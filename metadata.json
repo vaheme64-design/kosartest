@@ -1,0 +1,6 @@
+{
+  "name": "سامانه برنامه‌ریزی تولید و کنترل موجودی قطعات فلزی خودرو",
+  "description": "سیستم جامع مدیریت تولید، کنترل خطوط پرس و جوشکاری، رهگیری کار در جریان ساخت (WIP) و موجودی مواد اولیه و محصول کارخانه قطعات فلزی خودرو",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
