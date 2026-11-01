@@ -4,11 +4,18 @@ import { Sidebar, TabKey } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { TransactionsVouchersView } from './components/TransactionsVouchersView';
 import { InventoryReportView } from './components/InventoryReportView';
+import { InventoryModuleView } from './components/inventory/InventoryModuleView';
 import { PartsView } from './components/PartsView';
 import { RoutingsView } from './components/RoutingsView';
 import { MachinesView } from './components/MachinesView';
 import { AuditLedgerView } from './components/AuditLedgerView';
 import { UserManagementView } from './components/UserManagementView';
+import { ProductionPlanningView } from './components/ProductionPlanningView';
+import { SapcoMaterialsView } from './components/SapcoMaterialsView';
+import { WipTrackingView } from './components/WipTrackingView';
+import { ProductionWipModuleView } from './components/wip/ProductionWipModuleView';
+import { ProductionPlanningModuleView } from './components/planning/ProductionPlanningModuleView';
+import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
 
 import {
@@ -21,8 +28,10 @@ import {
   DieMold,
   Operator,
   FactoryHall,
+  ProductionPlan,
+  SapcoCoilReceipt,
 } from './types/inventory';
-import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
+import { auth } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
@@ -41,6 +50,8 @@ export default function App() {
   const [dies, setDies] = useState<DieMold[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [halls, setHalls] = useState<FactoryHall[]>([]);
+  const [plans, setPlans] = useState<ProductionPlan[]>([]);
+  const [coils, setCoils] = useState<SapcoCoilReceipt[]>([]);
   const [summary, setSummary] = useState<any>(null);
 
   // Auth & Role
@@ -74,7 +85,18 @@ export default function App() {
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumRes, txRes, partsRes, machinesRes, routingsRes, diesRes, opsRes, hallsRes] = await Promise.all([
+      const [
+        sumRes,
+        txRes,
+        partsRes,
+        machinesRes,
+        routingsRes,
+        diesRes,
+        opsRes,
+        hallsRes,
+        plansRes,
+        coilsRes,
+      ] = await Promise.all([
         fetch('/api/inventory/summary').then(r => r.json()),
         fetch('/api/inventory/transactions').then(r => r.json()),
         fetch('/api/parts').then(r => r.json()),
@@ -83,6 +105,8 @@ export default function App() {
         fetch('/api/dies').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/operators').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/halls').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/planning').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/sapco/coils').then(r => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (sumRes.success) setSummary(sumRes.data);
@@ -93,6 +117,8 @@ export default function App() {
       if (diesRes.success) setDies(diesRes.data);
       if (opsRes.success) setOperators(opsRes.data);
       if (hallsRes.success) setHalls(hallsRes.data);
+      if (plansRes.success) setPlans(plansRes.data);
+      if (coilsRes.success) setCoils(coilsRes.data);
     } catch (err) {
       console.error('Error fetching data from server:', err);
     } finally {
@@ -120,23 +146,21 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (data.success) {
-        if (data.transaction) {
-          setTransactions(prev => [data.transaction, ...prev]);
-        }
-        if (data.summary) {
-          setSummary(data.summary);
-        }
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'خطا در ثبت سند در سرور');
       }
+
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای ارتباط با سرور' };
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'خطای ارتباط با سرور',
+      };
     }
   };
 
-  // Handle Reversal of Voucher
+  // Reversal of an existing voucher
   const handleReverseVoucher = async (voucherId: string, reason: string) => {
     try {
       const res = await fetch('/api/inventory/reverse', {
@@ -150,18 +174,21 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'خطا در ابطال سند');
       }
+
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای ارتباط با سرور' };
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'خطای شبکه در ابطال سند',
+      };
     }
   };
 
-  // Handle Save Part
+  // Master Data Save/Update
   const handleSavePart = async (partData: Partial<Part>) => {
     try {
       const res = await fetch('/api/parts', {
@@ -170,38 +197,34 @@ export default function App() {
         body: JSON.stringify(partData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت قطعه');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت قطعه';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Save Machine
-  const handleSaveMachine = async (machineData: Partial<Machine>) => {
+  const handleSaveMachine = async (mchData: Partial<Machine>) => {
     try {
       const res = await fetch('/api/machines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(machineData),
+        body: JSON.stringify(mchData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت ماشین');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت ماشین';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Save Die / Mold
   const handleSaveDie = async (dieData: Partial<DieMold>) => {
     try {
       const res = await fetch('/api/dies', {
@@ -210,34 +233,30 @@ export default function App() {
         body: JSON.stringify(dieData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت قالب');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت قالب';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Delete Die
   const handleDeleteDie = async (id: string) => {
     try {
       const res = await fetch(`/api/dies/${id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در حذف قالب');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در حذف قالب';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Save Operator
   const handleSaveOperator = async (opData: Partial<Operator>) => {
     try {
       const res = await fetch('/api/operators', {
@@ -246,18 +265,16 @@ export default function App() {
         body: JSON.stringify(opData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت اپراتور');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت اپراتور';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Save Factory Hall
   const handleSaveHall = async (hallData: Partial<FactoryHall>) => {
     try {
       const res = await fetch('/api/halls', {
@@ -266,18 +283,16 @@ export default function App() {
         body: JSON.stringify(hallData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت سالن');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت سالن';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Save Routing
   const handleSaveRouting = async (routingData: Partial<Routing>) => {
     try {
       const res = await fetch('/api/routings', {
@@ -286,37 +301,34 @@ export default function App() {
         body: JSON.stringify(routingData),
       });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در ثبت مسیر تولید');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در ثبت مسیر تولید';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Handle Delete Routing
-  const handleDeleteRouting = async (id: string) => {
+  const handleDeleteRouting = async (routingId: string) => {
     try {
-      const res = await fetch(`/api/routings/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/routings/${routingId}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) {
-        await loadAllData();
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, error: data.error };
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در حذف مسیر');
+      await loadAllData();
+      return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'خطای سرور' };
+      const msg = err instanceof Error ? err.message : 'خطا در حذف مسیر';
+      alert(msg);
+      return { success: false, error: msg };
     }
   };
 
-  // Seed demo data
+  // Demo Data Reset & Clean Handlers
   const handleSeedDemo = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
       const res = await fetch('/api/demo-data/seed', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
@@ -329,10 +341,9 @@ export default function App() {
     }
   };
 
-  // Clean demo data
   const handleCleanDemo = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
       const res = await fetch('/api/demo-data/clean', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
@@ -345,12 +356,19 @@ export default function App() {
     }
   };
 
-  // Quick navigation from dashboard
   const handleOpenVoucherWithType = (type: string, partId?: string, stageId?: string) => {
     setInitialVoucherType(type as VoucherType);
     setInitialPartId(partId);
     setInitialStageId(stageId);
-    setActiveTab('vouchers');
+    setActiveTab('production');
+  };
+
+  const handleNavigateTab = (tab: any) => {
+    if (tab === 'vouchers') setActiveTab('production');
+    else if (tab === 'parts') setActiveTab('master_data');
+    else if (tab === 'audit') setActiveTab('reports');
+    else if (tab === 'users') setActiveTab('settings');
+    else setActiveTab(tab);
   };
 
   return (
@@ -367,28 +385,65 @@ export default function App() {
 
       {/* Main Layout */}
       <div className="flex-1 flex flex-col md:flex-row">
-        {/* Sidebar */}
+        {/* Sidebar with exact 10 navigation items */}
         <Sidebar
           activeTab={activeTab}
           onTabChange={tab => setActiveTab(tab)}
           partsCount={parts.length}
           txCount={transactions.length}
-          scrapRate={summary?.overallScrapRate || 0}
+          plansCount={plans.length}
+          coilsCount={coils.length}
         />
 
         {/* Content Area */}
         <main className="flex-1 p-4 lg:p-6 overflow-y-auto max-w-7xl mx-auto w-full">
+          {/* 1. Dashboard */}
           {activeTab === 'dashboard' && (
             <DashboardView
               summary={summary}
               recentTransactions={transactions}
               machines={machines}
-              onNavigateToTab={tab => setActiveTab(tab)}
+              onNavigateToTab={handleNavigateTab}
               onOpenNewVoucher={handleOpenVoucherWithType}
             />
           )}
 
-          {activeTab === 'vouchers' && (
+          {/* 2. Master Data (Parts & Routings) */}
+          {activeTab === 'master_data' && (
+            <div className="space-y-6">
+              <PartsView parts={parts} onSavePart={handleSavePart} />
+              <div className="pt-6 border-t border-slate-800">
+                <RoutingsView
+                  routings={routings}
+                  parts={parts}
+                  machines={machines}
+                  dies={dies}
+                  onSaveRouting={handleSaveRouting}
+                  onDeleteRouting={handleDeleteRouting}
+                  onDirectProduce={(partId, machineId) => {
+                    handleOpenVoucherWithType('PRODUCTION_OUTPUT', partId);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 3. Inventory Management Module */}
+          {activeTab === 'inventory' && (
+            <InventoryModuleView
+              parts={parts}
+              stageBalances={summary?.stageBalances || []}
+              currentUser={{
+                uid: currentUser.uid,
+                displayName: currentUser.displayName,
+                role: currentUser.role,
+              }}
+              onGlobalRefresh={loadAllData}
+            />
+          )}
+
+          {/* 4. Production */}
+          {activeTab === 'production' && (
             <TransactionsVouchersView
               parts={parts}
               machines={machines}
@@ -402,32 +457,28 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'inventory' && (
-            <InventoryReportView
-              balances={summary?.stageBalances || []}
-              onRefresh={loadAllData}
-              loading={loading}
+          {/* 5. Production Execution & WIP Module */}
+          {activeTab === 'wip' && (
+            <ProductionWipModuleView
+              parts={parts}
+              machines={machines}
+              operators={operators}
+              stageBalances={summary?.stageBalances || []}
+              onGlobalRefresh={loadAllData}
             />
           )}
 
-          {activeTab === 'parts' && (
-            <PartsView parts={parts} onSavePart={handleSavePart} />
-          )}
-
-          {activeTab === 'routings' && (
-            <RoutingsView
-              routings={routings}
+          {/* 6. Production Planning Engine */}
+          {activeTab === 'planning' && (
+            <ProductionPlanningModuleView
               parts={parts}
               machines={machines}
               dies={dies}
-              onSaveRouting={handleSaveRouting}
-              onDeleteRouting={handleDeleteRouting}
-              onDirectProduce={(partId, machineId) => {
-                handleOpenVoucherWithType('PRODUCTION_OUTPUT', partId);
-              }}
+              onGlobalRefresh={loadAllData}
             />
           )}
 
+          {/* 7. Machines and Capacity */}
           {activeTab === 'machines' && (
             <MachinesView
               machines={machines}
@@ -443,16 +494,26 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'audit' && (
-            <AuditLedgerView
-              transactions={transactions}
+          {/* 8. SAPCO Materials */}
+          {activeTab === 'sapco' && (
+            <SapcoMaterialsView
+              coils={coils}
+              parts={parts}
               onRefresh={loadAllData}
-              onReverseVoucher={handleReverseVoucher}
               loading={loading}
             />
           )}
 
-          {activeTab === 'users' && (
+          {/* 9. Management Reporting & Control Module */}
+          {activeTab === 'reports' && (
+            <ManagementReportsModuleView
+              parts={parts}
+              machines={machines}
+            />
+          )}
+
+          {/* 10. Users and Settings */}
+          {activeTab === 'settings' && (
             <UserManagementView
               currentUser={currentUser}
               onRoleChange={role => setCurrentUser(prev => ({ ...prev, role }))}

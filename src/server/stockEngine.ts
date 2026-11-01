@@ -29,8 +29,10 @@ export function calculateInventoryLedger(
   const partsMap = new Map<string, Part>();
   parts.forEach(p => partsMap.set(p.id, p));
 
-  // Mapping: key = `${stageId}_${partId}` -> balance object
+  // Mapping: key = `${stageId}:::${partId}` -> balance object
   const stageMap = new Map<string, {
+    stageId: string;
+    partId: string;
     totalQty: number;
     reservedQty: number;
     inTransitQty: number;
@@ -40,9 +42,11 @@ export function calculateInventoryLedger(
   }>();
 
   const getStageEntry = (stageId: string, partId: string) => {
-    const key = `${stageId}_${partId}`;
+    const key = `${stageId}:::${partId}`;
     if (!stageMap.has(key)) {
       stageMap.set(key, {
+        stageId,
+        partId,
         totalQty: 0,
         reservedQty: 0,
         inTransitQty: 0,
@@ -127,8 +131,9 @@ export function calculateInventoryLedger(
   let totalScrapKg = 0;
   let totalGoodOutputPcs = 0;
 
-  for (const [key, data] of stageMap.entries()) {
-    const [stageId, partId] = key.split('_');
+  for (const [, data] of stageMap.entries()) {
+    const stageId = data.stageId;
+    const partId = data.partId;
     const part = partsMap.get(partId);
     if (!part) continue;
 

@@ -250,3 +250,234 @@ export const SCRAP_REASONS = [
   'خرابی یا انحراف روبیک قالب',
   'ضایعات راه‌اندازی و تنظیم خط'
 ];
+
+export interface ProductionPlan {
+  id: string;
+  planNumber: string;
+  title: string;
+  partId: string;
+  partCode: string;
+  partName: string;
+  plannedQty: number;
+  producedQty: number;
+  startDate: string;
+  endDate: string;
+  priority: 1 | 2 | 3;
+  status: 'DRAFT' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  notes?: string;
+  isDemo?: boolean;
+  createdAt?: string;
+}
+
+export interface SapcoCoilReceipt {
+  id: string;
+  receiptNumber: string;
+  coilNumber: string;
+  partId: string;
+  partCode: string;
+  partName: string;
+  materialGrade: string;
+  thicknessMm: number;
+  widthMm: number;
+  receivedWeightKg: number;
+  consumedWeightKg: number;
+  heatNumber?: string;
+  receiptDate: string;
+  status: 'IN_STOCK' | 'IN_CUTTING' | 'DEPLETED';
+  isDemo?: boolean;
+}
+
+// =========================================================================
+// INVENTORY MODULE EXTENSIONS
+// =========================================================================
+
+export type StockOwnership = 'COMPANY_OWNED' | 'SAPCO_SUPPLIER_OWNED';
+export type StockQualityStatus = 'AVAILABLE' | 'QUALITY_BLOCKED' | 'QUARANTINE' | 'REJECTED';
+export type DocumentStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
+export type PostingStatus = 'UNPOSTED' | 'POSTED' | 'REVERSED';
+
+export type InventoryDocType =
+  | 'OPENING_BALANCE'
+  | 'RECEIPT_RAW_MATERIAL'
+  | 'RECEIPT_FINISHED_GOODS'
+  | 'ISSUE_RAW_MATERIAL'
+  | 'TRANSFER'
+  | 'ADJUSTMENT'
+  | 'REVERSAL';
+
+export interface WarehouseDefinition {
+  id: string;
+  code: string;
+  name: string;
+  type: 'RAW_MATERIALS' | 'WIP' | 'FINISHED_GOODS' | 'SCRAP' | 'TOOLING';
+  managerName?: string;
+  locations: string[];
+}
+
+export const WAREHOUSES_LIST: WarehouseDefinition[] = [
+  { id: 'WH-RAW', code: 'WH-RAW', name: 'انبار مرکزی رول و ورق ساپکو', type: 'RAW_MATERIALS', managerName: 'مرادی', locations: ['LOC-RAW-A1', 'LOC-RAW-A2', 'LOC-RAW-B1', 'LOC-RAW-B2'] },
+  { id: 'WH-WIP-STAMP', code: 'WH-WIP-STAMP', name: 'انبار پای کار سالن پرس (WIP)', type: 'WIP', managerName: 'قنبری', locations: ['LOC-WIP-BLANK', 'LOC-WIP-DRAWN', 'LOC-WIP-TRIM'] },
+  { id: 'WH-WIP-WELD', code: 'WH-WIP-WELD', name: 'انبار پای کار جوشکاری و مونتاژ', type: 'WIP', managerName: 'اکبری', locations: ['LOC-WELD-IN', 'LOC-WELD-OUT'] },
+  { id: 'WH-FINISHED', code: 'WH-FINISHED', name: 'انبار محصولات نهایی آماده تحویل', type: 'FINISHED_GOODS', managerName: 'محمدی', locations: ['LOC-FIN-P1', 'LOC-FIN-P2', 'LOC-FIN-P3'] },
+  { id: 'WH-SCRAP', code: 'WH-SCRAP', name: 'انبار ضایعات آهن و پرت ورق', type: 'SCRAP', managerName: 'سلیمانی', locations: ['LOC-SCRAP-YARD'] },
+];
+
+export interface InventoryDocumentLine {
+  id: string;
+  documentId: string;
+  lineNumber: number;
+  partId: string;
+  partCode: string;
+  partName: string;
+  materialLotId?: string;
+  lotNumber?: string;
+  heatNumber?: string;
+  ownership: StockOwnership;
+  contractId?: string;
+  contractNumber?: string;
+  locationCode?: string;
+  targetLocationCode?: string;
+  quantity: number;
+  unit: UnitOfMeasure;
+  quantityKg: number;
+  qualityStatus: StockQualityStatus;
+  unitCost?: number;
+  notes?: string;
+}
+
+export interface InventoryDocument {
+  id: string;
+  documentNumber: string;
+  documentType: InventoryDocType;
+  documentDate: string;
+  documentStatus: DocumentStatus;
+  postingStatus: PostingStatus;
+  warehouseId: string;
+  warehouseName: string;
+  targetWarehouseId?: string;
+  targetWarehouseName?: string;
+  ownership: StockOwnership;
+  contractId?: string;
+  contractNumber?: string;
+  referenceType?: string;
+  referenceNumber?: string;
+  reversalOfDocumentId?: string;
+  reversalOfDocNumber?: string;
+  adjustmentReason?: string;
+  auditNote?: string;
+  lines: InventoryDocumentLine[];
+  totalQuantity: number;
+  totalWeightKg: number;
+  createdByUid: string;
+  createdByName: string;
+  postedByUid?: string;
+  postedByName?: string;
+  postedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryReservation {
+  id: string;
+  reservationNumber: string;
+  partId: string;
+  partCode: string;
+  partName: string;
+  warehouseId: string;
+  warehouseName: string;
+  materialLotId?: string;
+  lotNumber?: string;
+  ownership: StockOwnership;
+  reservedFor: string;
+  quantity: number;
+  quantityKg: number;
+  unit: UnitOfMeasure;
+  status: 'ACTIVE' | 'CONSUMED' | 'RELEASED';
+  validUntil?: string;
+  createdAt: string;
+}
+
+export interface DetailedStockBalance {
+  id: string;
+  partId: string;
+  partCode: string;
+  partName: string;
+  category: PartCategory;
+  materialGrade?: string;
+  thicknessMm?: number;
+  warehouseId: string;
+  warehouseName: string;
+  locationCode: string;
+  materialLotId?: string;
+  lotNumber?: string;
+  heatNumber?: string;
+  ownership: StockOwnership;
+  contractId?: string;
+  contractNumber?: string;
+  unit: UnitOfMeasure;
+  // Quantities
+  physicalQty: number;
+  ownedQty: number;
+  supplierOwnedQty: number;
+  reservedQty: number;
+  qualityBlockedQty: number;
+  availableQty: number;
+  // Kilograms
+  physicalKg: number;
+  ownedKg: number;
+  supplierOwnedKg: number;
+  reservedKg: number;
+  qualityBlockedKg: number;
+  availableKg: number;
+  lastTransactionAt: string;
+}
+
+export interface SapcoContract {
+  id: string;
+  contractNumber: string;
+  title: string;
+  materialGrade: string;
+  allocatedWeightKg: number;
+  openingBalanceKg: number;
+  totalReceivedKg: number;
+  totalConsumedKg: number;
+  closingBalanceKg: number;
+  associatedPartCodes: string[];
+  status: 'ACTIVE' | 'FULFILLED' | 'EXPIRED';
+  startDate: string;
+  endDate: string;
+}
+
+export interface SapcoContractLedgerEntry {
+  id: string;
+  contractId: string;
+  contractNumber: string;
+  documentNumber: string;
+  date: string;
+  waybillNumber?: string;
+  lotNumber?: string;
+  heatNumber?: string;
+  operationType: 'OPENING' | 'RECEIPT' | 'CONSUMPTION' | 'RETURN' | 'ADJUSTMENT';
+  weightKgSigned: number;
+  runningBalanceKg: number;
+  notes?: string;
+}
+
+export interface InventoryDashboardMetrics {
+  totalPhysicalKg: number;
+  totalPhysicalPcs: number;
+  totalAvailableKg: number;
+  totalAvailablePcs: number;
+  totalReservedKg: number;
+  totalReservedPcs: number;
+  totalQualityBlockedKg: number;
+  totalQualityBlockedPcs: number;
+  totalSapcoConsignmentKg: number;
+  totalCompanyOwnedKg: number;
+  activeLotsCount: number;
+  draftDocumentsCount: number;
+  postedDocumentsCount: number;
+  activeContractsCount: number;
+}
+
+
