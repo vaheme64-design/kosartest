@@ -3,25 +3,24 @@ import {
   Boxes,
   Layers,
   CheckCircle2,
-  AlertOctagon,
+  ArrowDownLeft,
+  ArrowUpRight,
+  RotateCcw,
   ArrowRightLeft,
-  Truck,
-  Clock,
-  TrendingDown,
-  TrendingUp,
+  Search,
   Cpu,
   FileText,
   AlertTriangle,
-  Scale,
-  Calendar,
   Building2,
-  ArrowRight,
-  ShieldAlert,
+  ArrowLeft,
+  Calendar,
+  FileSignature,
 } from 'lucide-react';
 import {
   InventoryTransaction,
   StageInventorySummary,
   Machine,
+  UserRoleProfile,
   FACTORY_STAGES,
 } from '../types/inventory';
 import { ManagementDashboardSummary } from '../types/managementReports';
@@ -29,12 +28,13 @@ import {
   formatNumber,
   formatWeightKg,
   toPersianDigits,
-  formatDateTime,
-  getVoucherTypeLabel,
 } from '../utils/formatters';
-import { formatToJalali } from '../utils/jalali';
+import { OnboardingBanner } from './common/ContextualHelp';
+import { TabKey } from './Sidebar';
+import { InventorySubTab } from './inventory/InventoryModuleView';
 
 interface DashboardViewProps {
+  currentUser?: UserRoleProfile;
   summary: {
     rawMaterialKg: number;
     totalWipPcs: number;
@@ -48,13 +48,13 @@ interface DashboardViewProps {
   } | null;
   recentTransactions: InventoryTransaction[];
   machines: Machine[];
-  onNavigateToTab: (tab: any) => void;
+  onNavigateToTab: (tab: TabKey, subTab?: InventorySubTab, actionModal?: 'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER') => void;
   onOpenNewVoucher: (type: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
+  currentUser,
   summary,
-  recentTransactions,
   machines,
   onNavigateToTab,
   onOpenNewVoucher,
@@ -74,13 +74,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   if (!summary) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-slate-400 animate-pulse text-sm">در حال بارگذاری اطلاعات انبار و خطوط تولید...</div>
+      <div className="flex items-center justify-center min-h-[350px]">
+        <div className="text-slate-500 text-xs">در حال بارگذاری اطلاعات میز کار...</div>
       </div>
     );
   }
 
-  // Calculate bottleneck stage (highest WIP pcs)
+  const role = currentUser?.role || 'ADMIN';
+
+  // Calculate stage totals & bottleneck stage
   const stageTotals: Record<string, { name: string; qty: number; kg: number }> = {};
   FACTORY_STAGES.forEach(st => {
     stageTotals[st.id] = { name: st.name, qty: 0, kg: 0 };
@@ -93,7 +95,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   });
 
-  let bottleneckStage = { id: '', name: 'هیچ ایستگاهی گلوگاه نیست', qty: 0 };
+  let bottleneckStage = { id: '', name: 'هیچ ایستگاهی دارای انباشت غیرعادی نیست', qty: 0 };
   Object.entries(stageTotals).forEach(([id, data]) => {
     if (id !== 'STAGE_RAW_STORE' && id !== 'STAGE_FINISHED_STORE' && id !== 'STAGE_SCRAP_YARD') {
       if (data.qty > bottleneckStage.qty) {
@@ -102,258 +104,341 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   });
 
+  const activeOrdersCount = managementSummary?.activeCustomerOrdersCount ?? 3;
+  const grossDemandPcs = managementSummary?.totalGrossDemandPieces ?? 2500;
+  const delayedOrdersCount = managementSummary?.totalDelayedOrdersCount ?? 1;
+
+  const plannedPcs = managementSummary?.totalPlannedProductionPieces ?? 1850;
+  const actualPcs = managementSummary?.totalActualProducedPieces ?? 1200;
+  const achievementRate = managementSummary?.overallPlanAchievementRatePercent ?? 64.9;
+
+  const finishedGoodsPcs = managementSummary?.totalFinishedGoodsStockPieces ?? summary.totalFinishedPcs;
+  const wipQtyPcs = managementSummary?.totalWipQuantityPieces ?? summary.totalWipPcs;
+  const materialShortageKg = managementSummary?.totalMaterialShortageKg ?? 0;
+
+  const scrapPcs = managementSummary?.totalScrapPieces ?? summary.totalScrapQty;
+  const scrapWeightKg = managementSummary?.totalScrapWeightKg ?? summary.totalScrapKg;
+  const activeMachinesCount = machines.filter(m => m.status === 'ACTIVE').length;
+  const maintenanceMachinesCount = machines.filter(m => m.status === 'MAINTENANCE').length;
+
   return (
     <div className="space-y-6">
-      {/* Top Banner / Welcome & Quick Actions */}
-      <div className="bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xl">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-            <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-              مرکز مانیتورینگ و کنترل مدیریتی KPIMS
-            </span>
+      {/* Dismissible First-Time Guided Learning Banner */}
+      <OnboardingBanner
+        role={role}
+        onQuickAction={act => {
+          if (act === 'inventory_receipt') {
+            onNavigateToTab('inventory', 'DASHBOARD', 'RECEIPT');
+          }
+        }}
+      />
+
+      {/* QUESTION 3 FIRST FOR OPERATORS: "What should I do next?" Task Launchpad */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm lg:text-base font-bold text-slate-900">
+              میان‌بر عملیات روزانه (چه کاری می‌خواهید انجام دهید؟)
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              پرتکرارترین عملیات انبار، رول ورق و خط تولید بدون نیاز به جستجو در منوها
+            </p>
           </div>
-          <h2 className="text-lg lg:text-xl font-bold text-white">
-            داشبورد نظارت بر تولید و زنجیره تأمین قطعات فلزی خودرو
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            تطبیق بلادرنگ تعهدات ساپکو و سایپا با ظرفیت پرس‌ها، کار در جریان ساخت و ممیزی موجودی
-          </p>
         </div>
 
-        {/* Quick Voucher Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <button
-            onClick={() => onOpenNewVoucher('RECEIPT')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-emerald-900/30"
+            type="button"
+            onClick={() => onNavigateToTab('inventory', 'DASHBOARD', 'RECEIPT')}
+            className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 text-right transition-all cursor-pointer group"
           >
-            <Truck className="w-3.5 h-3.5" />
-            <span>رسید ورق ساپکو</span>
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-lg bg-emerald-600 text-white">
+                <ArrowDownLeft className="w-4 h-4" />
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-emerald-700 opacity-60 group-hover:opacity-100" />
+            </div>
+            <div className="font-bold text-xs text-slate-900 mt-2.5">۱. ثبت رسید کالا / رول ورق</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              ورود ورق، پیچ و مهره و تخصیص یک رول به چند قرارداد
+            </div>
           </button>
+
           <button
-            onClick={() => onOpenNewVoucher('ISSUE')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-amber-900/30"
+            type="button"
+            onClick={() => onNavigateToTab('inventory', 'DASHBOARD', 'ISSUE')}
+            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100/80 text-right transition-all cursor-pointer group"
           >
-            <TrendingDown className="w-3.5 h-3.5" />
-            <span>حواله مصرف مواد</span>
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-lg bg-slate-900 text-white">
+                <ArrowUpRight className="w-4 h-4 text-amber-400" />
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-500 opacity-60 group-hover:opacity-100" />
+            </div>
+            <div className="font-bold text-xs text-slate-900 mt-2.5">۲. صدور حواله خروج به خط</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              ارسال تمام یا بخشی از رول ورق و قطعات به سالن پرس
+            </div>
           </button>
+
           <button
+            type="button"
+            onClick={() => onNavigateToTab('inventory', 'DASHBOARD', 'RETURN')}
+            className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-50 text-right transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-lg bg-blue-600 text-white">
+                <RotateCcw className="w-4 h-4" />
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-blue-700 opacity-60 group-hover:opacity-100" />
+            </div>
+            <div className="font-bold text-xs text-slate-900 mt-2.5">۳. برگشت ورق از خط تولید</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              بازگرداندن ته‌کلاف به انبار با حفظ کویل‌پک و قرارداد
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('inventory', 'INQUIRY')}
+            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100/80 text-right transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-lg bg-slate-800 text-white">
+                <Search className="w-4 h-4" />
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-500 opacity-60 group-hover:opacity-100" />
+            </div>
+            <div className="font-bold text-xs text-slate-900 mt-2.5">۴. استعلام موجودی و کویل‌پک</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              فیلتر و گروه‌بندی رول‌ها بر اساس ضخامت، جنس و قرارداد
+            </div>
+          </button>
+
+          <button
+            type="button"
             onClick={() => onOpenNewVoucher('PRODUCTION_OUTPUT')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-cyan-900/30"
+            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100/80 text-right transition-all cursor-pointer group"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>ثبت تولید سالم</span>
-          </button>
-          <button
-            onClick={() => onNavigateToTab('reports')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-purple-900/30"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>گزارشات مدیریتی (۱۳ گانه)</span>
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-lg bg-slate-800 text-white">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-500 opacity-60 group-hover:opacity-100" />
+            </div>
+            <div className="font-bold text-xs text-slate-900 mt-2.5">۵. ثبت تولید و ضایعات شیفت</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              ثبت قطعات سالم تولیدشده در ایستگاه‌های پرس و جوش
+            </div>
           </button>
         </div>
       </div>
 
-      {/* 9 Core Management KPI Micro-Cards (Required by User Specification) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* KPI 1: Active Customer Orders */}
-        <div
-          onClick={() => onNavigateToTab('planning')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-blue-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>سفارشات فعال مشتریان</span>
-            <Building2 className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-slate-100 font-mono">
-            {toPersianDigits(managementSummary?.activeCustomerOrdersCount || 3)}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>تقاضا:</span>
-            <span className="font-mono text-blue-300 font-bold">
-              {formatNumber(managementSummary?.totalGrossDemandPieces || 2500)} عدد
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 2: Planned Production */}
-        <div
-          onClick={() => onNavigateToTab('planning')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>تولید مصوب برنامه‌ریزی‌شده</span>
-            <Calendar className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-amber-400 font-mono">
-            {formatNumber(managementSummary?.totalPlannedProductionPieces || 1850)}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>الزام خالص MRP:</span>
-            <span className="font-mono text-amber-300">قطعات تیپ خودرویی</span>
-          </div>
-        </div>
-
-        {/* KPI 3: Actual Production */}
-        <div
-          onClick={() => onNavigateToTab('reports')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>تولید واقعی کارگاهی</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-emerald-400 font-mono">
-            {formatNumber(managementSummary?.totalActualProducedPieces || 1200)}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>درصد تحقق برنامه:</span>
-            <span className="font-mono text-emerald-300 font-bold">
-              {toPersianDigits(managementSummary?.overallPlanAchievementRatePercent || 64.9)}%
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 4: Delayed Orders */}
-        <div
-          onClick={() => onNavigateToTab('reports')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-rose-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>سفارشات دارای تأخیر</span>
-            <ShieldAlert className="w-4 h-4 text-rose-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-rose-400 font-mono">
-            {toPersianDigits(managementSummary?.totalDelayedOrdersCount || 1)}
-          </div>
-          <div className="text-[11px] text-rose-300/80 mt-1 flex items-center justify-between">
-            <span>وضعیت:</span>
-            <span className="font-bold">نیازمند اقدام فوری</span>
-          </div>
-        </div>
-
-        {/* KPI 5: Material Shortages */}
-        <div
-          onClick={() => onNavigateToTab('sapco')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>کسری کلاف‌های ورق</span>
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-amber-400 font-mono">
-            {formatNumber(managementSummary?.totalMaterialShortageKg || 1572)} <span className="text-xs">kg</span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>سهمیه امانی:</span>
-            <span className="text-amber-300">گرید ST14 ساپکو</span>
-          </div>
-        </div>
-
-        {/* KPI 6: WIP Quantity */}
-        <div
-          onClick={() => onNavigateToTab('wip')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>موجودی کار در جریان (WIP)</span>
-            <Layers className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-cyan-400 font-mono">
-            {formatNumber(managementSummary?.totalWipQuantityPieces || summary.totalWipPcs)} <span className="text-xs">عدد</span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>توزیع در:</span>
-            <span className="text-cyan-300">۸ ایستگاه پرس/جوش</span>
-          </div>
-        </div>
-
-        {/* KPI 7: Finished Goods Stock */}
-        <div
-          onClick={() => onNavigateToTab('inventory')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>موجودی آزاد محصول نهایی</span>
-            <Boxes className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-emerald-400 font-mono">
-            {formatNumber(managementSummary?.totalFinishedGoodsStockPieces || summary.totalFinishedPcs)} <span className="text-xs">عدد</span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>قرنطینه:</span>
-            <span className="text-slate-300">کسر شده از آزاد</span>
-          </div>
-        </div>
-
-        {/* KPI 8: Scrap Quantity & Weight */}
-        <div
-          onClick={() => onNavigateToTab('reports')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-rose-500/50 rounded-xl p-3.5 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>ضایعات تولیدی کل</span>
-            <AlertOctagon className="w-4 h-4 text-rose-400" />
-          </div>
-          <div className="mt-2 text-xl font-black text-rose-400 font-mono">
-            {formatNumber(managementSummary?.totalScrapPieces || summary.totalScrapQty)} <span className="text-xs">عدد</span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>وزن ضایعات:</span>
-            <span className="font-mono text-rose-300">
-              {formatNumber(managementSummary?.totalScrapWeightKg || summary.totalScrapKg)} kg
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 9: Machine Utilization (Reliable Capacity Data) */}
-        <div
-          onClick={() => onNavigateToTab('machines')}
-          className="bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 rounded-xl p-3.5 transition cursor-pointer col-span-2 md:col-span-1 lg:col-span-2"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>بهره‌وری ماشین‌آلات (با داده معتبر)</span>
-            <Cpu className="w-4 h-4 text-purple-400" />
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-black text-purple-300 font-mono">
-              {toPersianDigits(managementSummary?.averageMachineUtilizationPercent || 33.7)}%
-            </span>
-            <span className="text-xs text-slate-400">
-              ({toPersianDigits(managementSummary?.reliableMachinesCount || 10)} دستگاه فعال)
-            </span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-            <span>مبنای ظرفیت:</span>
-            <span className="text-purple-300">۱۵ ساعت در ۲ شیفت کاری</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Section: Stage WIP Distribution & Bottleneck Analysis */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stage WIP Distribution Chart */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+      {/* QUESTION 1: "What is the current situation?" (Clickable KPI Cards) */}
+      <div className="space-y-2.5">
+        <h3 className="text-xs font-bold text-slate-500 px-1">
+          ۱. وضعیت فعلی کارخانه در یک نگاه (روی هر کارت کلیک کنید تا جزئیات باز شود)
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Raw Materials & Coils */}
+          <div
+            onClick={() => onNavigateToTab('inventory', 'INQUIRY')}
+            className="bg-white border border-slate-200 hover:border-slate-400 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between shadow-2xs"
+          >
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-cyan-400" />
-                توزیع موجودی در مراحل مسیر تولید و شناسایی گلوگاه خط (WIP)
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">موجودی ورق و مواد اولیه</span>
+                <Layers className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums tracking-tight">
+                  {formatWeightKg(summary.rawMaterialKg)}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">
+                موجودی محصول نهایی سالم: <strong className="font-mono text-slate-900">{formatNumber(finishedGoodsPcs)}</strong> عدد
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">وضعیت کسری ورق سفارشات:</span>
+              {materialShortageKg > 0 ? (
+                <span className="text-rose-600 font-mono font-bold">
+                  کسری: {formatWeightKg(materialShortageKg)}
+                </span>
+              ) : (
+                <span className="text-emerald-700 font-semibold">کافی و پایدار</span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Customer Demand & Contracts */}
+          <div
+            onClick={() => onNavigateToTab('planning')}
+            className="bg-white border border-slate-200 hover:border-slate-400 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between shadow-2xs"
+          >
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">سفارشات مشتریان و نیازسنجی</span>
+                <Building2 className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums tracking-tight">
+                  {toPersianDigits(activeOrdersCount)}
+                </span>
+                <span className="text-xs text-slate-500">سفارش فعال</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">
+                تقاضای کل: <strong className="font-mono text-slate-900">{formatNumber(grossDemandPcs)}</strong> عدد قطعه
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">وضعیت تحویل:</span>
+              {delayedOrdersCount > 0 ? (
+                <span className="text-amber-700 font-semibold">
+                  {toPersianDigits(delayedOrdersCount)} سفارش نیازمند پیگیری
+                </span>
+              ) : (
+                <span className="text-emerald-700 font-semibold">طبق برنامه زمانی</span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Production Plan & WIP */}
+          <div
+            onClick={() => onNavigateToTab('wip')}
+            className="bg-white border border-slate-200 hover:border-slate-400 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between shadow-2xs"
+          >
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">کار در جریان ساخت (WIP)</span>
+                <Boxes className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums tracking-tight">
+                  {formatNumber(wipQtyPcs)}
+                </span>
+                <span className="text-xs text-slate-500">قطعه نیمه‌ساخته در خطوط</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">
+                تحقق برنامه تولید: <strong className="font-mono text-slate-900">{toPersianDigits(achievementRate)}%</strong> ({formatNumber(actualPcs)} از {formatNumber(plannedPcs)})
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <span>شلوغ‌ترین ایستگاه:</span>
+              <strong className="text-slate-800 truncate max-w-[140px]">{bottleneckStage.name}</strong>
+            </div>
+          </div>
+
+          {/* Card 4: Machines & Quality */}
+          <div
+            onClick={() => onNavigateToTab('machines')}
+            className="bg-white border border-slate-200 hover:border-slate-400 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between shadow-2xs"
+          >
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">وضعیت پرس‌ها و کیفیت</span>
+                <Cpu className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-emerald-700 font-mono tabular-nums tracking-tight">
+                  {toPersianDigits(activeMachinesCount)}
+                </span>
+                <span className="text-xs text-slate-500">دستگاه پرس فعال و آماده</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">
+                مجموع ضایعات ثبت‌شده: <strong className="font-mono text-slate-900">{formatNumber(scrapPcs)}</strong> عدد ({formatWeightKg(scrapWeightKg)})
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <span>در حال تعمیرات / سرویس:</span>
+              <strong className="font-mono text-amber-700">{toPersianDigits(maintenanceMachinesCount)} دستگاه</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* QUESTION 2: "What requires my attention?" (Exceptions & Bottlenecks) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Attention & Exceptions Panel */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <span>۲. موارد نیازمند توجه و پیگیری</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                موجودی آزاد، در صف و در حال پردازش هر یک از ایستگاه‌های پرس و جوشکاری
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div
+                onClick={() => onNavigateToTab('planning')}
+                className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 hover:bg-amber-50 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between font-bold text-amber-950">
+                  <span>بررسی موجودی ورق برای سفارشات</span>
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
+                </div>
+                <p className="text-[11px] text-amber-800 mt-1">
+                  {materialShortageKg > 0
+                    ? `مقدار ${formatWeightKg(materialShortageKg)} کسری ورق برای پوشش کامل تقاضای مشتریان شناسایی شده است.`
+                    : 'بررسی کفایت موجودی رول‌های ورق و تخصیص ماشین‌آلات پرس برای سفارشات جاری.'}
+                </p>
+              </div>
+
+              <div
+                onClick={() => onNavigateToTab('inventory', 'CONTRACTS')}
+                className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/80 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between font-bold text-slate-900">
+                  <span>کنترل سقف قراردادها و کویل‌پک‌ها</span>
+                  <FileSignature className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  مشاهده مانده تعهد قراردادهای ساپکو و مشتریان و رول‌های تخصیص‌یافته به هر قرارداد.
+                </p>
+              </div>
+
+              <div
+                onClick={() => onNavigateToTab('inventory', 'CUSTOM_REPORTS')}
+                className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/80 transition cursor-pointer"
+              >
+                <div className="flex items-center justify-between font-bold text-slate-900">
+                  <span>گزارش سفارشی رول‌ها به تفکیک ضخامت و جنس</span>
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  مشاهده تعداد کل کویل‌ها و مجموع وزن موجود به تفکیک مشخصات فنی کالا.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* WIP Progress Across Operations (2 cols) */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
+          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                توزیع موجودی نیمه‌ساخته (WIP) در ایستگاه‌های خط تولید
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                موجودی پای دستگاه در ایستگاه‌های برش، پرسکاری، جوشکاری و رنگ
               </p>
             </div>
             <button
               onClick={() => onNavigateToTab('wip')}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition"
+              className="text-xs text-blue-700 hover:text-blue-900 transition flex items-center gap-1 cursor-pointer font-semibold"
             >
-              <span>مشاهده جزئیات کار در جریان</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>مدیریت ایستگاه‌های WIP</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {FACTORY_STAGES.filter(
               s => s.id !== 'STAGE_RAW_STORE' && s.id !== 'STAGE_FINISHED_STORE' && s.id !== 'STAGE_SCRAP_YARD'
             ).map(stage => {
@@ -366,24 +451,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div key={stage.id} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-300 font-medium">{stage.name}</span>
+                      <span className="text-slate-800 font-medium">{stage.name}</span>
                       {isBottleneck && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-bold">
-                          گلوگاه خط تولید
+                        <span className="text-[11px] text-amber-700 font-semibold">
+                          (بیشترین تجمع قطعه در صف)
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-[11px]">{formatWeightKg(data.kg)}</span>
-                      <span className="font-bold text-white font-mono">{formatNumber(data.qty)} عدد</span>
+                    <div className="flex items-center gap-3 font-mono tabular-nums">
+                      <span className="text-slate-500 text-[11px]">{formatWeightKg(data.kg)}</span>
+                      <span className="text-slate-900 font-bold">{formatNumber(data.qty)} عدد</span>
                     </div>
                   </div>
-                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        isBottleneck
-                          ? 'bg-rose-500'
-                          : 'bg-cyan-500'
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        isBottleneck ? 'bg-amber-500' : 'bg-slate-800'
                       }`}
                       style={{ width: `${percent}%` }}
                     />
@@ -391,58 +474,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Bottleneck & Plant Health Summary */}
-        <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
-              هشدار کنترل عملیات و گلوگاه تولید
-            </h3>
-
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
-              <div className="text-slate-400">ایستگاه با بالاترین انباشت صف:</div>
-              <div className="text-base font-bold text-amber-400">
-                {bottleneckStage.name}
-              </div>
-              <div className="text-slate-300 flex items-center justify-between text-[11px]">
-                <span>تعداد قطعات در صف:</span>
-                <span className="font-bold font-mono text-white">{formatNumber(bottleneckStage.qty)} عدد</span>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                onClick={() => onNavigateToTab('reports')}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 border border-slate-700"
-              >
-                <span>مشاهده گزارش سن‌یابی اقلام (WIP Aging)</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-purple-400" />
-              وضعیت سلامت خطوط پرس
-            </h3>
-            <div className="grid grid-cols-2 gap-2 text-center text-xs">
-              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                <div className="text-[10px] text-slate-400">پرس‌های آماده‌به‌کار</div>
-                <div className="text-base font-black text-emerald-400 mt-0.5 font-mono">
-                  {toPersianDigits(machines.filter(m => m.status === 'ACTIVE').length)} دستگاه
-                </div>
-              </div>
-              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                <div className="text-[10px] text-slate-400">تعمیرات اضطراری</div>
-                <div className="text-base font-black text-rose-400 mt-0.5 font-mono">
-                  {toPersianDigits(machines.filter(m => m.status === 'MAINTENANCE').length)} دستگاه
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

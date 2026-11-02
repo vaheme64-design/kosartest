@@ -3,16 +3,12 @@ import { Navbar } from './components/Navbar';
 import { Sidebar, TabKey } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { TransactionsVouchersView } from './components/TransactionsVouchersView';
-import { InventoryReportView } from './components/InventoryReportView';
-import { InventoryModuleView } from './components/inventory/InventoryModuleView';
+import { InventoryModuleView, InventorySubTab } from './components/inventory/InventoryModuleView';
 import { PartsView } from './components/PartsView';
 import { RoutingsView } from './components/RoutingsView';
 import { MachinesView } from './components/MachinesView';
-import { AuditLedgerView } from './components/AuditLedgerView';
 import { UserManagementView } from './components/UserManagementView';
-import { ProductionPlanningView } from './components/ProductionPlanningView';
 import { SapcoMaterialsView } from './components/SapcoMaterialsView';
-import { WipTrackingView } from './components/WipTrackingView';
 import { ProductionWipModuleView } from './components/wip/ProductionWipModuleView';
 import { ProductionPlanningModuleView } from './components/planning/ProductionPlanningModuleView';
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
@@ -36,6 +32,11 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
+  const [activeInventorySubTab, setActiveInventorySubTab] = useState<InventorySubTab>('DASHBOARD');
+  const [pendingInventoryModal, setPendingInventoryModal] = useState<
+    'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER' | null
+  >(null);
+
   const [initialVoucherType, setInitialVoucherType] = useState<VoucherType>('RECEIPT');
   const [initialPartId, setInitialPartId] = useState<string | undefined>(undefined);
   const [initialStageId, setInitialStageId] = useState<string | undefined>(undefined);
@@ -67,17 +68,23 @@ export default function App() {
 
   // Listen to Firebase Auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      setFirebaseUser(user);
-      if (user) {
-        setCurrentUser(prev => ({
-          ...prev,
-          uid: user.uid,
-          email: user.email || prev.email,
-          displayName: user.displayName || prev.displayName,
-        }));
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      user => {
+        setFirebaseUser(user);
+        if (user) {
+          setCurrentUser(prev => ({
+            ...prev,
+            uid: user.uid,
+            email: user.email || prev.email,
+            displayName: user.displayName || prev.displayName,
+          }));
+        }
+      },
+      () => {
+        setFirebaseUser(null);
       }
-    });
+    );
     return () => unsubscribe();
   }, []);
 
@@ -160,34 +167,6 @@ export default function App() {
     }
   };
 
-  // Reversal of an existing voucher
-  const handleReverseVoucher = async (voucherId: string, reason: string) => {
-    try {
-      const res = await fetch('/api/inventory/reverse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          voucherId,
-          reason,
-          user: currentUser,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'خطا در ابطال سند');
-      }
-
-      await loadAllData();
-      return { success: true, message: data.message };
-    } catch (err) {
-      return {
-        success: false,
-        message: err instanceof Error ? err.message : 'خطای شبکه در ابطال سند',
-      };
-    }
-  };
-
   // Master Data Save/Update
   const handleSavePart = async (partData: Partial<Part>) => {
     try {
@@ -202,7 +181,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت قطعه';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -220,7 +198,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت ماشین';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -238,7 +215,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت قالب';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -252,7 +228,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در حذف قالب';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -270,7 +245,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت اپراتور';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -288,7 +262,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت سالن';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -306,7 +279,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در ثبت مسیر تولید';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -320,7 +292,6 @@ export default function App() {
       return { success: true, message: data.message };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'خطا در حذف مسیر';
-      alert(msg);
       return { success: false, error: msg };
     }
   };
@@ -363,20 +334,59 @@ export default function App() {
     setActiveTab('production');
   };
 
-  const handleNavigateTab = (tab: any) => {
+  const handleDeepNavigate = (
+    tab: any,
+    subTab?: InventorySubTab,
+    actionModal?: 'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER'
+  ) => {
     if (tab === 'vouchers') setActiveTab('production');
     else if (tab === 'parts') setActiveTab('master_data');
     else if (tab === 'audit') setActiveTab('reports');
     else if (tab === 'users') setActiveTab('settings');
     else setActiveTab(tab);
+
+    if (subTab) {
+      setActiveInventorySubTab(subTab);
+    }
+    if (actionModal) {
+      setPendingInventoryModal(actionModal);
+    }
   };
 
+  // Compute top-level reorder alert summary counts for Navbar & Sidebar badges
+  const stageBalancesList: any[] = summary?.stageBalances || [];
+  let reorderAlertsCount = 0;
+  let criticalAlertsCount = 0;
+  parts.forEach(part => {
+    if (typeof part.minStock === 'number' && part.minStock > 0) {
+      const matchingStages = stageBalancesList.filter(
+        sb => (sb.partId === part.id || sb.partCode === part.code) && sb.stageId !== 'STAGE_SCRAP_YARD'
+      );
+      const currentStock = matchingStages.reduce(
+        (sum, sb) => sum + (part.unit === 'KG' ? sb.totalKg || sb.usableQty : sb.usableQty),
+        0
+      );
+      if (currentStock < part.minStock) {
+        reorderAlertsCount++;
+        const coverage = Math.round((currentStock / part.minStock) * 100);
+        if (currentStock <= 0 || coverage <= 25) {
+          criticalAlertsCount++;
+        }
+      }
+    }
+  });
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
-      {/* Top Navbar */}
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
+      {/* Top Navbar with Global Command Search & Role Switcher */}
       <Navbar
         currentUser={currentUser}
+        parts={parts}
+        coilsCount={coils.length}
+        reorderAlertsCount={reorderAlertsCount}
+        criticalAlertsCount={criticalAlertsCount}
         onRoleChange={role => setCurrentUser(prev => ({ ...prev, role }))}
+        onNavigate={handleDeepNavigate}
         onSeedDemo={handleSeedDemo}
         onCleanDemo={handleCleanDemo}
         onOpenErpModal={() => setIsErpModalOpen(true)}
@@ -385,25 +395,32 @@ export default function App() {
 
       {/* Main Layout */}
       <div className="flex-1 flex flex-col md:flex-row">
-        {/* Sidebar with exact 10 navigation items */}
+        {/* Grouped, Collapsible, Role-Aware Sidebar */}
         <Sidebar
           activeTab={activeTab}
-          onTabChange={tab => setActiveTab(tab)}
+          activeInventorySubTab={activeInventorySubTab}
+          onTabChange={(tab, invSubTab) => {
+            setActiveTab(tab);
+            if (invSubTab) setActiveInventorySubTab(invSubTab);
+          }}
+          currentRole={currentUser.role}
           partsCount={parts.length}
           txCount={transactions.length}
           plansCount={plans.length}
           coilsCount={coils.length}
+          reorderAlertsCount={reorderAlertsCount}
         />
 
         {/* Content Area */}
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-5 md:p-7 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
           {/* 1. Dashboard */}
           {activeTab === 'dashboard' && (
             <DashboardView
+              currentUser={currentUser}
               summary={summary}
               recentTransactions={transactions}
               machines={machines}
-              onNavigateToTab={handleNavigateTab}
+              onNavigateToTab={handleDeepNavigate}
               onOpenNewVoucher={handleOpenVoucherWithType}
             />
           )}
@@ -412,7 +429,7 @@ export default function App() {
           {activeTab === 'master_data' && (
             <div className="space-y-6">
               <PartsView parts={parts} onSavePart={handleSavePart} />
-              <div className="pt-6 border-t border-slate-800">
+              <div className="pt-6 border-t border-slate-200">
                 <RoutingsView
                   routings={routings}
                   parts={parts}
@@ -420,7 +437,7 @@ export default function App() {
                   dies={dies}
                   onSaveRouting={handleSaveRouting}
                   onDeleteRouting={handleDeleteRouting}
-                  onDirectProduce={(partId, machineId) => {
+                  onDirectProduce={partId => {
                     handleOpenVoucherWithType('PRODUCTION_OUTPUT', partId);
                   }}
                 />
@@ -438,7 +455,11 @@ export default function App() {
                 displayName: currentUser.displayName,
                 role: currentUser.role,
               }}
+              initialSubTab={activeInventorySubTab}
+              initialActionModal={pendingInventoryModal}
+              onClearInitialAction={() => setPendingInventoryModal(null)}
               onGlobalRefresh={loadAllData}
+              onNavigateToPlanning={() => setActiveTab('planning')}
             />
           )}
 

@@ -127,49 +127,49 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white border border-slate-200/80 w-full max-w-xl rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-4 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 bg-slate-700 text-slate-200 rounded-xl border border-slate-600">
+        <div className="p-5 bg-white border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-slate-100 text-slate-800 rounded-lg">
               <FileEdit className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="text-sm lg:text-base font-bold text-white">
+              <h3 className="text-sm lg:text-base font-bold text-slate-900">
                 ثبت سند تعدیل انبارگردانی و مغایرت باسکول (Inventory Adjustment)
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-0.5">
                 تعدیل رسمی مقادیر با الزام درج علت و لاگ ممیزی حسابرسی صنعتی
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
           {errorMessage && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-300 text-xs">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-700 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Direction Toggle */}
-          <div className="grid grid-cols-2 gap-2 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60">
+          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
             <button
               type="button"
               onClick={() => setAdjustmentDirection('NEGATIVE')}
-              className={`py-2 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`py-2 rounded-lg font-medium transition-all cursor-pointer ${
                 adjustmentDirection === 'NEGATIVE'
-                  ? 'bg-rose-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-rose-700 shadow-xs font-semibold'
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               کسری انبارگردانی / افت وزنی (-)
@@ -177,10 +177,10 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
             <button
               type="button"
               onClick={() => setAdjustmentDirection('POSITIVE')}
-              className={`py-2 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`py-2 rounded-lg font-medium transition-all cursor-pointer ${
                 adjustmentDirection === 'POSITIVE'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-emerald-700 shadow-xs font-semibold'
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               مازاد انبارگردانی (+)
@@ -190,13 +190,13 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           {/* Part Selection & Warehouse */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                کالا / ماده اولیه <span className="text-rose-400">*</span>
+              <label className="block text-slate-700 font-medium mb-1">
+                کالا / ماده اولیه <span className="text-rose-500">*</span>
               </label>
               <select
                 value={selectedPartId}
                 onChange={e => setSelectedPartId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               >
                 {parts.map(p => (
                   <option key={p.id} value={p.id}>
@@ -207,8 +207,8 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                انبار مورد تعدیل <span className="text-rose-400">*</span>
+              <label className="block text-slate-700 font-medium mb-1">
+                انبار مورد تعدیل <span className="text-rose-500">*</span>
               </label>
               <select
                 value={warehouseId}
@@ -217,7 +217,7 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
                   const wh = warehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setLocationCode(wh.locations[0]);
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               >
                 {warehouses.map(w => (
                   <option key={w.id} value={w.id}>
@@ -229,9 +229,9 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           </div>
 
           {/* Current Stock Banner */}
-          <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 flex items-center justify-between">
-            <span className="text-slate-400">موجودی فعلی در این انبار:</span>
-            <span className="font-mono font-bold text-white text-sm">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+            <span className="text-slate-500">موجودی فعلی در این انبار:</span>
+            <span className="font-mono font-bold text-slate-900 text-sm">
               {formatNumber(currentBalance?.physicalQty || 0)} {selectedPart?.unit} (آزاد: {formatNumber(currentBalance?.availableQty || 0)})
             </span>
           </div>
@@ -239,8 +239,8 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           {/* Quantity and Lot Number */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                مقدار تعدیل ({selectedPart?.unit}) <span className="text-rose-400">*</span>
+              <label className="block text-slate-700 font-medium mb-1">
+                مقدار تعدیل ({selectedPart?.unit}) <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -249,10 +249,10 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
                   value={quantity}
                   onChange={e => setQuantity(e.target.value)}
                   placeholder="مقدار قدرمطلق..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono font-bold text-sm focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold text-sm focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
                 />
                 <span className={`absolute left-3 top-2.5 font-bold font-mono text-sm ${
-                  adjustmentDirection === 'POSITIVE' ? 'text-emerald-400' : 'text-rose-400'
+                  adjustmentDirection === 'POSITIVE' ? 'text-emerald-600' : 'text-rose-600'
                 }`}>
                   {adjustmentDirection === 'POSITIVE' ? '+' : '-'}
                 </span>
@@ -260,7 +260,7 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 font-medium mb-1">
                 شماره سریال رول یا بچ (اختیاری)
               </label>
               <input
@@ -268,20 +268,20 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
                 value={lotNumber}
                 onChange={e => setLotNumber(e.target.value)}
                 placeholder="e.g. COIL-SAP-1403-0498"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-amber-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               />
             </div>
           </div>
 
           {/* Mandatory Reason */}
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
-              علت تعدیل انبارگردانی (الزامی) <span className="text-rose-400">*</span>
+            <label className="block text-slate-700 font-medium mb-1">
+              علت تعدیل انبارگردانی (الزامی) <span className="text-rose-500">*</span>
             </label>
             <select
               value={adjustmentReason}
               onChange={e => setAdjustmentReason(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 mb-2 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 mb-2 transition-colors"
             >
               <option value="کسری انبارگردانی دوره‌ای طبق شمارش فیزیکی">کسری انبارگردانی دوره‌ای طبق شمارش فیزیکی</option>
               <option value="مازاد انبارگردانی دوره‌ای طبق شمارش فیزیکی">مازاد انبارگردانی دوره‌ای طبق شمارش فیزیکی</option>
@@ -293,7 +293,7 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
+            <label className="block text-slate-700 font-medium mb-1">
               توضیحات ممیزی و مجوز مدیریت
             </label>
             <input
@@ -301,24 +301,24 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
               value={auditNote}
               onChange={e => setAuditNote(e.target.value)}
               placeholder="صورتجلسه انبارگردانی شماره... تایید شده توسط مدیر کارخانه"
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
             />
           </div>
 
           {/* Action buttons */}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium cursor-pointer transition-colors"
             >
               انصراف
             </button>
             <button
               type="submit"
               disabled={loading || rawQty <= 0}
-              className="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{loading ? 'در حال ثبت...' : 'ثبت قطعی تعدیل در دفاتر'}</span>

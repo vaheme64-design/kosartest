@@ -279,17 +279,17 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
         <div
           className={`p-3.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
             notification.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-              : 'bg-rose-950/80 border-rose-500/40 text-rose-300'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
           <div className="flex items-center gap-2">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <span>{notification.message}</span>
+            <span className="font-medium">{notification.message}</span>
           </div>
           <button
             onClick={() => setNotification(null)}
@@ -301,7 +301,7 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
       )}
 
       {/* Sub-Tabs Navigation */}
-      <div className="border-b border-slate-800 flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex items-center gap-1 border-b border-slate-200/80 overflow-x-auto">
         {navTabs.map(tab => {
           const isActive = activeSubTab === tab.id;
           const Icon = tab.icon;
@@ -309,21 +309,17 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2.5 text-xs transition-colors whitespace-nowrap cursor-pointer -mb-px ${
                 isActive
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
+                  : 'text-slate-500 hover:text-slate-800 border-b-2 border-transparent'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
               {tab.count !== undefined && tab.count > 0 && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  {tab.count}
+                <span className="font-mono text-[10px] text-slate-400 mr-0.5">
+                  ({tab.count})
                 </span>
               )}
             </button>

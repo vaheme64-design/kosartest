@@ -56,6 +56,8 @@ export function formatDateShort(isoString?: string): string {
   }
 }
 
+export const formatDate = formatDateShort;
+
 export function getVoucherTypeLabel(type: string): { label: string; color: string; bg: string } {
   switch (type) {
     case 'OPENING_BALANCE':

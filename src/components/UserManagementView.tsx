@@ -92,20 +92,31 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     },
   ];
 
+  const [authErrorMsg, setAuthErrorMsg] = useState<string | null>(null);
+
   const handleGoogleSignIn = async () => {
+    setAuthErrorMsg(null);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Google Sign-In failed', error);
+    } catch (error: any) {
+      const msg = error?.message || String(error);
+      if (msg.includes('token-service-api')) {
+        setAuthErrorMsg(
+          'سرویس Token Service API در پروژه کلود غیرفعال است. می‌توانید بدون نیاز به ورود ابری، مستقیماً از انتخابگر نقش‌های کارخانه در پایین استفاده کنید.'
+        );
+      } else {
+        setAuthErrorMsg('ورود با حساب گوگل انجام نشد. می‌توانید از نقش‌های داخلی سامانه استفاده نمایید.');
+      }
     }
   };
 
   const handleSignOut = async () => {
+    setAuthErrorMsg(null);
     try {
       await signOut(auth);
-    } catch (error) {
-      console.error('Sign-Out failed', error);
+    } catch {
+      // Ignore sign-out errors
     }
   };
 
@@ -194,6 +205,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               </button>
             )}
           </div>
+
+          {authErrorMsg && (
+            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs p-3.5 rounded-xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{authErrorMsg}</span>
+            </div>
+          )}
 
           {/* Role Cards Matrix */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

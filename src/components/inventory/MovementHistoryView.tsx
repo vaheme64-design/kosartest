@@ -66,19 +66,19 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
   const pageSize = 12;
 
   const docTypeLabels: Record<InventoryDocType, { label: string; color: string; icon: any }> = {
-    OPENING_BALANCE: { label: 'موجودی اول دوره', color: 'bg-slate-500/20 text-slate-300 border-slate-500/30', icon: Scale },
-    RECEIPT_RAW_MATERIAL: { label: 'رسید ورود مواد اولیه', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: ArrowDownRight },
-    ISSUE_RAW_MATERIAL: { label: 'حواله خروج و مصرف', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: ArrowUpLeft },
-    RECEIPT_FINISHED_GOODS: { label: 'رسید محصول نهایی', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30', icon: CheckCircle2 },
-    TRANSFER: { label: 'انتقال بین‌انباری', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: ArrowRightLeft },
-    ADJUSTMENT: { label: 'تعدیل انبارگردانی', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30', icon: Scale },
-    REVERSAL: { label: 'سند اصلاحی / ابطال', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30', icon: RotateCcw },
+    OPENING_BALANCE: { label: 'موجودی اول دوره', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Scale },
+    RECEIPT_RAW_MATERIAL: { label: 'رسید ورود مواد اولیه', color: 'bg-emerald-50 text-emerald-800 border-emerald-200', icon: ArrowDownRight },
+    ISSUE_RAW_MATERIAL: { label: 'حواله خروج و مصرف', color: 'bg-amber-50 text-amber-800 border-amber-200', icon: ArrowUpLeft },
+    RECEIPT_FINISHED_GOODS: { label: 'رسید محصول نهایی', color: 'bg-blue-50 text-blue-800 border-blue-200', icon: CheckCircle2 },
+    TRANSFER: { label: 'انتقال بین‌انباری', color: 'bg-purple-50 text-purple-800 border-purple-200', icon: ArrowRightLeft },
+    ADJUSTMENT: { label: 'تعدیل انبارگردانی', color: 'bg-orange-50 text-orange-800 border-orange-200', icon: Scale },
+    REVERSAL: { label: 'سند اصلاحی / ابطال', color: 'bg-rose-50 text-rose-800 border-rose-200', icon: RotateCcw },
   };
 
   const statusLabels: Record<PostingStatus, { label: string; color: string }> = {
-    POSTED: { label: 'قطعی (ثبت در کاردکس)', color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
-    UNPOSTED: { label: 'پیش‌نویس (غیرقطعی)', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
-    REVERSED: { label: 'ابطال‌شده با سند معکوس', color: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' },
+    POSTED: { label: 'قطعی (ثبت کاردکس)', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+    UNPOSTED: { label: 'پیش‌نویس (غیرقطعی)', color: 'bg-amber-50 text-amber-700 border border-amber-200' },
+    REVERSED: { label: 'ابطال‌شده با سند معکوس', color: 'bg-rose-50 text-rose-700 border border-rose-200' },
   };
 
   const filteredDocs = useMemo(() => {
@@ -195,29 +195,29 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header and Quick Summary */}
-      <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
-            <FileText className="w-5 h-5 text-amber-400" />
+          <h2 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-slate-700" />
             تاریخچه تراکنش‌ها و کاردکس اسناد انبار (Ledger)
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
             دفتر ثبت رویدادهای غیرقابل تغییر (Immutable Ledger)؛ هرگونه اصلاح منحصراً از طریق صدور سند معکوس (Reversal) با حفظ ردپای حسابرسی انجام می‌پذیرد.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-all cursor-pointer shadow-xs"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-slate-400' : 'text-slate-500'}`} />
             <span>به‌روزرسانی کاردکس</span>
           </button>
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition-all shadow-md shadow-emerald-900/30 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-all shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>خروجی اکسل (CSV)</span>
@@ -226,41 +226,41 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
       </div>
 
       {/* 4 Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400">اسناد قطعی ثبت‌شده</span>
-            <div className="text-base lg:text-lg font-bold text-emerald-400 mt-1">
+            <span className="text-[11px] font-medium text-slate-500">اسناد قطعی ثبت‌شده</span>
+            <div className="text-xl font-bold text-slate-900 mt-1">
               {formatNumber(postedCount)} <span className="text-xs font-normal text-slate-400">سند</span>
             </div>
           </div>
           <CheckCircle2 className="w-8 h-8 text-emerald-500/20" />
         </div>
 
-        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400">مجموع وزن ورودی (رسیدها)</span>
-            <div className="text-base lg:text-lg font-bold text-blue-400 mt-1">
+            <span className="text-[11px] font-medium text-slate-500">مجموع وزن ورودی (رسیدها)</span>
+            <div className="text-xl font-bold text-slate-900 mt-1">
               {formatWeightKg(totalWeightIn)}
             </div>
           </div>
           <ArrowDownRight className="w-8 h-8 text-blue-500/20" />
         </div>
 
-        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400">مجموع وزن خروجی (حواله‌ها)</span>
-            <div className="text-base lg:text-lg font-bold text-amber-400 mt-1">
+            <span className="text-[11px] font-medium text-slate-500">مجموع وزن خروجی (حواله‌ها)</span>
+            <div className="text-xl font-bold text-slate-900 mt-1">
               {formatWeightKg(totalWeightOut)}
             </div>
           </div>
           <ArrowUpLeft className="w-8 h-8 text-amber-500/20" />
         </div>
 
-        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-slate-400">اسناد اصلاحی / ابطال</span>
-            <div className="text-base lg:text-lg font-bold text-rose-400 mt-1">
+            <span className="text-[11px] font-medium text-slate-500">اسناد اصلاحی / ابطال</span>
+            <div className="text-xl font-bold text-slate-900 mt-1">
               {formatNumber(reversalCount)} <span className="text-xs font-normal text-slate-400">مورد</span>
             </div>
           </div>
@@ -269,7 +269,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
           {/* Search */}
           <div className="relative min-w-[240px] flex-1">
@@ -279,7 +279,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               placeholder="جستجوی شماره سند، کد/نام قطعه، لوت، ذوب یا بارنامه..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg pr-9 pl-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
             />
           </div>
 
@@ -287,7 +287,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
           <select
             value={selectedTypeFilter}
             onChange={e => { setSelectedTypeFilter(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
           >
             <option value="ALL">همه انواع اسناد</option>
             <option value="RECEIPT_RAW_MATERIAL">رسید مواد اولیه (ورق و کویل)</option>
@@ -303,7 +303,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
           <select
             value={selectedWarehouseFilter}
             onChange={e => { setSelectedWarehouseFilter(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
           >
             <option value="ALL">همه انبارها</option>
             {warehouses.map(w => (
@@ -315,7 +315,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
           <select
             value={selectedStatusFilter}
             onChange={e => { setSelectedStatusFilter(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
           >
             <option value="ALL">همه وضعیت‌ها</option>
             <option value="POSTED">قطعی (Posted)</option>
@@ -324,83 +324,84 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
           </select>
         </div>
 
-        <div className="text-xs text-slate-400">
-          تعداد اسناد: <span className="font-bold text-white">{toPersianDigits(filteredDocs.length)}</span>
+        <div className="text-xs text-slate-500">
+          تعداد اسناد: <span className="font-bold text-slate-900 font-mono">{toPersianDigits(filteredDocs.length)}</span>
         </div>
       </div>
 
       {/* Documents List & Accordion */}
       <div className="space-y-3">
         {pagedDocs.length === 0 ? (
-          <div className="bg-slate-800/40 p-12 text-center rounded-2xl border border-slate-700/60 text-slate-400">
+          <div className="bg-white p-12 text-center rounded-xl border border-slate-200/80 shadow-xs text-slate-400">
             هیچ سندی منطبق با معیارهای فیلتر یافت نشد.
           </div>
         ) : (
           pagedDocs.map(doc => {
             const isExpanded = expandedDocId === doc.id;
-            const typeInfo = docTypeLabels[doc.documentType] || { label: doc.documentType, color: 'bg-slate-700 text-slate-300', icon: FileText };
-            const statusInfo = statusLabels[doc.postingStatus] || { label: doc.postingStatus, color: 'bg-slate-700 text-slate-300' };
+            const typeInfo = docTypeLabels[doc.documentType] || { label: doc.documentType, color: 'bg-slate-100 text-slate-700 border-slate-200', icon: FileText };
+            const statusInfo = statusLabels[doc.postingStatus] || { label: doc.postingStatus, color: 'bg-slate-100 text-slate-700' };
             const Icon = typeInfo.icon;
             const canReverse = doc.postingStatus === 'POSTED' && doc.documentType !== 'REVERSAL';
 
             return (
               <div
                 key={doc.id}
-                className={`bg-slate-800/60 rounded-2xl border transition-all ${
-                  isExpanded ? 'border-amber-500/50 shadow-lg shadow-black/20' : 'border-slate-700/60 hover:border-slate-600'
+                className={`bg-white rounded-xl border transition-all ${
+                  isExpanded ? 'border-slate-400 shadow-md' : 'border-slate-200/80 shadow-xs hover:border-slate-300'
                 }`}
               >
                 {/* Document Main Row */}
                 <div className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl border ${typeInfo.color}`}>
+                    <div className={`p-2.5 rounded-lg border ${typeInfo.color}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-amber-400 text-sm">
+                        <span className="font-mono font-bold text-slate-900 text-sm">
                           {doc.documentNumber}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeInfo.color}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${typeInfo.color}`}>
                           {typeInfo.label}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${statusInfo.color}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusInfo.color}`}>
                           {statusInfo.label}
                         </span>
                         {doc.ownership === 'SAPCO_SUPPLIER_OWNED' && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                             امانی ساپکو
                           </span>
                         )}
                         {doc.reversalOfDocNumber && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/10 text-rose-300 border border-rose-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200">
                             اصلاحیه سند: {doc.reversalOfDocNumber}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
-                        <span>تاریخ: <span className="font-mono text-slate-300">{doc.documentDate}</span></span>
-                        <span>انبار: <span className="text-slate-300 font-medium">{doc.warehouseName}</span></span>
+
+                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
+                        <span>تاریخ: <span className="font-mono text-slate-700">{doc.documentDate}</span></span>
+                        <span>انبار: <span className="text-slate-800 font-medium">{doc.warehouseName}</span></span>
                         {doc.targetWarehouseName && (
-                          <span>مقصد: <span className="text-purple-300 font-medium">{doc.targetWarehouseName}</span></span>
+                          <span>مقصد: <span className="text-slate-800 font-medium">{doc.targetWarehouseName}</span></span>
                         )}
                         {doc.contractNumber && (
-                          <span>قرارداد: <span className="font-mono text-cyan-300">{doc.contractNumber}</span></span>
+                          <span>قرارداد: <span className="font-mono text-slate-800 font-medium">{doc.contractNumber}</span></span>
                         )}
                         {doc.referenceNumber && (
-                          <span>ارجاع/بارنامه: <span className="font-mono text-slate-300">{doc.referenceNumber}</span></span>
+                          <span>ارجاع/بارنامه: <span className="font-mono text-slate-700">{doc.referenceNumber}</span></span>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Actions & Metrics */}
-                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-700/60">
+                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
                     <div className="text-left md:text-right">
-                      <div className="text-xs font-bold text-white font-mono">
+                      <div className="text-xs font-bold text-slate-900 font-mono">
                         {formatWeightKg(doc.totalWeightKg)}
                       </div>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-[11px] text-slate-500">
                         {toPersianDigits(doc.lines.length)} ردیف کالا ({formatNumber(doc.totalQuantity)} عدد/شیت)
                       </div>
                     </div>
@@ -413,7 +414,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
                             setReversalReason('');
                             setReversalError(null);
                           }}
-                          className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
                           title="صدور سند اصلاحی و ابطال معکوس"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
@@ -423,7 +424,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
 
                       <button
                         onClick={() => setExpandedDocId(isExpanded ? null : doc.id)}
-                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
                       >
                         <span>{isExpanded ? 'بستن اقلام' : 'مشاهده اقلام'}</span>
                         {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -434,22 +435,22 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
 
                 {/* Expanded Lines Table */}
                 {isExpanded && (
-                  <div className="border-t border-slate-700/60 p-4 bg-slate-900/40 rounded-b-2xl space-y-3">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
+                  <div className="border-t border-slate-100 p-4 bg-slate-50/70 rounded-b-xl space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
                       <div>
-                        اقلام ثبت‌شده در سند <span className="font-mono text-amber-400">{doc.documentNumber}</span>
+                        اقلام ثبت‌شده در سند <span className="font-mono font-bold text-slate-900">{doc.documentNumber}</span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span>ثبت‌کننده: <strong className="text-white">{doc.createdByName}</strong></span>
+                        <span>ثبت‌کننده: <strong className="text-slate-800 font-semibold">{doc.createdByName}</strong></span>
                         {doc.postedByName && (
-                          <span>تأیید نهایی: <strong className="text-emerald-400">{doc.postedByName}</strong></span>
+                          <span>تأیید نهایی: <strong className="text-emerald-700 font-semibold">{doc.postedByName}</strong></span>
                         )}
                       </div>
                     </div>
 
                     {(doc.adjustmentReason || doc.auditNote) && (
-                      <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700 text-xs text-slate-300 flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-700 flex items-start gap-2 shadow-xs">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                           <strong>علت یا یادداشت حسابرسی: </strong>
                           <span>{doc.adjustmentReason || doc.auditNote}</span>
@@ -457,10 +458,10 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
                       </div>
                     )}
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-700/60">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-xs">
                       <table className="w-full text-right text-xs">
                         <thead>
-                          <tr className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-700">
+                          <tr className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                             <th className="py-2.5 px-3">ردیف</th>
                             <th className="py-2.5 px-3">کد کاتالوگ</th>
                             <th className="py-2.5 px-3">عنوان کالا</th>
@@ -473,32 +474,32 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
                             <th className="py-2.5 px-3 text-left">وزن (کیلوگرم)</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800">
+                        <tbody className="divide-y divide-slate-100">
                           {doc.lines.map((line, idx) => (
-                            <tr key={line.id || idx} className="hover:bg-slate-800/30">
+                            <tr key={line.id || idx} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-2.5 px-3 text-slate-400 font-mono">{toPersianDigits(idx + 1)}</td>
-                              <td className="py-2.5 px-3 font-mono font-bold text-amber-400">{line.partCode}</td>
-                              <td className="py-2.5 px-3 text-slate-200 font-medium">{line.partName}</td>
-                              <td className="py-2.5 px-3 font-mono text-cyan-300">{line.lotNumber || '-'}</td>
-                              <td className="py-2.5 px-3 font-mono text-slate-300">{line.heatNumber || '-'}</td>
-                              <td className="py-2.5 px-3 font-mono text-slate-400">{line.locationCode}</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{line.partCode}</td>
+                              <td className="py-2.5 px-3 text-slate-800 font-medium">{line.partName}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-700">{line.lotNumber || '-'}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-500">{line.heatNumber || '-'}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-600">{line.locationCode}</td>
                               <td className="py-2.5 px-3">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  line.qualityStatus === 'AVAILABLE' ? 'bg-emerald-500/20 text-emerald-300' :
-                                  line.qualityStatus === 'QUALITY_BLOCKED' ? 'bg-rose-500/20 text-rose-300' :
-                                  line.qualityStatus === 'REJECTED' ? 'bg-red-500/30 text-red-300' :
-                                  'bg-amber-500/20 text-amber-300'
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                  line.qualityStatus === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-800' :
+                                  line.qualityStatus === 'QUALITY_BLOCKED' ? 'bg-rose-50 text-rose-800' :
+                                  line.qualityStatus === 'REJECTED' ? 'bg-red-100 text-red-900' :
+                                  'bg-amber-50 text-amber-800'
                                 }`}>
                                   {line.qualityStatus === 'AVAILABLE' ? 'قابل استفاده' :
                                    line.qualityStatus === 'QUALITY_BLOCKED' ? 'مسدود کیفی' :
                                    line.qualityStatus === 'REJECTED' ? 'نامنطبق / ضایعات' : 'قرنطینه'}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-3 font-mono font-bold text-white text-left">
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-900 text-left">
                                 {formatNumber(line.quantity)}
                               </td>
-                              <td className="py-2.5 px-3 text-slate-400 font-medium">{line.unit}</td>
-                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-400 text-left">
+                              <td className="py-2.5 px-3 text-slate-500 font-medium">{line.unit}</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-900 text-left">
                                 {formatWeightKg(line.quantityKg)}
                               </td>
                             </tr>
@@ -516,7 +517,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
 
       {/* Pagination Bar */}
       {totalPages > 1 && (
-        <div className="p-3 bg-slate-900/60 border border-slate-700/60 rounded-xl flex items-center justify-between text-xs text-slate-400">
+        <div className="p-3 bg-white border border-slate-200/80 rounded-xl flex items-center justify-between text-xs text-slate-500 shadow-xs">
           <div>
             نمایش صفحه {toPersianDigits(currentPage)} از {toPersianDigits(totalPages)}
           </div>
@@ -524,7 +525,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               قبلی
             </button>
@@ -534,8 +535,8 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
                 onClick={() => setCurrentPage(pageNum)}
                 className={`w-7 h-7 rounded-lg font-mono font-medium transition-colors cursor-pointer ${
                   currentPage === pageNum
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    ? 'bg-slate-900 text-white font-bold'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                 }`}
               >
                 {toPersianDigits(pageNum)}
@@ -544,7 +545,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               بعدی
             </button>
@@ -554,58 +555,58 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
 
       {/* Reversal Confirmation Modal */}
       {reversalDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30">
+              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
                 <RotateCcw className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-slate-900">
                   ابطال سند و صدور سند معکوس (Reversal)
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  سند شماره <span className="font-mono text-amber-400 font-bold">{reversalDoc.documentNumber}</span>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  سند شماره <span className="font-mono text-slate-900 font-bold">{reversalDoc.documentNumber}</span>
                 </p>
               </div>
             </div>
 
-            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-300 space-y-1">
+            <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-xl text-xs text-rose-800 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4" />
+                <ShieldAlert className="w-4 h-4 text-rose-600" />
                 <span>قانون تغییرناپذیری اسناد انبار (Immutable Documents)</span>
               </div>
-              <p className="text-slate-300 leading-relaxed text-[11px]">
+              <p className="text-slate-600 leading-relaxed text-[11px]">
                 اسناد قطعی ثبت‌شده قابل حذف یا ویرایش مستقیم نیستند. این عملیات یک سند معکوس هم‌ارز با مقادیر جبرانی صادر کرده و وضعیت سند جاری را به «ابطال‌شده» تغییر می‌دهد تا دفاتر کاردکس و موجودی تصحیح شوند.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-200">
-                دلیل رسمی ابطال و صدور سند معکوس <span className="text-rose-400">*</span>
+              <label className="text-xs font-semibold text-slate-700">
+                دلیل رسمی ابطال و صدور سند معکوس <span className="text-rose-500">*</span>
               </label>
               <textarea
                 value={reversalReason}
                 onChange={e => setReversalReason(e.target.value)}
                 placeholder="مثال: اصلاح خطای اپراتور در ثبت بارنامه، مغایرت تناژ با باسکول، برگشت سفارش تولید..."
                 rows={3}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               />
             </div>
 
             {reversalError && (
-              <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-xl text-xs text-rose-300 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                 <span>{reversalError}</span>
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setReversalDoc(null)}
                 disabled={isSubmittingReversal}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium cursor-pointer transition-colors"
               >
                 انصراف
               </button>
@@ -613,7 +614,7 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
                 type="button"
                 onClick={handleConfirmReversal}
                 disabled={isSubmittingReversal}
-                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
               >
                 <RotateCcw className={`w-4 h-4 ${isSubmittingReversal ? 'animate-spin' : ''}`} />
                 <span>تأیید و صدور سند معکوس</span>

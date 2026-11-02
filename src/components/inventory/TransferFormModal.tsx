@@ -2,17 +2,17 @@ import React, { useState, useMemo } from 'react';
 import {
   X,
   ArrowRightLeft,
-  Building2,
-  AlertTriangle,
   CheckCircle2,
   AlertCircle,
+  ArrowLeft,
+  Building2,
 } from 'lucide-react';
 import {
   Part,
   WarehouseDefinition,
   DetailedStockBalance,
 } from '../../types/inventory';
-import { formatNumber, formatWeightKg } from '../../utils/formatters';
+import { formatNumber } from '../../utils/formatters';
 
 interface TransferFormModalProps {
   isOpen: boolean;
@@ -31,11 +31,12 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
   balances,
   onSubmit,
 }) => {
-  const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('WH-FINISHED');
-  const [targetWarehouseId, setTargetWarehouseId] = useState<string>('WH-RAW');
-  const [sourceLocationCode, setSourceLocationCode] = useState<string>('LOC-FIN-P1');
-  const [targetLocationCode, setTargetLocationCode] = useState<string>('LOC-RAW-B1');
+  const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('WH-RAW');
+  const [targetWarehouseId, setTargetWarehouseId] = useState<string>('WH-WIP-STAMP');
+  const [sourceLocationCode, setSourceLocationCode] = useState<string>('LOC-RAW-A1');
+  const [targetLocationCode, setTargetLocationCode] = useState<string>('LOC-WIP-S1');
   const [selectedPartId, setSelectedPartId] = useState<string>('');
+  const [selectedLotNumber, setSelectedLotNumber] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -52,7 +53,20 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
   const sourceWh = warehouses.find(w => w.id === sourceWarehouseId);
   const targetWh = warehouses.find(w => w.id === targetWarehouseId);
 
-  // Available stock in source warehouse
+  const sourceLots = useMemo(() => {
+    return balances.filter(
+      b => b.partId === selectedPartId && b.warehouseId === sourceWarehouseId && b.availableQty > 0
+    );
+  }, [balances, selectedPartId, sourceWarehouseId]);
+
+  React.useEffect(() => {
+    if (sourceLots.length > 0) {
+      setSelectedLotNumber(sourceLots[0].lotNumber || '');
+    } else {
+      setSelectedLotNumber('');
+    }
+  }, [sourceLots]);
+
   const availableInSource = useMemo(() => {
     const list = balances.filter(b => b.partId === selectedPartId && b.warehouseId === sourceWarehouseId);
     return list.reduce((sum, b) => sum + b.availableQty, 0);
@@ -80,7 +94,7 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
 
     if (isOverdraft) {
       setErrorMessage(
-        `خطای موجودی: مقدار انتقال (${requestedQty}) از موجودی آزاد انبار مبدا (${availableInSource}) بیشتر است.`
+        `موجودی قابل استفاده در انبار مبدا کافی نیست. موجودی آزاد مبدا: ${formatNumber(availableInSource)}؛ مقدار درخواستی جهت انتقال: ${formatNumber(requestedQty)}.`
       );
       return;
     }
@@ -102,6 +116,7 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
           partId: selectedPartId,
           partCode: selectedPart?.code,
           partName: selectedPart?.name,
+          lotNumber: selectedLotNumber || undefined,
           locationCode: sourceLocationCode,
           targetLocationCode,
           quantity: requestedQty,
@@ -116,70 +131,55 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
     setLoading(false);
 
     if (res.success) {
+      setQuantity('');
       onClose();
     } else {
-      setErrorMessage(res.error || 'خطا در ثبت انتقال');
+      setErrorMessage(res.error || 'خطا در ثبت انتقال بین انبارها');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden my-6">
         {/* Header */}
-        <div className="p-4 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20">
+        <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 bg-purple-600 text-white rounded-xl">
               <ArrowRightLeft className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="text-sm lg:text-base font-bold text-white">
-                حواله انتقال بین انبارها (Inventory Transfer)
+              <h3 className="text-sm lg:text-base font-bold text-slate-900">
+                انتقال کالا و رول بین انبارها (Warehouse Transfer)
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                جابجایی اقلام بین انبارهای کارخانه و پای‌کارهای سالن بدون تغییر در مالکیت کل
+              <p className="text-xs text-slate-500 mt-0.5">
+                جابجایی فیزیکی رول ورق یا قطعات از انبار مبدا به انبار مقصد با حفظ مالکیت و شماره کویل‌پک
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 text-xs">
           {errorMessage && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-300 text-xs">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Part Selection */}
-          <div>
-            <label className="block text-slate-300 font-semibold mb-1">
-              انتخاب کالا / قطعه <span className="text-rose-400">*</span>
-            </label>
-            <select
-              value={selectedPartId}
-              onChange={e => setSelectedPartId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500 font-medium"
-            >
-              {parts.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.code}) - {p.unit}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Source and Target Warehouses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-slate-400 font-bold block mb-2">مبدا جابجایی:</span>
-              <label className="block text-slate-300 mb-1">انبار مبدا</label>
+          {/* Visual Source -> Destination Flow */}
+          <div className="grid grid-cols-1 md:grid-cols-11 gap-3 items-center">
+            <div className="md:col-span-5 bg-amber-50/60 p-4 rounded-xl border border-amber-200 space-y-2.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <Building2 className="w-4 h-4 text-amber-700" />
+                <span>۱. انبار مبدا (خروج از)</span>
+              </div>
               <select
                 value={sourceWarehouseId}
                 onChange={e => {
@@ -187,7 +187,7 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
                   const wh = warehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setSourceLocationCode(wh.locations[0]);
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500"
+                className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
               >
                 {warehouses.map(w => (
                   <option key={w.id} value={w.id}>
@@ -195,24 +195,33 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
                   </option>
                 ))}
               </select>
-
-              <label className="block text-slate-300 mt-2 mb-1">موقعیت مبدا</label>
-              <select
-                value={sourceLocationCode}
-                onChange={e => setSourceLocationCode(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500 font-mono"
-              >
-                {(sourceWh?.locations || ['LOC-01']).map(loc => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <span className="text-[11px] text-slate-600 block mb-1">جایگاه مبدا:</span>
+                <select
+                  value={sourceLocationCode}
+                  onChange={e => setSourceLocationCode(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-mono"
+                >
+                  {(sourceWh?.locations || ['LOC-01']).map(loc => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-              <span className="text-slate-400 font-bold block mb-2">مقصد جابجایی:</span>
-              <label className="block text-slate-300 mb-1">انبار مقصد</label>
+            <div className="md:col-span-1 flex justify-center">
+              <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600">
+                <ArrowLeft className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="md:col-span-5 bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 space-y-2.5">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                <Building2 className="w-4 h-4 text-emerald-700" />
+                <span>۲. انبار مقصد (ورود به)</span>
+              </div>
               <select
                 value={targetWarehouseId}
                 onChange={e => {
@@ -220,7 +229,7 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
                   const wh = warehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setTargetLocationCode(wh.locations[0]);
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500"
+                className="w-full bg-white border border-emerald-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
               >
                 {warehouses.map(w => (
                   <option key={w.id} value={w.id}>
@@ -228,35 +237,66 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
                   </option>
                 ))}
               </select>
+              <div>
+                <span className="text-[11px] text-slate-600 block mb-1">جایگاه مقصد:</span>
+                <select
+                  value={targetLocationCode}
+                  onChange={e => setTargetLocationCode(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-mono"
+                >
+                  {(targetWh?.locations || ['LOC-01']).map(loc => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
-              <label className="block text-slate-300 mt-2 mb-1">موقعیت مقصد</label>
+          {/* Item & Lot Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                انتخاب کالا / ورق جهت انتقال <span className="text-rose-500">*</span>
+              </label>
               <select
-                value={targetLocationCode}
-                onChange={e => setTargetLocationCode(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500 font-mono"
+                value={selectedPartId}
+                onChange={e => setSelectedPartId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-semibold"
               >
-                {(targetWh?.locations || ['LOC-01']).map(loc => (
-                  <option key={loc} value={loc}>
-                    {loc}
+                {parts.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.code}) — {p.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                انتخاب کویل‌پک / بچ موجود در مبدا
+              </label>
+              <select
+                value={selectedLotNumber}
+                onChange={e => setSelectedLotNumber(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-mono"
+              >
+                <option value="">همه موجودی آزاد مبدا ({formatNumber(availableInSource)} {selectedPart?.unit})</option>
+                {sourceLots.map(l => (
+                  <option key={l.id} value={l.lotNumber || ''}>
+                    {l.lotNumber} — موجودی آزاد: {formatNumber(l.availableQty)} {l.unit}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Available stock in source */}
-          <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 flex items-center justify-between">
-            <span className="text-slate-400">موجودی آزاد در انبار مبدا:</span>
-            <span className="font-mono font-bold text-emerald-400 text-sm">
-              {formatNumber(availableInSource)} {selectedPart?.unit}
-            </span>
-          </div>
-
           {/* Quantity and Ref */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                تعداد / مقدار انتقالی <span className="text-rose-400">*</span>
+              <label className="block text-slate-700 font-semibold mb-1">
+                مقدار انتقال ({selectedPart?.unit === 'KG' ? 'کیلوگرم' : 'عدد'}) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -264,59 +304,59 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
                 placeholder="مقدار جابجایی..."
-                className={`w-full bg-slate-800 border rounded-xl px-3 py-2 text-slate-200 font-mono font-bold text-sm focus:outline-none ${
-                  isOverdraft ? 'border-rose-500 text-rose-400' : 'border-slate-700 focus:border-purple-500'
+                className={`w-full bg-slate-50 border rounded-xl px-3.5 py-2.5 text-slate-900 font-mono font-bold text-sm focus:outline-none ${
+                  isOverdraft ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-300 focus:bg-white focus:border-slate-900'
                 }`}
               />
               {isOverdraft && (
-                <span className="text-[11px] text-rose-400 mt-1 block">
-                  خطا: مقدار بیش از موجودی آزاد مبدا است!
+                <span className="text-[11px] text-rose-600 mt-1 block">
+                  مقدار درخواستی بیش از موجودی آزاد انبار مبدا ({formatNumber(availableInSource)}) است.
                 </span>
               )}
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                شماره پیگیری / مجوز جابجایی
+              <label className="block text-slate-700 font-semibold mb-1">
+                شماره مجوز / حواله جابجایی
               </label>
               <input
                 type="text"
                 value={referenceNumber}
                 onChange={e => setReferenceNumber(e.target.value)}
-                placeholder="e.g. TRF-PERMIT-1403"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-purple-500"
+                placeholder="مثلاً TRF-1403-402"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 font-mono"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">توضیحات</label>
+            <label className="block text-slate-700 font-semibold mb-1">توضیحات انتقال</label>
             <input
               type="text"
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="شرح علت جابجایی بین سالن‌ها..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-purple-500"
+              placeholder="علت انتقال بین انبارها..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-slate-900"
             />
           </div>
 
           {/* Actions */}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium cursor-pointer"
             >
               انصراف
             </button>
             <button
               type="submit"
               disabled={loading || isOverdraft || requestedQty <= 0}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-900/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{loading ? 'در حال انتقال...' : 'ثبت قطعی انتقال بین انبارها'}</span>
+              <span>{loading ? 'در حال ثبت انتقال...' : 'ثبت قطعی انتقال بین انبارها'}</span>
             </button>
           </div>
         </form>

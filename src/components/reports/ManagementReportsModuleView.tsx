@@ -426,45 +426,26 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
-              <FileSpreadsheet className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-100">
-                سامانه گزارشات مدیریتی و نظارت و کنترل تولید (KPIMS Management Reports)
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                ۱۳ گزارش تحلیلی، تطبیق برنامه و واقعی، بیلان امانی ساپکو، گردش اسناد و ممیزی انبارگردانی
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchActiveReport}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              بروزرسانی داده‌ها
-            </button>
+      {/* Sleek Header & Report Selector */}
+      <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 tracking-wide">
+              گزارش‌های نظارتی و کنترل تولید (KPIMS)
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              ۱۳ گزارش تحلیلی، تطبیق برنامه و واقعی، بیلان امانی ساپکو و گردش اسناد
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* Report Selector Dropdown / Pills */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium shrink-0">انتخاب نوع گزارش:</span>
+            <span className="text-xs text-slate-500 shrink-0">گزارش:</span>
             <select
               value={activeReport}
               onChange={e => setActiveReport(e.target.value as ReportTypeKey)}
-              className="bg-slate-950 border border-slate-700 text-slate-100 font-bold text-xs rounded-lg px-3 py-2 w-full sm:w-auto focus:outline-none focus:border-amber-500"
+              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:bg-white focus:border-slate-900 cursor-pointer"
             >
               {reportDefinitions.map(r => (
                 <option key={r.id} value={r.id}>
@@ -474,19 +455,14 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
             </select>
           </div>
 
-          {/* Report Metadata Status Badge */}
-          {reportMeta && (
-            <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3">
-              <span>
-                تاریخ تولید گزارش:{' '}
-                <strong className="text-slate-200">{formatToJalali(reportMeta.generatedAt)}</strong>
-              </span>
-              <span>
-                تعداد رکوردها:{' '}
-                <strong className="text-amber-400 font-mono">{toPersianDigits(reportMeta.totalRecordsCount)}</strong>
-              </span>
-            </div>
-          )}
+          <button
+            onClick={fetchActiveReport}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>بروزرسانی</span>
+          </button>
         </div>
       </div>
 
@@ -501,20 +477,34 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
       />
 
       {/* Main Report Table Container */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-100">
+      <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xs font-bold text-slate-800">
               {reportDefinitions.find(r => r.id === activeReport)?.title}
             </h3>
+            {reportMeta && (
+              <span className="text-[11px] text-slate-400 font-mono">
+                ({toPersianDigits(reportMeta.totalRecordsCount)} سطر)
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-              ● مقادیر قطعی واقعی
+          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="text-emerald-600">●</span> مقادیر قطعی
             </span>
-            <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
-              ▲ مقادیر برآوردی/تخمینی
+            <span className="text-slate-300">·</span>
+            <span className="flex items-center gap-1">
+              <span className="text-amber-600">▲</span> مقادیر تخمینی
             </span>
+            {reportMeta && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-400 font-mono text-[10px]">
+                  {formatToJalali(reportMeta.generatedAt)}
+                </span>
+              </>
+            )}
           </div>
         </div>
 

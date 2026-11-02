@@ -35,6 +35,12 @@ import {
   atomicPostDocument,
   createReversalDocument,
   calculateSapcoContractLedger,
+  issuePhysicalCoilPartial,
+  returnPhysicalCoilPartial,
+  buildCustomInventoryReport,
+  validateImportBatchRows,
+  sanitizeCsvValue,
+  postDocumentInDbTransaction,
   AuditRecord,
 } from './inventoryEngine';
 import {
@@ -48,9 +54,15 @@ import {
   InventoryDocumentLine,
   InventoryReservation,
   SapcoContract,
+  ContractCommercialLine,
   WAREHOUSES_LIST,
   StockOwnership,
   StockQualityStatus,
+  PhysicalCoil,
+  ContractCoilAllocation,
+  CoilIssueReturnRecord,
+  SavedReportConfig,
+  ImportBatchSummary,
   InventoryDocType,
 } from '../types/inventory';
 import {
@@ -114,6 +126,156 @@ let inventoryDocsStore: InventoryDocument[] = [...INITIAL_INVENTORY_DOCUMENTS];
 let contractsStore: SapcoContract[] = [...INITIAL_SAPCO_CONTRACTS];
 let reservationsStore: InventoryReservation[] = [...INITIAL_INVENTORY_RESERVATIONS];
 let auditLogsStore: AuditRecord[] = [...INITIAL_AUDIT_LOGS];
+
+// Enhanced Physical Coils & Multi-Contract Allocation Store
+export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
+  {
+    id: 'COIL-PHYS-01',
+    coilId: 'COIL-1403-0498',
+    coilPackNumber: 'CP-1001',
+    partId: 'PRT-RAW-001',
+    partCode: 'SAPCO-COIL-DC04-0.8',
+    partName: 'کویل ورق روغنی کشش عمیق DC04 ضخامت 0.8mm ساپکو',
+    materialGrade: 'DC04',
+    heatNumber: 'HT-MOB-98241',
+    thicknessMm: 0.8,
+    widthMm: 1250,
+    originalWeightKg: 14200,
+    remainingWeightKg: 14200,
+    warehouseId: 'WH-RAW',
+    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseLocationCode: 'LOC-RAW-A1',
+    ownership: 'SAPCO_SUPPLIER_OWNED',
+    qualityStatus: 'AVAILABLE',
+    physicalStatus: 'AVAILABLE',
+    supplierName: 'ساپکو (ایران‌خودرو)',
+    receiptDate: '2024-10-01T07:00:00.000Z',
+    allocations: [
+      {
+        contractId: 'CNT-SAPCO-1403-Q3',
+        contractNumber: 'CNT-SAPCO-1403-Q3',
+        coilId: 'COIL-PHYS-01',
+        allocatedWeightKg: 14200,
+        ownership: 'SAPCO_SUPPLIER_OWNED',
+      },
+    ],
+  },
+  {
+    id: 'COIL-PHYS-02',
+    coilId: 'COIL-1403-0501',
+    coilPackNumber: 'CP-1002',
+    partId: 'PRT-RAW-002',
+    partCode: 'SAPCO-COIL-ST14-1.0',
+    partName: 'کویل ورق روغنی ST14 ضخامت 1.0mm فولاد مبارکه / ساپکو',
+    materialGrade: 'ST14',
+    heatNumber: 'HT-MOB-77103',
+    thicknessMm: 1.0,
+    widthMm: 1000,
+    originalWeightKg: 12500,
+    remainingWeightKg: 12500,
+    warehouseId: 'WH-RAW',
+    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseLocationCode: 'LOC-RAW-A2',
+    ownership: 'SAPCO_SUPPLIER_OWNED',
+    qualityStatus: 'AVAILABLE',
+    physicalStatus: 'AVAILABLE',
+    supplierName: 'ساپکو (ایران‌خودرو)',
+    receiptDate: '2024-10-01T07:00:00.000Z',
+    allocations: [
+      {
+        contractId: 'CNT-SAPCO-1403-Q4-TARA',
+        contractNumber: 'CNT-SAPCO-1403-Q4-TARA',
+        coilId: 'COIL-PHYS-02',
+        allocatedWeightKg: 12500,
+        ownership: 'SAPCO_SUPPLIER_OWNED',
+      },
+    ],
+  },
+  {
+    id: 'COIL-PHYS-03',
+    coilId: 'COIL-1403-0520',
+    coilPackNumber: 'CP-1003',
+    partId: 'PRT-RAW-001',
+    partCode: 'SAPCO-COIL-DC04-0.8',
+    partName: 'کویل ورق روغنی کشش عمیق DC04 ضخامت 0.8mm ساپکو',
+    materialGrade: 'DC04',
+    heatNumber: 'HT-MOB-99410',
+    thicknessMm: 0.8,
+    widthMm: 1250,
+    originalWeightKg: 13800,
+    remainingWeightKg: 13800,
+    warehouseId: 'WH-RAW',
+    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseLocationCode: 'LOC-RAW-A1',
+    ownership: 'SAPCO_SUPPLIER_OWNED',
+    qualityStatus: 'AVAILABLE',
+    physicalStatus: 'AVAILABLE',
+    supplierName: 'ساپکو (ایران‌خودرو)',
+    receiptDate: '2024-10-15T09:00:00.000Z',
+    allocations: [
+      {
+        contractId: 'CNT-SAPCO-1403-Q3',
+        contractNumber: 'CNT-SAPCO-1403-Q3',
+        coilId: 'COIL-PHYS-03',
+        allocatedWeightKg: 13800,
+        ownership: 'SAPCO_SUPPLIER_OWNED',
+      },
+    ],
+  },
+  {
+    id: 'COIL-PHYS-04',
+    coilId: 'COIL-1403-DUAL-01',
+    coilPackNumber: 'CP-1004',
+    partId: 'PRT-RAW-001',
+    partCode: 'SAPCO-COIL-DC04-0.8',
+    partName: 'کویل ورق روغنی کشش عمیق DC04 ضخامت 0.8mm ساپکو',
+    materialGrade: 'DC04',
+    heatNumber: 'HT-MOB-11024',
+    thicknessMm: 0.8,
+    widthMm: 1250,
+    originalWeightKg: 2000,
+    remainingWeightKg: 2000,
+    warehouseId: 'WH-RAW',
+    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseLocationCode: 'LOC-RAW-A3',
+    ownership: 'SAPCO_SUPPLIER_OWNED',
+    qualityStatus: 'AVAILABLE',
+    physicalStatus: 'AVAILABLE',
+    supplierName: 'ساپکو (ایران‌خودرو)',
+    receiptDate: '2024-10-25T11:00:00.000Z',
+    allocations: [
+      {
+        contractId: 'CNT-SAPCO-1403-Q3',
+        contractNumber: 'CNT-SAPCO-1403-Q3',
+        coilId: 'COIL-PHYS-04',
+        allocatedWeightKg: 1200,
+        ownership: 'SAPCO_SUPPLIER_OWNED',
+      },
+      {
+        contractId: 'CNT-SAPCO-1403-Q4-TARA',
+        contractNumber: 'CNT-SAPCO-1403-Q4-TARA',
+        coilId: 'COIL-PHYS-04',
+        allocatedWeightKg: 800,
+        ownership: 'SAPCO_SUPPLIER_OWNED',
+      },
+    ],
+  },
+];
+
+let physicalCoilsStore: PhysicalCoil[] = [...INITIAL_PHYSICAL_COILS];
+let coilIssueRecordsStore: CoilIssueReturnRecord[] = [];
+let savedReportsStore: SavedReportConfig[] = [
+  {
+    id: 'REP-CFG-01',
+    name: 'موجودی کل کلاف‌ها بر اساس پکینگ و گرید',
+    reportType: 'COILS_SUMMARY',
+    selectedColumns: ['materialGrade', 'thicknessMm', 'widthMm', 'coilPackNumber', 'totalCoilsCount', 'totalRemainingWeightKg'],
+    groupBy: ['materialGrade', 'coilPackNumber'],
+    filters: {},
+    createdAt: new Date().toISOString(),
+  },
+];
+let importBatchesStore: ImportBatchSummary[] = [];
 
 export const apiRouter = Router();
 
@@ -1087,6 +1249,11 @@ apiRouter.post('/inventory/documents', (req: Request, res: Response) => {
         auditLogsStore.unshift(postResult.auditRecord);
       }
 
+      // Persist to PostgreSQL via Prisma transaction
+      postDocumentInDbTransaction(newDoc, user).catch(err => {
+        console.warn('PostgreSQL Prisma transaction background warning:', err?.message || err);
+      });
+
       return res.status(201).json({
         success: true,
         message: `سند شماره «${newDoc.documentNumber}» با موفقیت صادر و ثبت قطعی گردید.`,
@@ -1142,6 +1309,11 @@ apiRouter.post('/inventory/documents/:id/post', (req: Request, res: Response) =>
     if (postResult.auditRecord) {
       auditLogsStore.unshift(postResult.auditRecord);
     }
+
+    // Persist to PostgreSQL via Prisma transaction
+    postDocumentInDbTransaction(doc, postUser).catch(err => {
+      console.warn('PostgreSQL Prisma transaction background warning:', err?.message || err);
+    });
 
     res.json({
       success: true,
@@ -1416,10 +1588,939 @@ apiRouter.get('/inventory/sapco-account', (_req: Request, res: Response) => {
 });
 
 /**
+ * 16.11.1. Contracts & Commitments Management (CRUD, Customer Materials & Product Delivery Commitments)
+ */
+apiRouter.get('/inventory/contracts', (req: Request, res: Response) => {
+  try {
+    const { search, customerName, status, contractType } = req.query;
+    const { contractsWithBalances } = calculateSapcoContractLedger(contractsStore, inventoryDocsStore);
+
+    let list = contractsWithBalances.map(c => {
+      // Find connected coils from physicalCoilsStore
+      const connectedCoils = physicalCoilsStore
+        .filter(coil => (coil.allocations || []).some(a => a.contractId === c.id || a.contractNumber === c.contractNumber))
+        .map(coil => {
+          const alloc = (coil.allocations || []).find(a => a.contractId === c.id || a.contractNumber === c.contractNumber);
+          return {
+            coilId: coil.coilId,
+            coilPackNumber: coil.coilPackNumber,
+            allocatedWeightKg: alloc?.allocatedWeightKg || coil.remainingWeightKg,
+            remainingWeightKg: coil.remainingWeightKg,
+            thicknessMm: coil.thicknessMm,
+            widthMm: coil.widthMm,
+            materialGrade: coil.materialGrade,
+            warehouseName: coil.warehouseName,
+          };
+        });
+
+      return {
+        ...c,
+        coils: connectedCoils.length > 0 ? connectedCoils : (c.coils || []),
+      };
+    });
+
+    if (customerName && typeof customerName === 'string' && customerName !== 'ALL') {
+      list = list.filter(c => c.customerName && c.customerName.includes(customerName));
+    }
+    if (status && typeof status === 'string' && status !== 'ALL') {
+      list = list.filter(c => c.status === status);
+    }
+    if (contractType && typeof contractType === 'string' && contractType !== 'ALL') {
+      list = list.filter(c => c.contractType === contractType);
+    }
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(c =>
+        c.contractNumber.toLowerCase().includes(q) ||
+        c.title.toLowerCase().includes(q) ||
+        (c.customerName && c.customerName.toLowerCase().includes(q)) ||
+        (c.materialGrade && c.materialGrade.toLowerCase().includes(q)) ||
+        (c.notes && c.notes.toLowerCase().includes(q))
+      );
+    }
+
+    res.json({
+      success: true,
+      count: list.length,
+      data: list,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در دریافت لیست قراردادها',
+    });
+  }
+});
+
+apiRouter.post('/inventory/contracts', (req: Request, res: Response) => {
+  try {
+    const payload = req.body;
+    if (!payload.contractNumber || !payload.title) {
+      return res.status(400).json({
+        success: false,
+        error: 'شماره قرارداد و عنوان قرارداد الزامی هستند.',
+      });
+    }
+
+    // Check unique contract number
+    const exists = contractsStore.find(c => c.contractNumber.trim().toLowerCase() === payload.contractNumber.trim().toLowerCase());
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        error: `قرارداد با شماره «${payload.contractNumber}» قبلاً در سیستم ثبت شده است.`,
+      });
+    }
+
+    const newId = payload.id || `CNT-${Date.now()}`;
+    const newContract: SapcoContract = {
+      id: newId,
+      contractNumber: payload.contractNumber.trim(),
+      title: payload.title.trim(),
+      customerName: payload.customerName || 'شرکت ساپکو',
+      contractType: payload.contractType || 'HYBRID',
+      ownership: payload.ownership || 'SAPCO_SUPPLIER_OWNED',
+      materialGrade: payload.materialGrade || 'DC04',
+      allocatedWeightKg: Number(payload.allocatedWeightKg) || 0,
+      openingBalanceKg: Number(payload.openingBalanceKg) || 0,
+      totalReceivedKg: 0,
+      totalConsumedKg: 0,
+      closingBalanceKg: Number(payload.openingBalanceKg) || 0,
+      associatedPartCodes: Array.isArray(payload.associatedPartCodes) ? payload.associatedPartCodes : [],
+      status: payload.status || 'ACTIVE',
+      startDate: payload.startDate || new Date().toISOString(),
+      endDate: payload.endDate || new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString(),
+      notes: payload.notes || '',
+      commercialLines: Array.isArray(payload.commercialLines) ? payload.commercialLines : [],
+      coils: Array.isArray(payload.coils) ? payload.coils : [],
+    };
+
+    contractsStore.unshift(newContract);
+
+    // If coils were specified for allocation, link them in physicalCoilsStore
+    if (Array.isArray(payload.coils) && payload.coils.length > 0) {
+      for (const coilAlloc of payload.coils) {
+        const physical = physicalCoilsStore.find(c => c.coilId === coilAlloc.coilId || c.id === coilAlloc.coilId);
+        if (physical) {
+          if (!physical.allocations) physical.allocations = [];
+          // Avoid duplicate allocation
+          const existingAllocIdx = physical.allocations.findIndex(a => a.contractId === newId || a.contractNumber === newContract.contractNumber);
+          const allocEntry: ContractCoilAllocation = {
+            id: `ALLOC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            contractId: newId,
+            contractNumber: newContract.contractNumber,
+            coilId: physical.id,
+            allocatedWeightKg: Number(coilAlloc.allocatedWeightKg) || physical.remainingWeightKg,
+            ownership: newContract.ownership || 'SAPCO_SUPPLIER_OWNED',
+            notes: 'تخصیص در زمان ثبت اولیه قرارداد',
+          };
+          if (existingAllocIdx >= 0) {
+            physical.allocations[existingAllocIdx] = allocEntry;
+          } else {
+            physical.allocations.push(allocEntry);
+          }
+        }
+      }
+    }
+
+    // Record Audit Log
+    auditLogsStore.unshift({
+      id: `AUD-${Date.now()}`,
+      action: 'CONTRACT_CREATE',
+      entityName: 'MaterialContract',
+      entityId: newContract.contractNumber,
+      user: {
+        uid: payload.createdByUid || 'USR-OP',
+        displayName: payload.createdByName || 'کارشناس بازرگانی و قراردادها',
+      },
+      details: `ثبت قرارداد جدید با طرف حساب «${newContract.customerName}» و سهمیه ${newContract.allocatedWeightKg} کیلوگرم`,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `قرارداد شماره «${newContract.contractNumber}» با موفقیت در سیستم ثبت گردید.`,
+      contract: newContract,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت قرارداد جدید',
+    });
+  }
+});
+
+apiRouter.put('/inventory/contracts/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const payload = req.body;
+
+    const contractIndex = contractsStore.findIndex(c => c.id === id || c.contractNumber === id);
+    if (contractIndex === -1) {
+      return res.status(404).json({ success: false, error: 'قرارداد مورد نظر یافت نشد.' });
+    }
+
+    const current = contractsStore[contractIndex];
+    const updated: SapcoContract = {
+      ...current,
+      ...payload,
+      id: current.id,
+      contractNumber: current.contractNumber, // Prevent altering unique number
+      commercialLines: payload.commercialLines || current.commercialLines,
+      associatedPartCodes: payload.associatedPartCodes || current.associatedPartCodes,
+    };
+
+    contractsStore[contractIndex] = updated;
+
+    res.json({
+      success: true,
+      message: `قرارداد شماره «${updated.contractNumber}» به‌روزرسانی شد.`,
+      contract: updated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ویرایش قرارداد',
+    });
+  }
+});
+
+apiRouter.delete('/inventory/contracts/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const contract = contractsStore.find(c => c.id === id || c.contractNumber === id);
+    if (!contract) {
+      return res.status(404).json({ success: false, error: 'قرارداد یافت نشد.' });
+    }
+
+    // Check if posted documents reference this contract
+    const hasMovements = inventoryDocsStore.some(
+      d => d.postingStatus === 'POSTED' && (d.contractId === contract.id || d.contractNumber === contract.contractNumber)
+    );
+
+    if (hasMovements) {
+      // Soft-cancel instead of hard delete to preserve Kardex integrity
+      contract.status = 'SUSPENDED';
+      return res.json({
+        success: true,
+        message: `قرارداد «${contract.contractNumber}» به دلیل داشتن گردش کاردکس قطعی، به وضعیت «تعلیق» تغییر یافت و سوابق آن حفظ شد.`,
+        contract,
+      });
+    }
+
+    contractsStore = contractsStore.filter(c => c.id !== contract.id);
+    res.json({
+      success: true,
+      message: `قرارداد «${contract.contractNumber}» با موفقیت حذف گردید.`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در حذف قرارداد',
+    });
+  }
+});
+
+apiRouter.post('/inventory/contracts/:id/allocate-coil', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { coilId, allocatedWeightKg, notes } = req.body;
+
+    const contract = contractsStore.find(c => c.id === id || c.contractNumber === id);
+    if (!contract) {
+      return res.status(404).json({ success: false, error: 'قرارداد مورد نظر یافت نشد.' });
+    }
+
+    const coil = physicalCoilsStore.find(c => c.id === coilId || c.coilId === coilId);
+    if (!coil) {
+      return res.status(404).json({ success: false, error: 'کلاف فیزیکی مورد نظر یافت نشد.' });
+    }
+
+    const weight = Number(allocatedWeightKg) || coil.remainingWeightKg;
+    if (weight <= 0 || weight > coil.originalWeightKg) {
+      return res.status(400).json({
+        success: false,
+        error: `وزن تخصیصی باید بین ۱ تا ${coil.originalWeightKg} کیلوگرم باشد.`,
+      });
+    }
+
+    if (!coil.allocations) coil.allocations = [];
+    const existingIdx = coil.allocations.findIndex(a => a.contractId === contract.id || a.contractNumber === contract.contractNumber);
+
+    const allocRecord: ContractCoilAllocation = {
+      id: `ALLOC-${Date.now()}`,
+      contractId: contract.id,
+      contractNumber: contract.contractNumber,
+      coilId: coil.id,
+      allocatedWeightKg: weight,
+      ownership: contract.ownership || coil.ownership,
+      notes: notes || `تخصیص کلاف ${coil.coilId} به قرارداد ${contract.contractNumber}`,
+    };
+
+    if (existingIdx >= 0) {
+      coil.allocations[existingIdx] = allocRecord;
+    } else {
+      coil.allocations.push(allocRecord);
+    }
+
+    res.json({
+      success: true,
+      message: `مقدار ${weight} کیلوگرم از کلاف «${coil.coilId}» (پکینگ: ${coil.coilPackNumber}) به قرارداد «${contract.contractNumber}» تخصیص یافت.`,
+      coil,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در تخصیص کلاف به قرارداد',
+    });
+  }
+});
+
+/**
  * 16.12. Audit Logs
  */
 apiRouter.get('/inventory/audit-logs', (_req: Request, res: Response) => {
   res.json({ success: true, count: auditLogsStore.length, data: auditLogsStore });
+});
+
+/**
+ * 16.13. Physical Coils & Partial-Coil Management
+ */
+apiRouter.get('/inventory/coils', (req: Request, res: Response) => {
+  try {
+    const { partId, materialGrade, warehouseId, ownership, packNumber, search } = req.query;
+    let list = [...physicalCoilsStore];
+
+    if (partId && typeof partId === 'string' && partId !== 'ALL') {
+      list = list.filter(c => c.partId === partId || c.partCode === partId);
+    }
+    if (materialGrade && typeof materialGrade === 'string' && materialGrade !== 'ALL') {
+      list = list.filter(c => c.materialGrade === materialGrade);
+    }
+    if (warehouseId && typeof warehouseId === 'string' && warehouseId !== 'ALL') {
+      list = list.filter(c => c.warehouseId === warehouseId);
+    }
+    if (ownership && typeof ownership === 'string' && ownership !== 'ALL') {
+      list = list.filter(c => c.ownership === ownership);
+    }
+    if (packNumber && typeof packNumber === 'string' && packNumber.trim()) {
+      list = list.filter(c => c.coilPackNumber.toLowerCase().includes(packNumber.toLowerCase()));
+    }
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        c =>
+          c.coilId.toLowerCase().includes(q) ||
+          c.coilPackNumber.toLowerCase().includes(q) ||
+          (c.partName && c.partName.toLowerCase().includes(q)) ||
+          (c.partCode && c.partCode.toLowerCase().includes(q)) ||
+          (c.heatNumber && c.heatNumber.toLowerCase().includes(q)) ||
+          c.warehouseName.toLowerCase().includes(q)
+      );
+    }
+
+    res.json({
+      success: true,
+      count: list.length,
+      data: list,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در دریافت لیست کلاف‌های فیزیکی',
+    });
+  }
+});
+
+apiRouter.post('/inventory/coils', (req: Request, res: Response) => {
+  try {
+    const payload = req.body;
+    if (!payload.coilId || !payload.partId || !payload.originalWeightKg || !payload.warehouseId) {
+      return res.status(400).json({
+        success: false,
+        error: 'اطلاعات ضروری کلاف (شماره کویل، قطعه، وزن اولیه، انبار) تکمیل نشده است.',
+      });
+    }
+
+    const part = partsStore.find(p => p.id === payload.partId);
+    const warehouse = WAREHOUSES_LIST.find(w => w.id === payload.warehouseId);
+
+    const newCoil: PhysicalCoil = {
+      id: payload.id || `COIL-PHYS-${Date.now()}`,
+      coilId: payload.coilId,
+      coilPackNumber: payload.coilPackNumber || `CP-${Math.floor(1000 + Math.random() * 9000)}`,
+      partId: payload.partId,
+      partCode: part?.code || payload.partCode || '',
+      partName: part?.name || payload.partName || '',
+      materialGrade: payload.materialGrade || part?.materialGrade || 'DC04',
+      heatNumber: payload.heatNumber || '',
+      thicknessMm: Number(payload.thicknessMm) || part?.thicknessMm || 0.8,
+      widthMm: Number(payload.widthMm) || 1250,
+      originalWeightKg: Number(payload.originalWeightKg),
+      remainingWeightKg: Number(payload.remainingWeightKg ?? payload.originalWeightKg),
+      warehouseId: payload.warehouseId,
+      warehouseName: warehouse?.name || payload.warehouseName || 'انبار رول و ورق',
+      warehouseLocationCode: payload.warehouseLocationCode || 'LOC-RAW-A1',
+      ownership: payload.ownership || 'SAPCO_SUPPLIER_OWNED',
+      qualityStatus: payload.qualityStatus || 'AVAILABLE',
+      physicalStatus: payload.physicalStatus || 'AVAILABLE',
+      supplierName: payload.supplierName || 'ساپکو',
+      receiptDate: payload.receiptDate || new Date().toISOString(),
+      allocations: payload.allocations || [],
+    };
+
+    physicalCoilsStore.unshift(newCoil);
+
+    res.status(201).json({
+      success: true,
+      message: `کلاف فیزیکی شماره «${newCoil.coilId}» (پکینگ ${newCoil.coilPackNumber}) با موفقیت ثبت گردید.`,
+      data: newCoil,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت کلاف فیزیکی جدید',
+    });
+  }
+});
+
+apiRouter.post('/inventory/coils/:id/issue', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { issuedWeightKg, moId, moOperationId, scrappedKg, user } = req.body;
+
+    const coil = physicalCoilsStore.find(c => c.id === id || c.coilId === id);
+    if (!coil) {
+      return res.status(404).json({ success: false, error: 'کلاف فیزیکی مورد نظر یافت نشد.' });
+    }
+
+    const issueUser = {
+      uid: user?.uid || 'USR-OP',
+      displayName: user?.displayName || 'اپراتور خط پرس',
+    };
+
+    const result = issuePhysicalCoilPartial(
+      coil,
+      Number(issuedWeightKg),
+      moId || 'MO-DEMO',
+      moOperationId,
+      Number(scrappedKg) || 0,
+      issueUser
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    if (result.issueRecord) {
+      coilIssueRecordsStore.unshift(result.issueRecord);
+    }
+
+    res.json({
+      success: true,
+      message: `مقدار ${issuedWeightKg} کیلوگرم از کلاف «${coil.coilId}» جهت خط تولید صادر شد. مانده کلاف: ${coil.remainingWeightKg} کیلوگرم.`,
+      coil,
+      issueRecord: result.issueRecord,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در صدور جزئی کلاف',
+    });
+  }
+});
+
+apiRouter.post('/inventory/coils/:id/return', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { returnedRemnantWeightKg, warehouseId, locationCode, notes, user } = req.body;
+
+    const coil = physicalCoilsStore.find(c => c.id === id || c.coilId === id);
+    if (!coil) {
+      return res.status(404).json({ success: false, error: 'کلاف فیزیکی مورد نظر یافت نشد.' });
+    }
+
+    const returnUser = {
+      uid: user?.uid || 'USR-OP',
+      displayName: user?.displayName || 'انباردار مواد اولیه',
+    };
+
+    const result = returnPhysicalCoilPartial(
+      coil,
+      Number(returnedRemnantWeightKg),
+      warehouseId || coil.warehouseId,
+      locationCode || coil.warehouseLocationCode,
+      notes || 'برگشت مازاد یا ته کلاف از خط تولید به انبار',
+      returnUser
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    if (result.returnRecord) {
+      coilIssueRecordsStore.unshift(result.returnRecord);
+    }
+
+    res.json({
+      success: true,
+      message: `ته‌کلاف / مازاد به وزن ${returnedRemnantWeightKg} کیلوگرم با حفظ پکینگ اصلی (${coil.coilPackNumber}) به انبار برگشت داده شد. مانده جدید کلاف: ${coil.remainingWeightKg} کیلوگرم.`,
+      coil,
+      returnRecord: result.returnRecord,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در برگشت ته‌کلاف به انبار',
+    });
+  }
+});
+
+apiRouter.post('/inventory/coils/:id/allocate', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { allocations } = req.body;
+
+    const coil = physicalCoilsStore.find(c => c.id === id || c.coilId === id);
+    if (!coil) {
+      return res.status(404).json({ success: false, error: 'کلاف فیزیکی مورد نظر یافت نشد.' });
+    }
+
+    if (!Array.isArray(allocations) || allocations.length === 0) {
+      return res.status(400).json({ success: false, error: 'لیست تخصیص قراردادها مشخص نشده است.' });
+    }
+
+    const totalAllocated = allocations.reduce((sum: number, a: any) => sum + Number(a.allocatedWeightKg || 0), 0);
+    if (totalAllocated > coil.originalWeightKg) {
+      return res.status(400).json({
+        success: false,
+        error: `مجموع وزن تخصیص داده شده (${totalAllocated} kg) بیشتر از وزن فیزیکی کلاف (${coil.originalWeightKg} kg) است.`,
+      });
+    }
+
+    coil.allocations = allocations.map((a: any) => ({
+      contractId: a.contractId,
+      contractNumber: a.contractNumber || a.contractId,
+      coilId: coil.id,
+      allocatedWeightKg: Number(a.allocatedWeightKg),
+      ownership: a.ownership || coil.ownership,
+    }));
+
+    res.json({
+      success: true,
+      message: `تخصیص چندقراردادی کلاف شماره «${coil.coilId}» به‌روزرسانی شد.`,
+      coil,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در به‌روزرسانی تخصیص قراردادهای کلاف',
+    });
+  }
+});
+
+/**
+ * 16.14. Customizable Inventory Reports (Reports A, B, C, D, E)
+ */
+apiRouter.get('/inventory/custom-reports', (req: Request, res: Response) => {
+  try {
+    const {
+      reportType = 'COILS_SUMMARY',
+      materialGrade,
+      minThickness,
+      maxThickness,
+      minWidth,
+      maxWidth,
+      coilPackNumber,
+      warehouseId,
+      ownership,
+      contractId,
+      search,
+    } = req.query;
+
+    const { balances } = calculateDetailedStockBalances(inventoryDocsStore, reservationsStore, partsStore);
+
+    const reportData = buildCustomInventoryReport({
+      reportType: reportType as any,
+      coils: physicalCoilsStore,
+      stockBalances: balances,
+      contracts: contractsStore,
+      filters: {
+        materialGrade: materialGrade ? String(materialGrade) : undefined,
+        minThickness: minThickness ? Number(minThickness) : undefined,
+        maxThickness: maxThickness ? Number(maxThickness) : undefined,
+        minWidth: minWidth ? Number(minWidth) : undefined,
+        maxWidth: maxWidth ? Number(maxWidth) : undefined,
+        coilPackNumber: coilPackNumber ? String(coilPackNumber) : undefined,
+        warehouseId: warehouseId ? String(warehouseId) : undefined,
+        ownership: ownership ? (String(ownership) as StockOwnership) : undefined,
+        contractId: contractId ? String(contractId) : undefined,
+        search: search ? String(search) : undefined,
+      },
+    });
+
+    res.json({
+      success: true,
+      reportType,
+      rowCount: reportData.rows.length,
+      columns: reportData.columns,
+      summary: reportData.summary,
+      data: reportData.rows,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ایجاد گزارش سفارشی انبار',
+    });
+  }
+});
+
+apiRouter.get('/inventory/report-configs', (_req: Request, res: Response) => {
+  res.json({ success: true, count: savedReportsStore.length, data: savedReportsStore });
+});
+
+apiRouter.post('/inventory/report-configs', (req: Request, res: Response) => {
+  try {
+    const payload = req.body;
+    if (!payload.name || !payload.reportType) {
+      return res.status(400).json({ success: false, error: 'نام گزارش و نوع گزارش الزامی است.' });
+    }
+
+    const newConfig: SavedReportConfig = {
+      id: payload.id || `REP-CFG-${Date.now()}`,
+      name: payload.name,
+      reportType: payload.reportType,
+      selectedColumns: payload.selectedColumns || [],
+      groupBy: payload.groupBy || [],
+      filters: payload.filters || {},
+      createdAt: new Date().toISOString(),
+    };
+
+    savedReportsStore.unshift(newConfig);
+    res.status(201).json({ success: true, message: 'پیکربندی گزارش با موفقیت ذخیره شد.', data: newConfig });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ذخیره پیکربندی گزارش',
+    });
+  }
+});
+
+/**
+ * 16.15. Data Import & Export with Formula Injection Protection
+ */
+apiRouter.get('/inventory/import/templates/:type', (req: Request, res: Response) => {
+  const { type } = req.params;
+  const templates: Record<string, any> = {
+    PARTS: {
+      type: 'PARTS',
+      title: 'قالب اکسل ورود کاتالوگ قطعات و ورق‌ها',
+      columns: [
+        { key: 'code', titlePersian: 'کد کالا / قطعه', required: true, example: 'SAPCO-DC04-0.8' },
+        { key: 'name', titlePersian: 'شرح قطعه', required: true, example: 'کویل ورق روغنی کشش عمیق DC04 ضخامت ۰.۸' },
+        { key: 'category', titlePersian: 'دسته کالا (RAW_MATERIAL / FINISHED_GOOD / WIP)', required: true, example: 'RAW_MATERIAL' },
+        { key: 'unit', titlePersian: 'واحد سنجش (KG / PCS)', required: true, example: 'KG' },
+        { key: 'materialGrade', titlePersian: 'گرید متریال', required: false, example: 'DC04' },
+        { key: 'thicknessMm', titlePersian: 'ضخامت (mm)', required: false, example: '0.8' },
+        { key: 'weightPerUnitKg', titlePersian: 'وزن واحد (kg)', required: false, example: '1' },
+      ],
+      sampleRows: [
+        { code: 'SAPCO-DC04-0.8', name: 'کویل ورق روغنی DC04 ضخامت 0.8mm ساپکو', category: 'RAW_MATERIAL', unit: 'KG', materialGrade: 'DC04', thicknessMm: '0.8', weightPerUnitKg: '1' },
+      ],
+    },
+    PHYSICAL_COILS: {
+      type: 'PHYSICAL_COILS',
+      title: 'قالب اکسل ورود کلاف‌های فیزیکی و شماره پکینگ',
+      columns: [
+        { key: 'coilId', titlePersian: 'شناسه کویل کارخانه / ساپکو', required: true, example: 'COIL-1403-9001' },
+        { key: 'coilPackNumber', titlePersian: 'شماره پکینگ ساپکو', required: true, example: 'CP-4401' },
+        { key: 'partCode', titlePersian: 'کد قطعه / ورق', required: true, example: 'SAPCO-DC04-0.8' },
+        { key: 'materialGrade', titlePersian: 'گرید ورق', required: true, example: 'DC04' },
+        { key: 'thicknessMm', titlePersian: 'ضخامت (mm)', required: true, example: '0.8' },
+        { key: 'widthMm', titlePersian: 'عرض (mm)', required: true, example: '1250' },
+        { key: 'weightKg', titlePersian: 'وزن فیزیکی (kg)', required: true, example: '14500' },
+        { key: 'warehouseId', titlePersian: 'کد انبار', required: true, example: 'WH-RAW' },
+        { key: 'ownership', titlePersian: 'مالکیت (SAPCO_SUPPLIER_OWNED / COMPANY_OWNED)', required: true, example: 'SAPCO_SUPPLIER_OWNED' },
+        { key: 'contractNumber', titlePersian: 'شماره قرارداد ساپکو (اختیاری)', required: false, example: 'CNT-SAPCO-1403-Q3' },
+      ],
+      sampleRows: [
+        { coilId: 'COIL-1403-9001', coilPackNumber: 'CP-4401', partCode: 'SAPCO-DC04-0.8', materialGrade: 'DC04', thicknessMm: '0.8', widthMm: '1250', weightKg: '14500', warehouseId: 'WH-RAW', ownership: 'SAPCO_SUPPLIER_OWNED', contractNumber: 'CNT-SAPCO-1403-Q3' },
+      ],
+    },
+    OPENING_BALANCES: {
+      type: 'OPENING_BALANCES',
+      title: 'قالب اکسل سند موجودی اول دوره',
+      columns: [
+        { key: 'partCode', titlePersian: 'کد کالا', required: true, example: 'SAPCO-DC04-0.8' },
+        { key: 'warehouseId', titlePersian: 'کد انبار', required: true, example: 'WH-RAW' },
+        { key: 'quantity', titlePersian: 'مقدار اول دوره', required: true, example: '25000' },
+        { key: 'unit', titlePersian: 'واحد', required: true, example: 'KG' },
+        { key: 'ownership', titlePersian: 'مالکیت', required: true, example: 'SAPCO_SUPPLIER_OWNED' },
+        { key: 'lotNumber', titlePersian: 'شماره بچ / پکینگ', required: false, example: 'CP-1001' },
+      ],
+      sampleRows: [
+        { partCode: 'SAPCO-DC04-0.8', warehouseId: 'WH-RAW', quantity: '25000', unit: 'KG', ownership: 'SAPCO_SUPPLIER_OWNED', lotNumber: 'CP-1001' },
+      ],
+    },
+    CONTRACTS: {
+      type: 'CONTRACTS',
+      title: 'قالب اکسل ورود قراردادها و سهمیه‌های مشتری/ساپکو',
+      columns: [
+        { key: 'contractNumber', titlePersian: 'شماره قرارداد', required: true, example: 'CNT-SAPCO-1403-Q4' },
+        { key: 'title', titlePersian: 'عنوان / موضوع قرارداد', required: true, example: 'تأمین ورق DC04 و براکت رام' },
+        { key: 'customerName', titlePersian: 'نام مشتری / طرف حساب', required: true, example: 'شرکت ساپکو' },
+        { key: 'contractType', titlePersian: 'نوع قرارداد (HYBRID / SAPCO_CONSIGNMENT / CUSTOMER_SUPPLIED / PRODUCT_DELIVERY)', required: false, example: 'HYBRID' },
+        { key: 'materialGrade', titlePersian: 'گرید مواد', required: true, example: 'DC04' },
+        { key: 'allocatedWeightKg', titlePersian: 'سهمیه وزنی کل (کیلوگرم)', required: true, example: '120000' },
+        { key: 'openingBalanceKg', titlePersian: 'موجودی اول دوره (kg)', required: false, example: '15000' },
+        { key: 'startDate', titlePersian: 'تاریخ شروع (YYYY-MM-DD)', required: true, example: '2024-10-01' },
+        { key: 'endDate', titlePersian: 'تاریخ پایان (YYYY-MM-DD)', required: true, example: '2025-01-20' },
+      ],
+      sampleRows: [
+        { contractNumber: 'CNT-SAPCO-1403-Q4', title: 'سهمیه ورق DC04 پاییز ساپکو', customerName: 'شرکت ساپکو', contractType: 'HYBRID', materialGrade: 'DC04', allocatedWeightKg: '120000', openingBalanceKg: '15000', startDate: '2024-10-01', endDate: '2025-01-20' },
+      ],
+    },
+  };
+
+  const tmpl = templates[type.toUpperCase()] || templates.PARTS;
+  res.json({ success: true, data: tmpl });
+});
+
+apiRouter.post('/inventory/import/validate', (req: Request, res: Response) => {
+  try {
+    const { batchType, rows } = req.body;
+    if (!batchType || !Array.isArray(rows)) {
+      return res.status(400).json({ success: false, error: 'نوع دسته و ردیف‌های ورودی مشخص نشده است.' });
+    }
+
+    const validation = validateImportBatchRows(
+      batchType,
+      rows,
+      partsStore,
+      contractsStore,
+      WAREHOUSES_LIST
+    );
+
+    res.json({
+      success: true,
+      batchType,
+      totalRows: rows.length,
+      validRowsCount: validation.validRows.length,
+      invalidRowsCount: validation.invalidRows.length,
+      errors: validation.invalidRows,
+      preview: validation.validRows.slice(0, 5),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در اعتبارسنجی ردیف‌های ورودی اکسل',
+    });
+  }
+});
+
+apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
+  try {
+    const { idempotencyKey, batchType, rows, user } = req.body;
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, error: 'کلید یکتایی دسته واردات (Idempotency Key) الزامی است.' });
+    }
+
+    // Check idempotency
+    const existingBatch = importBatchesStore.find(b => b.idempotencyKey === idempotencyKey);
+    if (existingBatch) {
+      return res.status(409).json({
+        success: false,
+        error: `این فایل اکسل قبلاً در تاریخ ${existingBatch.createdAt} با شماره پیگیری ${existingBatch.id} وارد سیستم شده است. جهت جلوگیری از تکرار، عملیات لغو گردید.`,
+        batch: existingBatch,
+      });
+    }
+
+    const validation = validateImportBatchRows(
+      batchType,
+      rows,
+      partsStore,
+      contractsStore,
+      WAREHOUSES_LIST
+    );
+
+    if (validation.validRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'هیچ ردیف معتبری برای ورود یافت نشد. لطفاً خطاهای گزارش‌شده را برطرف نمایید.',
+        errors: validation.invalidRows,
+      });
+    }
+
+    // Import valid rows
+    let importedCount = 0;
+    if (batchType === 'PARTS') {
+      for (const row of validation.validRows) {
+        const existingIdx = partsStore.findIndex(p => p.code === row.code);
+        const newPart: Part = {
+          id: row.id || `PRT-IMP-${Date.now()}-${importedCount}`,
+          code: row.code,
+          name: row.name,
+          category: row.category,
+          unit: row.unit,
+          weightPerUnitKg: Number(row.weightPerUnitKg) || 1,
+          materialGrade: row.materialGrade,
+          thicknessMm: row.thicknessMm ? Number(row.thicknessMm) : undefined,
+          isDemo: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        if (existingIdx >= 0) {
+          partsStore[existingIdx] = { ...partsStore[existingIdx], ...newPart };
+        } else {
+          partsStore.push(newPart);
+        }
+        importedCount++;
+      }
+    } else if (batchType === 'PHYSICAL_COILS') {
+      for (const row of validation.validRows) {
+        const part = partsStore.find(p => p.code === row.partCode);
+        const newCoil: PhysicalCoil = {
+          id: `COIL-IMP-${Date.now()}-${importedCount}`,
+          coilId: row.coilId,
+          coilPackNumber: row.coilPackNumber,
+          partId: part?.id || row.partCode,
+          partCode: row.partCode,
+          partName: part?.name || row.partCode,
+          materialGrade: row.materialGrade || part?.materialGrade || 'DC04',
+          thicknessMm: Number(row.thicknessMm) || 0.8,
+          widthMm: Number(row.widthMm) || 1250,
+          originalWeightKg: Number(row.weightKg),
+          remainingWeightKg: Number(row.weightKg),
+          warehouseId: row.warehouseId,
+          warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+          warehouseLocationCode: 'LOC-RAW-A1',
+          ownership: row.ownership || 'SAPCO_SUPPLIER_OWNED',
+          qualityStatus: 'AVAILABLE',
+          physicalStatus: 'AVAILABLE',
+          receiptDate: new Date().toISOString(),
+          allocations: row.contractNumber
+            ? [
+                {
+                  contractId: row.contractNumber,
+                  contractNumber: row.contractNumber,
+                  coilId: `COIL-IMP-${Date.now()}-${importedCount}`,
+                  allocatedWeightKg: Number(row.weightKg),
+                  ownership: row.ownership || 'SAPCO_SUPPLIER_OWNED',
+                },
+              ]
+            : [],
+        };
+        physicalCoilsStore.push(newCoil);
+        importedCount++;
+      }
+    } else if (batchType === 'CONTRACTS') {
+      for (const row of validation.validRows) {
+        const contractNum = String(row.contractNumber || row['شماره قرارداد'] || '').trim();
+        const existingIdx = contractsStore.findIndex(c => c.contractNumber.toLowerCase() === contractNum.toLowerCase());
+        const newContract: SapcoContract = {
+          id: `CNT-${Date.now()}-${importedCount}`,
+          contractNumber: contractNum,
+          title: String(row.title || row['عنوان / موضوع قرارداد'] || contractNum).trim(),
+          customerName: String(row.customerName || row['نام مشتری / طرف حساب'] || 'شرکت ساپکو').trim(),
+          contractType: (row.contractType as any) || 'HYBRID',
+          materialGrade: String(row.materialGrade || 'DC04').trim(),
+          allocatedWeightKg: Number(row.allocatedWeightKg || row['سهمیه وزنی کل (کیلوگرم)']) || 0,
+          openingBalanceKg: Number(row.openingBalanceKg || row['موجودی اول دوره (kg)']) || 0,
+          totalReceivedKg: 0,
+          totalConsumedKg: 0,
+          closingBalanceKg: Number(row.openingBalanceKg || row['موجودی اول دوره (kg)']) || 0,
+          associatedPartCodes: [],
+          status: 'ACTIVE',
+          startDate: row.startDate ? new Date(row.startDate).toISOString() : new Date().toISOString(),
+          endDate: row.endDate ? new Date(row.endDate).toISOString() : new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString(),
+        };
+        if (existingIdx >= 0) {
+          contractsStore[existingIdx] = { ...contractsStore[existingIdx], ...newContract };
+        } else {
+          contractsStore.push(newContract);
+        }
+        importedCount++;
+      }
+    }
+
+    const batchSummary: ImportBatchSummary = {
+      id: `BATCH-${Date.now()}`,
+      idempotencyKey,
+      batchType,
+      fileName: req.body.fileName || 'imported_file.xlsx',
+      totalRows: rows.length,
+      validRows: importedCount,
+      errorRows: validation.invalidRows.length,
+      status: validation.invalidRows.length > 0 ? 'PARTIAL' : 'COMPLETED',
+      createdAt: new Date().toISOString(),
+      createdByName: user?.displayName || 'مدیر سیستم',
+    };
+
+    importBatchesStore.unshift(batchSummary);
+
+    res.status(201).json({
+      success: true,
+      message: `تعداد ${importedCount} ردیف با موفقیت وارد پایگاه داده شد. (${validation.invalidRows.length} ردیف دارای خطا نادیده گرفته شد)`,
+      batch: batchSummary,
+      errors: validation.invalidRows,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت نهایی ردیف‌های ورودی',
+    });
+  }
+});
+
+apiRouter.get('/inventory/export', (req: Request, res: Response) => {
+  try {
+    const { dataset = 'STOCK_BALANCES' } = req.query;
+    let rows: any[] = [];
+    let headers: string[] = [];
+
+    if (dataset === 'PHYSICAL_COILS') {
+      headers = ['شناسه کویل', 'شماره پکینگ', 'کد ورق', 'نام ورق', 'گرید', 'ضخامت', 'عرض', 'وزن اولیه (kg)', 'وزن باقیمانده (kg)', 'انبار', 'مالکیت'];
+      rows = physicalCoilsStore.map(c => [
+        sanitizeCsvValue(c.coilId),
+        sanitizeCsvValue(c.coilPackNumber),
+        sanitizeCsvValue(c.partCode),
+        sanitizeCsvValue(c.partName),
+        sanitizeCsvValue(c.materialGrade),
+        sanitizeCsvValue(c.thicknessMm),
+        sanitizeCsvValue(c.widthMm),
+        sanitizeCsvValue(c.originalWeightKg),
+        sanitizeCsvValue(c.remainingWeightKg),
+        sanitizeCsvValue(c.warehouseName),
+        sanitizeCsvValue(c.ownership),
+      ]);
+    } else {
+      const { balances } = calculateDetailedStockBalances(inventoryDocsStore, reservationsStore, partsStore);
+      headers = ['کد قطعه', 'نام قطعه', 'انبار', 'لوکیشن', 'پکینگ/بچ', 'مالکیت', 'موجودی فیزیکی', 'رزرو', 'مسدود', 'موجودی آزاد', 'واحد'];
+      rows = balances.map(b => [
+        sanitizeCsvValue(b.partCode),
+        sanitizeCsvValue(b.partName),
+        sanitizeCsvValue(b.warehouseName),
+        sanitizeCsvValue(b.locationCode),
+        sanitizeCsvValue(b.lotNumber || '-'),
+        sanitizeCsvValue(b.ownership),
+        sanitizeCsvValue(b.physicalQty),
+        sanitizeCsvValue(b.reservedQty),
+        sanitizeCsvValue(b.qualityBlockedQty),
+        sanitizeCsvValue(b.availableQty),
+        sanitizeCsvValue(b.unit),
+      ]);
+    }
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const datasetStr = typeof dataset === 'string' ? dataset.toLowerCase() : 'inventory';
+    res.setHeader('Content-Disposition', `attachment; filename="kpims_${datasetStr}_${Date.now()}.csv"`);
+    res.send('\uFEFF' + csvContent); // Include UTF-8 BOM for Excel Persian display
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در صدور فایل اکسل/CSV',
+    });
+  }
 });
 
 // =========================================================================

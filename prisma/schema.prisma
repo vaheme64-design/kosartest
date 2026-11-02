@@ -264,6 +264,7 @@ model Material {
   parts                Part[]
   materialLots         MaterialLot[]
   materialContracts    MaterialContract[]
+  physicalCoils        PhysicalCoil[]
 
   @@map("materials")
 }
@@ -301,6 +302,9 @@ model Part {
   stockBalances        StockBalance[]
   materialLots         MaterialLot[]
   productionTransfers  ProductionTransfer[]
+  physicalCoils        PhysicalCoil[]
+  attributeValues      ItemAttributeValue[]
+  trackingProfile      ItemTrackingProfile?
 
   @@index([category, active])
   @@index([carModel])
@@ -490,6 +494,7 @@ model Warehouse {
   inventoryReservations    InventoryReservation[]
   fromTransfers            ProductionTransfer[]   @relation("FromWarehouse")
   toTransfers              ProductionTransfer[]   @relation("ToWarehouse")
+  physicalCoils            PhysicalCoil[]
 
   @@map("warehouses")
 }
@@ -513,6 +518,7 @@ model WarehouseLocation {
   inventoryTransactions   InventoryTransaction[]
   stockBalances            StockBalance[]
   materialLots             MaterialLot[]
+  physicalCoils            PhysicalCoil[]
 
   @@unique([warehouseId, code])
   @@map("warehouse_locations")
@@ -1006,6 +1012,7 @@ model MaterialLot {
   reservations           InventoryReservation[]
   stockBalances          StockBalance[]
   contractTransactions   MaterialContractTransaction[]
+  physicalCoils          PhysicalCoil[]
 
   @@index([materialId, status])
   @@index([heatNumber])
@@ -1032,6 +1039,8 @@ model MaterialContract {
 
   materialLots            MaterialLot[]
   transactions            MaterialContractTransaction[]
+  contractCoilAllocations ContractCoilAllocation[]
+  commercialLines         ContractCommercialLine[]
 
   @@index([supplierCustomerId, status])
   @@map("material_contracts")
@@ -1170,4 +1179,213 @@ model SystemSetting {
   updatedAt      DateTime  @updatedAt
 
   @@map("system_settings")
+}
+
+// =========================================================================
+// 5. PHYSICAL COILS & ENHANCED INVENTORY TRACEABILITY ENTITIES
+// =========================================================================
+
+// کلاف‌ها و رول‌های فیزیکی ورق با هویت مستقل از قراردادها (Physical Coils)
+model PhysicalCoil {
+  id                     String             @id @default(uuid())
+  coilId                 String             @unique // شناسه یکتای رول مانند COIL-1403-0101
+  coilPackNumber         String             // شماره پکینگ یا بسته‌بندی کلاف سازنده (قابل فیلتر و جستجو)
+  partId                 String?
+  part                   Part?              @relation(fields: [partId], references: [id])
+  materialId             String?
+  material               Material?          @relation(fields: [materialId], references: [id])
+  materialLotId          String?
+  materialLot            MaterialLot?       @relation(fields: [materialLotId], references: [id])
+  heatNumber             String?            // شماره ذوب فولاد مبارکه / مبدأ
+  thicknessMm            Decimal            @db.Decimal(6, 3) // ضخامت واقعی (میلیمتر)
+  widthMm                Decimal            @db.Decimal(8, 2) // عرض رول (میلیمتر)
+  originalWeightKg       Decimal            @db.Decimal(12, 3) // وزن اولیه باسکول
+  remainingWeightKg      Decimal            @db.Decimal(12, 3) // مانده وزن فیزیکی فعلی
+  warehouseId            String
+  warehouse              Warehouse          @relation(fields: [warehouseId], references: [id])
+  warehouseLocationId    String?
+  warehouseLocation      WarehouseLocation? @relation(fields: [warehouseLocationId], references: [id])
+  ownership              String             @default("SAPCO_SUPPLIER_OWNED") // COMPANY_OWNED, SAPCO_SUPPLIER_OWNED, CUSTOMER_SUPPLIED, THIRD_PARTY_OWNED
+  qualityStatus          String             @default("AVAILABLE") // AVAILABLE, QUARANTINE, QUALITY_BLOCKED, REJECTED
+  physicalStatus         String             @default("AVAILABLE") // AVAILABLE, ISSUED, PARTIALLY_ISSUED, CONSUMED, RETURNED, BLOCKED
+  parentCoilId           String?            // ارجاع به رول مادر در صورت برش یا تفکیک باقیمانده
+  parentCoil             PhysicalCoil?      @relation("CoilSplits", fields: [parentCoilId], references: [id])
+  childCoils             PhysicalCoil[]     @relation("CoilSplits")
+  supplierName           String?            @default("ساپکو (ایران‌خودرو)")
+  receiptDate            DateTime           @default(now())
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  contractAllocations    ContractCoilAllocation[]
+  issueReturnRecords     CoilIssueReturnRecord[]
+
+  @@index([coilPackNumber])
+  @@index([warehouseId, physicalStatus])
+  @@index([heatNumber])
+  @@map("physical_coils")
+}
+
+// تخصیص سهمیه‌ها به کلاف‌های فیزیکی (چند قرارداد روی یک کلاف یا یک قرارداد روی چند کلاف)
+model ContractCoilAllocation {
+  id                 String           @id @default(uuid())
+  contractId         String
+  contract           MaterialContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  coilId             String
+  coil               PhysicalCoil     @relation(fields: [coilId], references: [id], onDelete: Cascade)
+  allocatedWeightKg  Decimal          @db.Decimal(12, 3) // وزن تخصیص‌یافته از این رول به این قرارداد
+  ownership          String           @default("SAPCO_SUPPLIER_OWNED") // مالکیت حقوقی متریال
+  sourceDocumentId   String?          // شماره سند ورود یا تخصیص
+  notes              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([contractId, coilId])
+  @@index([contractId])
+  @@index([coilId])
+  @@map("contract_coil_allocations")
+}
+
+// ردگیری حواله خروج جزئی و بازگشت کلاف به انبار (Partial Coil Issue & Return)
+model CoilIssueReturnRecord {
+  id                   String        @id @default(uuid())
+  coilId               String
+  coil                 PhysicalCoil  @relation(fields: [coilId], references: [id], onDelete: Cascade)
+  manufacturingOrderId String?       // شماره دستور ساخت مصرف‌کننده
+  documentNumber       String        // شماره حواله خروج یا رسید برگشتی
+  issuedWeightKg       Decimal       @db.Decimal(12, 3) // وزن ارسالی به پای خط
+  consumedWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // وزن خالص مصرف‌شده
+  returnedWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // وزن برگشت داده شده به انبار
+  outstandingWeightKg  Decimal       @db.Decimal(12, 3) // مانده در گردش پای خط (تحویل - برگشت - مصرف)
+  varianceWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // پرت، ضایعات یا افت وزنی باسکول
+  status               String        @default("ISSUED") // ISSUED, PARTIALLY_RETURNED, FULLY_RETURNED, CONSUMED
+  issuedAt             DateTime      @default(now())
+  returnedAt           DateTime?
+  notes                String?
+
+  @@index([coilId, status])
+  @@map("coil_issue_return_records")
+}
+
+// پروفایل نیازمندی‌های ردیابی اقلام و متریال (Item Tracking Profiles)
+model ItemTrackingProfile {
+  id                     String       @id @default(uuid())
+  itemCategory           PartCategory
+  partId                 String?      @unique
+  part                   Part?        @relation(fields: [partId], references: [id], onDelete: Cascade)
+  requiresCoilPack       Boolean      @default(false)
+  requiresCoilId         Boolean      @default(false)
+  requiresHeatNumber     Boolean      @default(false)
+  requiresBatchLot       Boolean      @default(false)
+  requiresExpirationDate Boolean      @default(false)
+  requiresActualWeight   Boolean      @default(false)
+  trackOwnership         Boolean      @default(true)
+  trackContract          Boolean      @default(true)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@map("item_tracking_profiles")
+}
+
+// تعاریف ویژگی‌های سفارشی اقلام (Custom Attribute Definitions)
+model ItemAttributeDefinition {
+  id                   String    @id @default(uuid())
+  key                  String    @unique // e.g. "COIL_PACK_NO", "RUBBER_HARDNESS_SHORE", "SCREW_COATING"
+  displayName          String    // نام فارسی ویژگی
+  dataType             String    // TEXT, NUMBER, DATE, SELECT, BOOLEAN
+  isRequired           Boolean   @default(false)
+  isSearchable         Boolean   @default(true)
+  isReportable         Boolean   @default(true)
+  applicableCategories String[]  // رده‌های قابل انتساب
+  validationRules      String?   // قوانین اعتبارسنجی
+  createdAt            DateTime  @default(now())
+
+  @@map("item_attribute_definitions")
+}
+
+// مقادیر ویژگی‌های اختصاصی قطعات و اقلام (Item Attribute Values)
+model ItemAttributeValue {
+  id             String    @id @default(uuid())
+  partId         String
+  part           Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+  attributeKey   String
+  textValue      String?
+  numberValue    Decimal?  @db.Decimal(14, 4)
+  dateValue      DateTime?
+  booleanValue   Boolean?
+  createdAt      DateTime  @default(now())
+
+  @@unique([partId, attributeKey])
+  @@map("item_attribute_values")
+}
+
+// ردیف‌های تعهدات تحویل محصول و سهمیه ورودی قراردادها (Contract Commercial Lines)
+model ContractCommercialLine {
+  id                      String           @id @default(uuid())
+  contractId              String
+  contract                MaterialContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  lineType                String           // CUSTOMER_SUPPLIED_MATERIAL, FINISHED_PRODUCT_DELIVERY, SUPPLIER_PURCHASE
+  partId                  String?
+  partCode                String
+  partName                String
+  contractQty             Decimal          @default(0) @db.Decimal(12, 3)
+  contractWeightKg        Decimal          @default(0) @db.Decimal(14, 3)
+  deliveredOrReceivedQty  Decimal          @default(0) @db.Decimal(12, 3)
+  deliveredOrReceivedKg   Decimal          @default(0) @db.Decimal(14, 3)
+  remainingQty            Decimal          @default(0) @db.Decimal(12, 3)
+  remainingKg             Decimal          @default(0) @db.Decimal(14, 3)
+  unit                    String           @default("KG")
+  notes                   String?
+  createdAt               DateTime         @default(now())
+
+  @@index([contractId, lineType])
+  @@map("contract_commercial_lines")
+}
+
+// الگوهای ذخیره‌شده گزارش‌ساز انبار (Customizable Saved Report Configurations)
+model SavedReportConfig {
+  id              String    @id @default(uuid())
+  name            String    // عنوان گزارش ذخیره‌شده
+  reportType      String    // COILS_SUMMARY, COIL_PACK_INQUIRY, CONTRACT_STOCK, WAREHOUSE_STOCK, OWNERSHIP_REPORT
+  selectedColumns String[]  // ستون‌های انتخابی کاربر
+  groupBy         String[]  // ابعاد گروه‌بندی
+  filters         Json      // فیلترهای اعمال‌شده
+  sortBy          String?
+  sortOrder       String?   @default("asc")
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("saved_report_configs")
+}
+
+// دسته‌های واردات داده به سیستم (Import Batches & Idempotency Controls)
+model ImportBatch {
+  id             String              @id @default(uuid())
+  batchNumber    String              @unique // e.g. IMP-1403-0001
+  templateType   String              // ITEM_MASTER, COILS, CONTRACTS, INVENTORY_RECEIPTS, INVENTORY_ISSUES, INVENTORY_ADJUSTMENTS
+  status         String              @default("VALIDATING") // VALIDATING, IMPORTED, REJECTED, PARTIALLY_IMPORTED
+  totalRows      Int                 @default(0)
+  validRows      Int                 @default(0)
+  errorRows      Int                 @default(0)
+  importedBy     String              @default("مدیر سیستم")
+  importedAt     DateTime            @default(now())
+
+  errors         ImportErrorRecord[]
+
+  @@map("import_batches")
+}
+
+// لاگ خطاهای ردیفی فایل‌های ورودی اکسل و CSV (Import Error Records)
+model ImportErrorRecord {
+  id           String      @id @default(uuid())
+  batchId      String
+  batch        ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber    Int
+  fieldName    String?
+  errorMessage String
+  rowData      Json?
+  createdAt    DateTime    @default(now())
+
+  @@index([batchId, rowNumber])
+  @@map("import_error_records")
 }

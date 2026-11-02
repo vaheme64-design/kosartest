@@ -59,17 +59,17 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white p-6 rounded-xl border border-slate-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 bg-slate-900 text-white rounded-lg">
               <Boxes className="w-5 h-5" />
             </span>
             <div>
-              <h1 className="text-lg lg:text-xl font-bold text-white">
+              <h1 className="text-base lg:text-lg font-bold text-slate-900 tracking-tight">
                 سامانه مدیریت و کاردکس انبار قطعات و ورق (KPIMS Inventory)
               </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 محاسبه بر مبنای اسناد قطعی‌شده، کنترل عدم منفی‌شدن موجودی، تفکیک مالکیت امانی ساپکو و رهگیری کلاف‌ها
               </p>
             </div>
@@ -81,37 +81,37 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition-all cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>به‌روزرسانی</span>
           </button>
           <button
             onClick={onOpenReceipt}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-900/30 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-all shadow-xs cursor-pointer"
           >
             <ArrowDownLeft className="w-4 h-4" />
             <span>رسید کالا / ورق</span>
           </button>
           <button
             onClick={onOpenIssue}
-            className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-900/30 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-all shadow-2xs cursor-pointer"
           >
-            <ArrowUpRight className="w-4 h-4" />
+            <ArrowUpRight className="w-4 h-4 text-slate-500" />
             <span>حواله مصرف</span>
           </button>
           <button
             onClick={onOpenTransfer}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-all shadow-2xs cursor-pointer"
           >
-            <ArrowRightLeft className="w-4 h-4" />
+            <ArrowRightLeft className="w-4 h-4 text-slate-500" />
             <span>انتقال بین انبارها</span>
           </button>
           <button
             onClick={onOpenAdjustment}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-bold transition-all border border-slate-600 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-medium border border-slate-200 transition-all cursor-pointer"
           >
-            <FileEdit className="w-4 h-4" />
+            <FileEdit className="w-4 h-4 text-slate-600" />
             <span>تعدیل انبارگردانی</span>
           </button>
         </div>
@@ -120,76 +120,76 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       {/* Main KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Physical Stock Card */}
-        <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/70 hover:border-slate-600 transition-all">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span className="font-semibold">موجودی فیزیکی کل کارخانه</span>
-            <span className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs">
+            <span className="font-medium text-slate-600">موجودی فیزیکی کل کارخانه</span>
+            <span className="p-1 bg-slate-100 text-slate-700 rounded">
               <Scale className="w-4 h-4" />
             </span>
           </div>
-          <div className="mt-2 text-xl font-bold text-white font-mono">
+          <div className="mt-3 text-2xl font-bold text-slate-900 font-mono tracking-tight">
             {formatWeightKg(metrics?.totalPhysicalKg || 0)}
           </div>
-          <div className="mt-1 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-2 text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100">
             <span>قطعات و مجموعه‌ها:</span>
-            <span className="font-mono text-blue-400 font-semibold">
+            <span className="font-mono text-slate-800 font-semibold tabular-nums">
               {formatNumber(metrics?.totalPhysicalPcs || 0)} عدد
             </span>
           </div>
         </div>
 
         {/* Available Stock Card */}
-        <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/70 hover:border-slate-600 transition-all">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span className="font-semibold">موجودی آزاد و قابل تخصیص</span>
-            <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs">
+            <span className="font-medium text-slate-600">موجودی آزاد و قابل تخصیص</span>
+            <span className="p-1 bg-emerald-50 text-emerald-700 rounded">
               <CheckCircle2 className="w-4 h-4" />
             </span>
           </div>
-          <div className="mt-2 text-xl font-bold text-emerald-400 font-mono">
+          <div className="mt-3 text-2xl font-bold text-emerald-700 font-mono tracking-tight">
             {formatWeightKg(metrics?.totalAvailableKg || 0)}
           </div>
-          <div className="mt-1 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-2 text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100">
             <span>آزاد جهت تولید:</span>
-            <span className="font-mono text-emerald-400 font-semibold">
+            <span className="font-mono text-emerald-700 font-semibold tabular-nums">
               {formatNumber(metrics?.totalAvailablePcs || 0)} عدد
             </span>
           </div>
         </div>
 
         {/* SAPCO Consignment Stock Card */}
-        <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/70 hover:border-slate-600 transition-all">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span className="font-semibold">ورق امانی ساپکو (تامین‌کننده)</span>
-            <span className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs">
+            <span className="font-medium text-slate-600">ورق امانی ساپکو (تامین‌کننده)</span>
+            <span className="p-1 bg-amber-50 text-amber-700 rounded">
               <ScrollText className="w-4 h-4" />
             </span>
           </div>
-          <div className="mt-2 text-xl font-bold text-amber-400 font-mono">
+          <div className="mt-3 text-2xl font-bold text-amber-800 font-mono tracking-tight">
             {formatWeightKg(metrics?.totalSapcoConsignmentKg || 0)}
           </div>
-          <div className="mt-1 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-2 text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100">
             <span>مالکیت شرکتی کارخانه:</span>
-            <span className="font-mono text-slate-300 font-semibold">
+            <span className="font-mono text-slate-700 font-medium tabular-nums">
               {formatWeightKg(metrics?.totalCompanyOwnedKg || 0)}
             </span>
           </div>
         </div>
 
         {/* Reserved & Blocked Stock Card */}
-        <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/70 hover:border-slate-600 transition-all">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span className="font-semibold">رزرو شده / قرنطینه کیفی</span>
-            <span className="p-1.5 bg-purple-500/10 text-purple-400 rounded-lg">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs">
+            <span className="font-medium text-slate-600">رزرو شده / قرنطینه کیفی</span>
+            <span className="p-1 bg-slate-100 text-slate-600 rounded">
               <AlertTriangle className="w-4 h-4" />
             </span>
           </div>
-          <div className="mt-2 text-xl font-bold text-purple-400 font-mono">
+          <div className="mt-3 text-2xl font-bold text-slate-800 font-mono tracking-tight">
             {formatWeightKg(metrics?.totalReservedKg || 0)}
           </div>
-          <div className="mt-1 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-2 text-xs text-slate-500 flex items-center justify-between pt-2 border-t border-slate-100">
             <span>بلوکه کیفی / قرنطینه:</span>
-            <span className="font-mono text-rose-400 font-semibold">
+            <span className="font-mono text-rose-600 font-medium tabular-nums">
               {formatWeightKg(metrics?.totalQualityBlockedKg || 0)}
             </span>
           </div>
@@ -199,22 +199,22 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       {/* Warehouse Status Grid & Contracts Glance */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Warehouses Summary (2 cols) */}
-        <div className="lg:col-span-2 bg-slate-800/60 rounded-2xl border border-slate-700/60 p-5 space-y-4">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Warehouse className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Warehouse className="w-4 h-4 text-slate-600" />
               وضعیت انبارهای کارخانه و توزیع فیزیکی موجودی
             </h2>
             <button
               onClick={onNavigateToInquiry}
-              className="text-xs text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer"
+              className="text-xs text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1 cursor-pointer"
             >
               <span>مشاهده کاردکس تفصیلی</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {warehouses.map(wh => {
               const whBalances = balances.filter(b => b.warehouseId === wh.id);
               const totalKg = whBalances.reduce((sum, b) => sum + b.physicalKg, 0);
@@ -224,28 +224,28 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               return (
                 <div
                   key={wh.id}
-                  className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-all flex flex-col justify-between"
+                  className="bg-slate-50 p-4 rounded-xl border border-slate-200/70 hover:border-slate-300 transition-all flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-200">{wh.name}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                      <span className="text-xs font-bold text-slate-800">{wh.name}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
                         {wh.code}
                       </span>
                     </div>
                     <div className="mt-3 flex items-baseline gap-2">
-                      <span className="text-base font-bold text-white font-mono">
+                      <span className="text-base font-bold text-slate-900 font-mono">
                         {formatWeightKg(totalKg)}
                       </span>
                       {totalPcs > 0 && (
-                        <span className="text-xs text-slate-400 font-mono">
+                        <span className="text-xs text-slate-500 font-mono tabular-nums">
                           ({formatNumber(totalPcs)} عدد)
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 flex items-center justify-between">
                     <span>سرپرست: {wh.managerName || '—'}</span>
                     <span>{lotsCount > 0 ? `${lotsCount} رول/بچ فعال` : `${wh.locations.length} موقعیت`}</span>
                   </div>
@@ -256,16 +256,16 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         </div>
 
         {/* SAPCO Active Contracts Glance (1 col) */}
-        <div className="bg-slate-800/60 rounded-2xl border border-slate-700/60 p-5 space-y-4 flex flex-col justify-between">
-          <div className="space-y-3">
+        <div className="bg-white rounded-xl border border-slate-200/80 p-6 space-y-4 flex flex-col justify-between shadow-xs">
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <ScrollText className="w-4 h-4 text-amber-400" />
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <ScrollText className="w-4 h-4 text-slate-600" />
                 سهمیه‌های فعال ورق ساپکو
               </h2>
               <button
                 onClick={onNavigateToSapco}
-                className="text-xs text-amber-400 hover:text-amber-300 font-medium cursor-pointer"
+                className="text-xs text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
               >
                 دفتر سهمیه‌ها
               </button>
@@ -278,25 +278,25 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   : 0;
 
                 return (
-                  <div key={c.id} className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                  <div key={c.id} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-200">{c.contractNumber}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                      <span className="font-bold text-slate-800">{c.contractNumber}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-mono">
                         {c.materialGrade}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-400 truncate mt-1">{c.title}</div>
+                    <div className="text-[11px] text-slate-500 truncate mt-1">{c.title}</div>
 
                     {/* Progress Bar */}
                     <div className="mt-2.5">
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                        <span>مانده موجودی: {formatWeightKg(c.closingBalanceKg)}</span>
-                        <span>{toPersianDigits(consumedPercent)}٪ مصرف سهمیه</span>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                        <span>مانده: {formatWeightKg(c.closingBalanceKg)}</span>
+                        <span>{toPersianDigits(consumedPercent)}٪ مصرف</span>
                       </div>
-                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            consumedPercent > 80 ? 'bg-rose-500' : 'bg-amber-500'
+                            consumedPercent > 80 ? 'bg-rose-500' : 'bg-slate-700'
                           }`}
                           style={{ width: `${Math.min(100, consumedPercent)}%` }}
                         />
@@ -308,10 +308,10 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-800">
+          <div className="pt-3 border-t border-slate-100">
             <button
               onClick={onNavigateToSapco}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>مشاهده صورتحساب کامل ساپکو</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -321,16 +321,16 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       </div>
 
       {/* Critical Business Rules Reminder Strip */}
-      <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+      <div className="bg-white p-4 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600 shadow-xs">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>
             <strong>اصول کنترل کیفیت و انبارداری KPIMS:</strong> عدم ثبت موجودی منفی، ثبت اتمیک تراکنش‌ها در سرور، تفکیک رول‌های امانی ساپکو و ثبت اصلاحات با صدور سند معکوس جبرانی.
           </span>
         </div>
         <button
           onClick={onNavigateToLedger}
-          className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4 cursor-pointer"
+          className="text-slate-800 hover:text-slate-900 font-semibold underline underline-offset-4 cursor-pointer"
         >
           دفتر روزنامه تراکنش‌ها
         </button>

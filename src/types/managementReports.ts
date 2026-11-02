@@ -142,7 +142,7 @@ export interface SapcoMaterialAccountItem {
   closingBookBalanceKg: number;
   physicalStockInPlantKg: number;
   discrepancyKg: number; // physical - closingBook
-  status: 'ACTIVE' | 'DEPLETED' | 'EXPIRED' | 'FULFILLED';
+  status: 'ACTIVE' | 'DEPLETED' | 'EXPIRED' | 'FULFILLED' | 'SUSPENDED';
 }
 
 // 8. Inventory Valuation Quantities (Strictly Quantities without inventing financial rules)

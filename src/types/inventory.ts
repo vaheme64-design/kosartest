@@ -291,8 +291,13 @@ export interface SapcoCoilReceipt {
 // INVENTORY MODULE EXTENSIONS
 // =========================================================================
 
-export type StockOwnership = 'COMPANY_OWNED' | 'SAPCO_SUPPLIER_OWNED';
+export type StockOwnership =
+  | 'COMPANY_OWNED'
+  | 'SAPCO_SUPPLIER_OWNED'
+  | 'CUSTOMER_SUPPLIED'
+  | 'THIRD_PARTY_OWNED';
 export type StockQualityStatus = 'AVAILABLE' | 'QUALITY_BLOCKED' | 'QUARANTINE' | 'REJECTED';
+export type PhysicalCoilStatus = 'AVAILABLE' | 'ISSUED' | 'PARTIALLY_ISSUED' | 'CONSUMED' | 'RETURNED' | 'BLOCKED';
 export type DocumentStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
 export type PostingStatus = 'UNPOSTED' | 'POSTED' | 'REVERSED';
 
@@ -363,6 +368,7 @@ export interface InventoryDocument {
   referenceNumber?: string;
   reversalOfDocumentId?: string;
   reversalOfDocNumber?: string;
+  reversalOfDocumentNumber?: string;
   adjustmentReason?: string;
   auditNote?: string;
   lines: InventoryDocumentLine[];
@@ -392,7 +398,7 @@ export interface InventoryReservation {
   quantity: number;
   quantityKg: number;
   unit: UnitOfMeasure;
-  status: 'ACTIVE' | 'CONSUMED' | 'RELEASED';
+  status: 'ACTIVE' | 'CONSUMED' | 'RELEASED' | 'EXPIRED' | 'CANCELLED';
   validUntil?: string;
   createdAt: string;
 }
@@ -436,6 +442,9 @@ export interface SapcoContract {
   id: string;
   contractNumber: string;
   title: string;
+  customerName?: string;
+  contractType?: 'SAPCO_CONSIGNMENT' | 'CUSTOMER_SUPPLIED' | 'PRODUCT_DELIVERY' | 'HYBRID';
+  ownership?: StockOwnership;
   materialGrade: string;
   allocatedWeightKg: number;
   openingBalanceKg: number;
@@ -443,9 +452,19 @@ export interface SapcoContract {
   totalConsumedKg: number;
   closingBalanceKg: number;
   associatedPartCodes: string[];
-  status: 'ACTIVE' | 'FULFILLED' | 'EXPIRED';
+  status: 'ACTIVE' | 'FULFILLED' | 'EXPIRED' | 'SUSPENDED';
   startDate: string;
   endDate: string;
+  notes?: string;
+  commercialLines?: ContractCommercialLine[];
+  coils?: {
+    coilId: string;
+    coilPackNumber?: string;
+    allocatedWeightKg: number;
+    thicknessMm?: number;
+    widthMm?: number;
+    materialGrade?: string;
+  }[];
 }
 
 export interface SapcoContractLedgerEntry {
@@ -478,6 +497,160 @@ export interface InventoryDashboardMetrics {
   draftDocumentsCount: number;
   postedDocumentsCount: number;
   activeContractsCount: number;
+}
+
+// =========================================================================
+// PHYSICAL COILS & ENHANCED INVENTORY TRACEABILITY MODELS
+// =========================================================================
+
+export interface ContractCoilAllocation {
+  id?: string;
+  contractId: string;
+  contractNumber: string;
+  coilId: string;
+  allocatedWeightKg: number;
+  ownership: StockOwnership;
+  sourceDocumentId?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface PhysicalCoil {
+  id: string;
+  coilId: string;               // e.g. COIL-1403-0101
+  coilPackNumber: string;       // e.g. CP-1001 (searchable and filterable)
+  partId?: string;
+  partCode?: string;
+  partName?: string;
+  materialId?: string;
+  materialGrade: string;
+  heatNumber?: string;
+  thicknessMm: number;
+  widthMm: number;
+  originalWeightKg: number;
+  remainingWeightKg: number;
+  warehouseId: string;
+  warehouseName: string;
+  warehouseLocationCode?: string;
+  ownership: StockOwnership;
+  qualityStatus: StockQualityStatus;
+  physicalStatus: PhysicalCoilStatus;
+  parentCoilId?: string;
+  supplierName?: string;
+  receiptDate: string;
+  allocations: ContractCoilAllocation[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CoilIssueReturnRecord {
+  id: string;
+  coilId: string;
+  manufacturingOrderId?: string;
+  documentNumber: string;
+  issuedWeightKg: number;
+  consumedWeightKg: number;
+  returnedWeightKg: number;
+  outstandingWeightKg: number;
+  varianceWeightKg: number;
+  scrappedKg?: number;
+  status: 'ISSUED' | 'PARTIALLY_RETURNED' | 'FULLY_RETURNED' | 'CONSUMED';
+  issuedAt: string;
+  returnedAt?: string;
+  notes?: string;
+}
+
+export interface ItemTrackingProfile {
+  id: string;
+  itemCategory: PartCategory;
+  partId?: string;
+  requiresCoilPack: boolean;
+  requiresCoilId: boolean;
+  requiresHeatNumber: boolean;
+  requiresBatchLot: boolean;
+  requiresExpirationDate: boolean;
+  requiresActualWeight: boolean;
+  trackOwnership: boolean;
+  trackContract: boolean;
+}
+
+export interface ItemAttributeDefinition {
+  id: string;
+  key: string;
+  displayName: string;
+  dataType: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN';
+  isRequired: boolean;
+  isSearchable: boolean;
+  isReportable: boolean;
+  applicableCategories: PartCategory[];
+  validationRules?: string;
+}
+
+export interface ItemAttributeValue {
+  id: string;
+  partId: string;
+  attributeKey: string;
+  textValue?: string;
+  numberValue?: number;
+  dateValue?: string;
+  booleanValue?: boolean;
+}
+
+export interface ContractCommercialLine {
+  id: string;
+  contractId: string;
+  lineType: 'CUSTOMER_SUPPLIED_MATERIAL' | 'FINISHED_PRODUCT_DELIVERY' | 'SUPPLIER_PURCHASE';
+  partId?: string;
+  partCode: string;
+  partName: string;
+  contractQty: number;
+  contractWeightKg: number;
+  deliveredOrReceivedQty: number;
+  deliveredOrReceivedKg: number;
+  remainingQty: number;
+  remainingKg: number;
+  unit: UnitOfMeasure;
+  notes?: string;
+}
+
+export interface CustomReportColumn {
+  key: string;
+  label: string;
+  category: 'ITEM' | 'LOCATION' | 'TRACEABILITY' | 'QUANTITY' | 'CONTRACT';
+}
+
+export interface SavedReportConfig {
+  id: string;
+  name: string;
+  reportType: 'COILS_SUMMARY' | 'COIL_PACK_INQUIRY' | 'CONTRACT_STOCK' | 'WAREHOUSE_STOCK' | 'OWNERSHIP_REPORT' | 'CUSTOM';
+  selectedColumns: string[];
+  groupBy: string[];
+  filters: Record<string, any>;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  createdAt?: string;
+}
+
+export interface ImportBatchSummary {
+  id: string;
+  batchNumber?: string;
+  idempotencyKey?: string;
+  batchType?: string;
+  fileName?: string;
+  templateType?: string;
+  status: 'VALIDATING' | 'IMPORTED' | 'REJECTED' | 'PARTIALLY_IMPORTED' | 'COMPLETED' | 'PARTIAL';
+  totalRows: number;
+  validRows: number;
+  errorRows: number;
+  importedBy?: string;
+  importedAt?: string;
+  createdAt?: string;
+  createdByName?: string;
+  errors?: {
+    rowNumber: number;
+    fieldName?: string;
+    errorMessage: string;
+  }[];
 }
 
 

@@ -1,11 +1,47 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getAuth,
+  initializeAuth,
+  inMemoryPersistence,
+  browserPopupRedirectResolver,
+  signOut,
+  Auth,
+} from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Clean up any stale persisted auth tokens in IndexedDB/localStorage that may fail if Token Service API is disabled
+if (typeof window !== 'undefined') {
+  try {
+    Object.keys(window.localStorage).forEach(key => {
+      if (key.startsWith('firebase:authUser:') || key.startsWith('firebase:previous_websocket_failure')) {
+        window.localStorage.removeItem(key);
+      }
+    });
+    if (window.indexedDB && typeof window.indexedDB.deleteDatabase === 'function') {
+      window.indexedDB.deleteDatabase('firebaseLocalStorageDb');
+    }
+  } catch {
+    // Ignore storage cleanup errors in restricted iframe environments
+  }
+}
+
+// Suppress noisy internal Firestore SDK console.error logs for transient token/network retries
+setLogLevel('silent');
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+
+let authInstance: Auth;
+try {
+  authInstance = initializeAuth(app, {
+    persistence: inMemoryPersistence,
+    popupRedirectResolver: browserPopupRedirectResolver,
+  });
+} catch {
+  authInstance = getAuth(app);
+}
+export const auth = authInstance;
 
 export enum OperationType {
   CREATE = 'create',
@@ -42,10 +78,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || [],
+      providerInfo:
+        auth.currentUser?.providerData?.map(provider => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
     },
     operationType,
     path,
@@ -59,8 +96,23 @@ export async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('token-service-api') || msg.includes('Fetching auth token failed')) {
+      try {
+        await signOut(auth);
+      } catch {
+        // Ignore signOut error
+      }
+      return;
+    }
+    // Only log if truly offline and not caused by permission-denied or disabled token service
+    if (
+      error instanceof Error &&
+      error.message.includes('the client is offline') &&
+      typeof navigator !== 'undefined' &&
+      navigator.onLine === false
+    ) {
+      console.warn('Firestore client is operating in offline mode.');
     }
   }
 }

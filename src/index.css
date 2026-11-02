@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Vazirmatn', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @layer base {
+  html,
   body {
-    font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
+    background-color: #f8fafc;
+    color: #0f172a;
+    letter-spacing: 0 !important;
+    line-height: 1.6;
+    font-feature-settings: "tnum" on, "lnum" on;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Prevent Tailwind tracking utilities from breaking cursive Persian ligatures */
+  [dir="rtl"] *,
+  body * {
+    letter-spacing: 0 !important;
+  }
+
+  /* Ensure font-mono uses Vazirmatn with tabular numerals so Persian text and numbers never break */
+  .font-mono {
+    font-family: var(--font-mono) !important;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" on, "lnum" on;
   }
 }
 
-/* Custom scrollbar for data tables and panels */
+/* Minimal neutral scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: #cbd5e1;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94a3b8;
 }
