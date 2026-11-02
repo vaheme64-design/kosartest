@@ -12,14 +12,34 @@ import {
   Compass,
   Zap,
   Boxes,
+  Palette,
+  Grid,
+  LogOut,
+  LayoutDashboard,
+  ScrollText,
+  Hammer,
+  GitCommit,
+  CalendarDays,
+  Cpu,
+  Layers,
+  FileSpreadsheet,
+  Settings,
 } from 'lucide-react';
 import { Part, UserRoleProfile } from '../types/inventory';
+import {
+  ErpLayoutTemplate,
+  ErpColorTheme,
+  COLOR_THEMES,
+} from '../types/theme';
 import { formatToJalali } from '../utils/jalali';
 import { toPersianDigits } from '../utils/formatters';
 import { TabKey } from './Sidebar';
 import { InventorySubTab } from './inventory/InventoryModuleView';
 
 interface NavbarProps {
+  activeTab: TabKey;
+  layoutTemplate: ErpLayoutTemplate;
+  colorTheme: ErpColorTheme;
   currentUser: UserRoleProfile;
   parts?: Part[];
   coilsCount?: number;
@@ -31,6 +51,8 @@ interface NavbarProps {
     subTab?: InventorySubTab,
     actionModal?: 'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER'
   ) => void;
+  onOpenTemplateModal: () => void;
+  onQuickTemplateChange: (tpl: ErpLayoutTemplate) => void;
   onSeedDemo: () => Promise<void>;
   onCleanDemo: () => Promise<void>;
   onOpenErpModal: () => void;
@@ -45,7 +67,23 @@ interface SearchableModuleItem {
   subTab?: InventorySubTab;
 }
 
+const TAB_TITLES: Record<TabKey, string> = {
+  dashboard: 'داشبورد مدیریتی و خلاصه وضعیت',
+  master_data: 'اطلاعات پایه',
+  inventory: 'انبار و موجودی',
+  production: 'ثبت روزانه تولید و ضایعات',
+  wip: 'قطعات در جریان ساخت (WIP)',
+  planning: 'برنامه‌ریزی تولید و نیازسنجی (MRP)',
+  machines: 'ماشین‌آلات و ظرفیت',
+  sapco: 'مواد امانی SAPCO',
+  reports: 'گزارش‌های مدیریتی و OEE',
+  settings: 'کاربران و تنظیمات',
+};
+
 export const Navbar: React.FC<NavbarProps> = ({
+  activeTab,
+  layoutTemplate,
+  colorTheme,
   currentUser,
   parts = [],
   coilsCount = 0,
@@ -53,6 +91,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   criticalAlertsCount = 0,
   onRoleChange,
   onNavigate,
+  onOpenTemplateModal,
+  onQuickTemplateChange,
   onSeedDemo,
   onCleanDemo,
   onOpenErpModal,
@@ -63,7 +103,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAppMatrix, setShowAppMatrix] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const themeMeta = COLOR_THEMES[colorTheme];
+  const isDarkHeader =
+    layoutTemplate === 'TABBED_WORKBENCH' || layoutTemplate === 'ODOO_ENTERPRISE';
 
   useEffect(() => {
     fetch('/api/db/status')
@@ -95,11 +140,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     PRODUCTION_MANAGER: 'مدیر تولید و برنامه‌ریزی',
     LINE_SUPERVISOR: 'سرپرست سالن تولید و پرس',
     QC_INSPECTOR: 'بازرس کنترل کیفیت (QC)',
-    ADMIN: 'مدیر ارشد کارخانه (دسترسی کامل)',
+    ADMIN: 'مدیر سیستم (دسترسی کامل)',
   };
 
   const allModulesAndSubModules: SearchableModuleItem[] = [
-    { label: 'میز کار و خلاصه وضعیت روزانه', category: 'ماژول اصلی', keywords: 'داشبورد خانه میز کار خلاصه', tab: 'dashboard' },
+    { label: 'داشبورد و خلاصه وضعیت روزانه', category: 'ماژول اصلی', keywords: 'داشبورد خانه میز کار خلاصه', tab: 'dashboard' },
+    { label: 'اطلاعات پایه (قطعات، ورق، BOM، مسیر تولید، شیفت‌ها)', category: 'ماژول اصلی', keywords: 'اطلاعات پایه کالا قطعه ورق ضخامت جنس مسیر ساخت فرمول bom حداقل موجودی', tab: 'master_data' },
     { label: 'پیشخوان و مرکز فرماندهی انبار', category: 'زیرماژول انبار', keywords: 'انبار پیشخوان موجودی', tab: 'inventory', subTab: 'DASHBOARD' },
     { label: 'جستجو و استعلام موجودی انبار', category: 'زیرماژول انبار', keywords: 'استعلام موجودی فیلتر ضخامت جنس ورق', tab: 'inventory', subTab: 'INQUIRY' },
     { label: 'مدیریت رول‌های ورق و کویل‌پک', category: 'زیرماژول انبار', keywords: 'رول ورق کویل پک کلاف برش', tab: 'inventory', subTab: 'COILS' },
@@ -108,14 +154,31 @@ export const Navbar: React.FC<NavbarProps> = ({
     { label: 'اسناد ورود و خروج انبار (کاردکس)', category: 'زیرماژول انبار', keywords: 'کاردکس اسناد گردش انبار ابطال', tab: 'inventory', subTab: 'MOVEMENT' },
     { label: 'ورود و خروج اکسل (CSV) با راهنما', category: 'زیرماژول انبار', keywords: 'اکسل ورود اطلاعات خروجی csv راهنما', tab: 'inventory', subTab: 'IMPORT_EXPORT' },
     { label: 'گزارش‌ساز سفارشی انبار', category: 'زیرماژول انبار', keywords: 'گزارش سفارشی شخصی سازی ستون کویل', tab: 'inventory', subTab: 'CUSTOM_REPORTS' },
-    { label: 'صورتحساب امانی ساپکو', category: 'زیرماژول انبار', keywords: 'صورتحساب امانی ساپکو دفتر حساب', tab: 'inventory', subTab: 'SAPCO' },
     { label: 'برنامه‌ریزی تولید و نیازسنجی مواد (MRP)', category: 'ماژول برنامه‌ریزی', keywords: 'برنامه ریزی تولید mrp سفارشات مشتری تخصیص ماشین آلات', tab: 'planning' },
     { label: 'ثبت روزانه تولید، مصرف و ضایعات', category: 'ماژول تولید', keywords: 'ثبت تولید مصرف ضایعات آمار روزانه پرسکاری', tab: 'production' },
-    { label: 'رهگیری کار در جریان ساخت (WIP) و ایستگاه‌ها', category: 'ماژول تولید', keywords: 'wip کار در جریان ایستگاه دستور کار انتقال بین مراحل', tab: 'wip' },
-    { label: 'شناسنامه کالاها، مشخصات ورق و مسیر ساخت (BOM)', category: 'اطلاعات پایه', keywords: 'کالا قطعه ورق ضخامت جنس مسیر ساخت فرمول bom حداقل موجودی', tab: 'master_data' },
-    { label: 'ماشین‌آلات، پرس‌ها، قالب‌ها و اپراتورها', category: 'اطلاعات پایه', keywords: 'ماشین آلات دستگاه پرس قالب سنبه ماتریس اپراتور سالن', tab: 'machines' },
-    { label: 'گزارش‌های جامع مدیریتی، بهای تمام‌شده و OEE', category: 'گزارش‌ها', keywords: 'گزارش مدیریتی بهای تمام شده راندمان oee ضایعات تحلیل', tab: 'reports' },
-    { label: 'مدیریت کاربران، نقش‌ها و تنظیمات امنیتی', category: 'تنظیمات', keywords: 'کاربران نقش دسترسی تنظیمات', tab: 'settings' },
+    { label: 'قطعات در جریان ساخت (WIP) و ایستگاه‌ها', category: 'ماژول تولید', keywords: 'wip کار در جریان ایستگاه دستور کار انتقال بین مراحل', tab: 'wip' },
+    { label: 'ماشین‌آلات و ظرفیت (پرس‌ها و قالب‌ها)', category: 'اطلاعات پایه', keywords: 'ماشین آلات دستگاه پرس قالب سنبه ماتریس اپراتور سالن', tab: 'machines' },
+    { label: 'مواد امانی SAPCO', category: 'ماژول امانی', keywords: 'مواد ساپکو امانی رول کویل', tab: 'sapco' },
+    { label: 'گزارش‌های جامع مدیریتی و OEE', category: 'گزارش‌ها', keywords: 'گزارش مدیریتی بهای تمام شده راندمان oee ضایعات تحلیل', tab: 'reports' },
+    { label: 'مدیریت کاربران و تنظیمات', category: 'تنظیمات', keywords: 'کاربران نقش دسترسی تنظیمات', tab: 'settings' },
+  ];
+
+  const appMatrixItems: {
+    tab: TabKey;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+  }[] = [
+    { tab: 'dashboard', label: 'داشبورد', icon: LayoutDashboard, color: 'bg-emerald-600' },
+    { tab: 'master_data', label: 'اطلاعات پایه', icon: ScrollText, color: 'bg-blue-600' },
+    { tab: 'inventory', label: 'انبار و موجودی', icon: Boxes, color: 'bg-teal-600' },
+    { tab: 'production', label: 'تولید روزانه', icon: Hammer, color: 'bg-amber-600' },
+    { tab: 'wip', label: 'کار در جریان (WIP)', icon: GitCommit, color: 'bg-purple-600' },
+    { tab: 'planning', label: 'برنامه‌ریزی (MRP)', icon: CalendarDays, color: 'bg-indigo-600' },
+    { tab: 'machines', label: 'ماشین‌آلات و ظرفیت', icon: Cpu, color: 'bg-cyan-600' },
+    { tab: 'sapco', label: 'مواد SAPCO', icon: Layers, color: 'bg-rose-600' },
+    { tab: 'reports', label: 'گزارش‌ها', icon: FileSpreadsheet, color: 'bg-slate-700' },
+    { tab: 'settings', label: 'کاربران و تنظیمات', icon: Settings, color: 'bg-slate-800' },
   ];
 
   const quickActions = [
@@ -153,39 +216,142 @@ export const Navbar: React.FC<NavbarProps> = ({
     return { modules, actions, matchedParts };
   }, [globalSearch, parts]);
 
-  const hour = new Date().getHours();
-  const currentShift =
-    hour >= 6 && hour < 14 ? 'شیفت صبح (A)' : hour >= 14 && hour < 22 ? 'شیفت عصر (B)' : 'شیفت شب (C)';
+  const now = new Date();
+  const timeStr = toPersianDigits(
+    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  );
+  const jalaliNumeric = formatToJalali(now);
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 lg:px-6 py-2.5">
+    <header
+      style={
+        isDarkHeader
+          ? {
+              backgroundColor:
+                layoutTemplate === 'ODOO_ENTERPRISE'
+                  ? themeMeta.headerDarkHex
+                  : '#0f172a',
+            }
+          : undefined
+      }
+      className={`${
+        isDarkHeader
+          ? 'text-white border-b border-slate-800'
+          : 'bg-white text-slate-900 border-b border-slate-200'
+      } sticky top-0 z-40 px-4 lg:px-6 py-2.5 transition-colors`}
+    >
       <div className="flex flex-col lg:flex-row items-center justify-between gap-3">
-        {/* Brand & Shift Info */}
+        {/* RIGHT SIDE: App Matrix + Brand / Active Page Title */}
         <div className="flex items-center justify-between w-full lg:w-auto gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shrink-0">
-              <Factory className="w-4 h-4" />
+            {/* Odoo-style 9-dots App Switcher */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowAppMatrix(!showAppMatrix)}
+                title="ماتریس سریع برنامه‌ها و ماژول‌ها (سبک Odoo)"
+                className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                  isDarkHeader
+                    ? 'bg-white/10 hover:bg-white/20 text-white'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+
+              {showAppMatrix && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white text-slate-900 border border-slate-200 rounded-2xl shadow-2xl p-4 z-50">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                    <span className="text-xs font-bold text-slate-800">
+                      ماتریس ماژول‌های KPIMS (سبک Odoo)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAppMatrix(false)}
+                      className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {appMatrixItems.map(item => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.tab}
+                          type="button"
+                          onClick={() => {
+                            if (onNavigate) onNavigate(item.tab);
+                            setShowAppMatrix(false);
+                          }}
+                          className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl hover:bg-slate-50 border transition-all cursor-pointer ${
+                            activeTab === item.tab
+                              ? 'border-emerald-500 bg-emerald-50/40'
+                              : 'border-transparent'
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-xl ${item.color} text-white flex items-center justify-center shadow-xs`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-800 text-center leading-tight">
+                            {item.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
+
+            {/* In Template 1 (HUB_WORKSPACE - Image 1), the KPIMS brand is inside the dark right sidebar, so the white top bar cleanly shows the current module title */}
+            {layoutTemplate === 'HUB_WORKSPACE' ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-slate-900">KPIMS</span>
-                <span className="text-slate-300">|</span>
-                <span className="text-xs text-slate-700 font-semibold">سامانه جامع تولید و انبار قطعات خودرو کوثر</span>
+                <span className="text-sm md:text-base font-bold text-slate-900">
+                  {TAB_TITLES[activeTab]}
+                </span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                <span>{formatToJalali(new Date(), { textualMonth: true })}</span>
-                <span>·</span>
-                <span>{currentShift}</span>
-                <span>·</span>
-                <span>{toPersianDigits(parts.length || 52)} قلم کالا</span>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs"
+                  style={{ backgroundColor: themeMeta.primaryHex }}
+                >
+                  <Factory className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-sm font-bold ${
+                        isDarkHeader ? 'text-white' : 'text-slate-900'
+                      }`}
+                    >
+                      KPIMS
+                    </span>
+                    <span className={isDarkHeader ? 'text-slate-600' : 'text-slate-300'}>|</span>
+                    <span
+                      className={`text-xs font-medium ${
+                        isDarkHeader ? 'text-slate-300' : 'text-slate-700'
+                      }`}
+                    >
+                      سامانه مدیریت تولید و موجودی کوثر
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Global Search for Modules, Sub-Modules, Quick Actions & Parts */}
+        {/* CENTER: Global Search for Modules, Sub-Modules, Quick Actions & Parts */}
         <div className="relative w-full lg:max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+          <Search
+            className={`w-4 h-4 absolute right-3 top-2.5 pointer-events-none ${
+              isDarkHeader ? 'text-slate-400' : 'text-slate-400'
+            }`}
+          />
           <input
             ref={searchInputRef}
             type="text"
@@ -194,14 +360,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             onChange={e => setGlobalSearch(e.target.value)}
             placeholder="جستجوی ماژول، زیرماژول (کویل، کسری، MRP)، عملیات یا قطعه..."
-            className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-900 rounded-xl pr-9 pl-14 py-1.5 text-xs text-slate-900 focus:outline-none transition-colors"
+            className={`w-full rounded-xl pr-9 pl-14 py-1.5 text-xs focus:outline-none transition-colors ${
+              isDarkHeader
+                ? 'bg-white/10 border border-white/15 text-white placeholder:text-slate-300 focus:bg-white focus:text-slate-900'
+                : 'bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-900 text-slate-900'
+            }`}
           />
-          <span className="absolute left-2.5 top-2 px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] text-slate-500 font-medium pointer-events-none">
+          <span
+            className={`absolute left-2.5 top-2 px-1.5 py-0.2 rounded text-[10px] font-medium pointer-events-none ${
+              isDarkHeader
+                ? 'bg-white/15 text-slate-200'
+                : 'bg-slate-200/70 text-slate-500'
+            }`}
+          >
             Ctrl+K
           </span>
 
           {searchFocused && (
-            <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl p-2.5 z-50 text-xs space-y-2.5 max-h-96 overflow-y-auto">
+            <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl p-2.5 z-50 text-xs space-y-2.5 max-h-96 overflow-y-auto text-slate-900">
               {/* 1. Modules & Sub-Modules */}
               {searchResults.modules.length > 0 && (
                 <div>
@@ -293,9 +469,74 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Top Reorder Point Alert Pill, Role Switcher, Notifications & Demo Actions */}
+        {/* LEFT SIDE: Template Switcher, Reorder Alert Pill, Role, Clock/Date */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Top Alert Button -> Navigates directly to Inventory ALERTS page */}
+          {/* Quick 1-Click Template Pills + Full Modal Trigger */}
+          <div
+            className={`inline-flex items-center p-0.5 rounded-xl border ${
+              isDarkHeader
+                ? 'bg-white/10 border-white/15'
+                : 'bg-slate-100 border-slate-200'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onQuickTemplateChange('HUB_WORKSPACE')}
+              title="قالب ۱: فضای کاری کارتی (مطابق تصویر ۱ و ERPNext)"
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                layoutTemplate === 'HUB_WORKSPACE'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : isDarkHeader
+                  ? 'text-slate-300 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              قالب ۱ (کارتی)
+            </button>
+            <button
+              type="button"
+              onClick={() => onQuickTemplateChange('TABBED_WORKBENCH')}
+              title="قالب ۲: میزکار تب‌بندی یکپارچه (مطابق تصویر ۲)"
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                layoutTemplate === 'TABBED_WORKBENCH'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : isDarkHeader
+                  ? 'text-slate-300 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              قالب ۲ (تب‌بندی)
+            </button>
+            <button
+              type="button"
+              onClick={() => onQuickTemplateChange('ODOO_ENTERPRISE')}
+              title="قالب ۳: سبک Odoo Enterprise"
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                layoutTemplate === 'ODOO_ENTERPRISE'
+                  ? 'bg-[#017E84] text-white shadow-2xs'
+                  : isDarkHeader
+                  ? 'text-slate-300 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              قالب Odoo
+            </button>
+            <button
+              type="button"
+              onClick={onOpenTemplateModal}
+              title="باز کردن تنظیمات کامل قالب‌ها، رنگ‌ها و تحلیل UX/UI"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                isDarkHeader
+                  ? 'text-emerald-300 hover:bg-white/10'
+                  : 'text-emerald-700 hover:bg-white'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>رنگ و قالب‌ها</span>
+            </button>
+          </div>
+
+          {/* Top Reorder Point Alert Pill -> Navigates directly to Inventory ALERTS page */}
           {reorderAlertsCount > 0 && (
             <button
               type="button"
@@ -309,19 +550,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
               title="مشاهده فهرست اقلام زیر نقطه سفارش و کسری موجودی"
             >
-              <BellRing className={`w-3.5 h-3.5 ${criticalAlertsCount > 0 ? 'text-rose-600' : 'text-amber-600'}`} />
+              <BellRing
+                className={`w-3.5 h-3.5 ${
+                  criticalAlertsCount > 0 ? 'text-rose-600' : 'text-amber-600'
+                }`}
+              />
               <span>{toPersianDigits(reorderAlertsCount)} کسری نقطه سفارش</span>
             </button>
           )}
 
           {/* Role Workspace Selector */}
-          <div className="flex items-center bg-blue-50/80 border border-blue-200 rounded-xl px-2.5 py-1.5">
-            <UserCheck className="w-3.5 h-3.5 text-blue-600 ml-1.5 shrink-0" />
-            <span className="text-[11px] text-blue-800 ml-1 font-medium">نقش:</span>
+          <div
+            className={`hidden xl:flex items-center rounded-xl px-2.5 py-1.5 border ${
+              isDarkHeader
+                ? 'bg-white/10 border-white/15 text-white'
+                : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
+          >
+            <UserCheck
+              className={`w-3.5 h-3.5 ml-1.5 shrink-0 ${
+                isDarkHeader ? 'text-emerald-400' : 'text-emerald-600'
+              }`}
+            />
             <select
               value={currentUser.role}
               onChange={e => onRoleChange(e.target.value as UserRoleProfile['role'])}
-              className="bg-transparent text-slate-900 text-xs font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-bold focus:outline-none cursor-pointer"
             >
               {Object.entries(roleLabels).map(([roleKey, label]) => (
                 <option key={roleKey} value={roleKey} className="bg-white text-slate-900">
@@ -336,7 +590,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl transition-colors cursor-pointer relative"
+              className={`p-2 rounded-xl border transition-colors cursor-pointer relative ${
+                isDarkHeader
+                  ? 'bg-white/10 hover:bg-white/20 text-white border-white/15'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
               title="اعلان‌ها و هشدارهای عملیاتی"
             >
               <Bell className="w-4 h-4" />
@@ -346,7 +604,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {showNotifications && (
-              <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-3.5 z-50 text-xs space-y-2.5">
+              <div className="absolute left-0 top-full mt-1.5 w-80 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-lg p-3.5 z-50 text-xs space-y-2.5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <span className="font-bold text-slate-900">اعلان‌ها و هشدارهای کارخانه</span>
                   <button
@@ -389,45 +647,38 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {toPersianDigits(coilsCount)} رول فیزیکی در انبار ثبت شده و آماده رهگیری قرارداد است.
                     </div>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onNavigate) onNavigate('planning');
-                      setShowNotifications(false);
-                    }}
-                    className="w-full text-right p-2.5 bg-amber-50/70 hover:bg-amber-100/70 rounded-lg border border-amber-200 cursor-pointer block"
-                  >
-                    <div className="font-semibold text-amber-900">برنامه‌ریزی تولید و نیازسنجی مواد (MRP)</div>
-                    <div className="text-[11px] text-amber-700 mt-0.5">
-                      برای بررسی موازنه سفارشات ساپکو و ظرفیت پرس‌ها کلیک کنید.
-                    </div>
-                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Database Indicator */}
+          {/* Database & Demo Controls */}
           <button
             onClick={onOpenErpModal}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-xl transition-colors cursor-pointer ${
+              isDarkHeader
+                ? 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/15'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+            }`}
             title="مشاهده وضعیت پایگاه داده و تنظیمات ERP"
           >
-            <Database className="w-3.5 h-3.5 text-slate-500" />
+            <Database className="w-3.5 h-3.5" />
             <span className="text-[11px] font-medium">
-              {dbStatus?.isConnected ? 'PostgreSQL' : 'پایگاه داده فعال'}
+              {dbStatus?.isConnected ? 'PostgreSQL' : 'پایگاه داده'}
             </span>
           </button>
 
-          {/* Seed Demo Data Button */}
           <button
             onClick={onSeedDemo}
             disabled={loading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-xl transition-colors disabled:opacity-50 cursor-pointer ${
+              isDarkHeader
+                ? 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/15'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+            }`}
             title="بازنشانی اطلاعات نمونه کارخانه"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>داده نمونه</span>
           </button>
 
@@ -436,13 +687,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => setShowConfirmClean(true)}
               disabled={loading}
-              className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+              className={`p-1.5 border rounded-xl transition-colors disabled:opacity-50 cursor-pointer ${
+                isDarkHeader
+                  ? 'bg-white/10 hover:bg-rose-500/20 text-slate-300 border-white/15'
+                  : 'text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-200'
+              }`}
               title="پاکسازی داده‌های نمونه"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs">
+            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs text-slate-900">
               <span className="text-rose-700 text-[11px]">حذف نمونه؟</span>
               <button
                 onClick={async () => {
@@ -460,6 +715,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                 لغو
               </button>
             </div>
+          )}
+
+          {/* Clock / Date (Image 1 style) or User / Exit (Image 2 style) */}
+          {layoutTemplate === 'HUB_WORKSPACE' ? (
+            <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-medium pl-1 tabular-nums">
+              <span>{jalaliNumeric}</span>
+              <span className="text-slate-300">|</span>
+              <span>{timeStr}</span>
+            </div>
+          ) : (
+            isDarkHeader && (
+              <div className="hidden md:flex items-center gap-3 pr-2 border-r border-slate-700 text-xs">
+                <div className="text-left leading-tight">
+                  <div className="font-bold text-white">مدیر سیستم</div>
+                  <div className="text-[10px] text-slate-400">مدیر سیستم</div>
+                </div>
+                <span className="inline-flex items-center gap-1 text-slate-300 hover:text-white cursor-pointer">
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>خروج</span>
+                </span>
+              </div>
+            )
           )}
         </div>
       </div>

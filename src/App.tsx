@@ -4,8 +4,7 @@ import { Sidebar, TabKey } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { TransactionsVouchersView } from './components/TransactionsVouchersView';
 import { InventoryModuleView, InventorySubTab } from './components/inventory/InventoryModuleView';
-import { PartsView } from './components/PartsView';
-import { RoutingsView } from './components/RoutingsView';
+import { MasterDataHubView } from './components/MasterDataHubView';
 import { MachinesView } from './components/MachinesView';
 import { UserManagementView } from './components/UserManagementView';
 import { SapcoMaterialsView } from './components/SapcoMaterialsView';
@@ -13,6 +12,8 @@ import { ProductionWipModuleView } from './components/wip/ProductionWipModuleVie
 import { ProductionPlanningModuleView } from './components/planning/ProductionPlanningModuleView';
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
+import { TemplateSwitcherModal } from './components/TemplateSwitcherModal';
+import { ErpLayoutTemplate, ErpColorTheme } from './types/theme';
 
 import {
   Part,
@@ -36,6 +37,34 @@ export default function App() {
   const [pendingInventoryModal, setPendingInventoryModal] = useState<
     'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER' | null
   >(null);
+
+  // Multi-Template & Color Theme Engine (Persisted in localStorage)
+  const [layoutTemplate, setLayoutTemplate] = useState<ErpLayoutTemplate>(() => {
+    const saved = localStorage.getItem('kpims_layout_template') as ErpLayoutTemplate | null;
+    return saved || 'HUB_WORKSPACE';
+  });
+  const [colorTheme, setColorTheme] = useState<ErpColorTheme>(() => {
+    const saved = localStorage.getItem('kpims_color_theme') as ErpColorTheme | null;
+    return saved || 'EMERALD_KOSAR';
+  });
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+
+  const handleSelectTemplate = (tpl: ErpLayoutTemplate) => {
+    setLayoutTemplate(tpl);
+    localStorage.setItem('kpims_layout_template', tpl);
+    if (tpl === 'ODOO_ENTERPRISE') {
+      setColorTheme('ODOO_PLUM');
+      localStorage.setItem('kpims_color_theme', 'ODOO_PLUM');
+    } else if (tpl === 'HUB_WORKSPACE' || tpl === 'TABBED_WORKBENCH') {
+      setColorTheme('EMERALD_KOSAR');
+      localStorage.setItem('kpims_color_theme', 'EMERALD_KOSAR');
+    }
+  };
+
+  const handleSelectColor = (clr: ErpColorTheme) => {
+    setColorTheme(clr);
+    localStorage.setItem('kpims_color_theme', clr);
+  };
 
   const [initialVoucherType, setInitialVoucherType] = useState<VoucherType>('RECEIPT');
   const [initialPartId, setInitialPartId] = useState<string | undefined>(undefined);
@@ -376,92 +405,114 @@ export default function App() {
     }
   });
 
-  return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
-      {/* Top Navbar with Global Command Search & Role Switcher */}
-      <Navbar
-        currentUser={currentUser}
-        parts={parts}
-        coilsCount={coils.length}
-        reorderAlertsCount={reorderAlertsCount}
-        criticalAlertsCount={criticalAlertsCount}
-        onRoleChange={role => setCurrentUser(prev => ({ ...prev, role }))}
-        onNavigate={handleDeepNavigate}
-        onSeedDemo={handleSeedDemo}
-        onCleanDemo={handleCleanDemo}
-        onOpenErpModal={() => setIsErpModalOpen(true)}
-        loading={loading}
-      />
+  // In HUB_WORKSPACE (Image 1), the dark sidebar spans full height on the right while the white navbar sits over the main workspace.
+  // In TABBED_WORKBENCH (Image 2), ODOO_ENTERPRISE, and CLASSIC_COMMAND, the navbar spans full width across the top.
+  const isSidebarFullHeight = layoutTemplate === 'HUB_WORKSPACE';
 
-      {/* Main Layout */}
-      <div className="flex-1 flex flex-col md:flex-row">
-        {/* Grouped, Collapsible, Role-Aware Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          activeInventorySubTab={activeInventorySubTab}
-          onTabChange={(tab, invSubTab) => {
-            setActiveTab(tab);
-            if (invSubTab) setActiveInventorySubTab(invSubTab);
-          }}
-          currentRole={currentUser.role}
-          partsCount={parts.length}
-          txCount={transactions.length}
-          plansCount={plans.length}
-          coilsCount={coils.length}
-          reorderAlertsCount={reorderAlertsCount}
+  const navbarElement = (
+    <Navbar
+      activeTab={activeTab}
+      layoutTemplate={layoutTemplate}
+      colorTheme={colorTheme}
+      currentUser={currentUser}
+      parts={parts}
+      coilsCount={coils.length}
+      reorderAlertsCount={reorderAlertsCount}
+      criticalAlertsCount={criticalAlertsCount}
+      onRoleChange={role => setCurrentUser(prev => ({ ...prev, role }))}
+      onNavigate={handleDeepNavigate}
+      onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
+      onQuickTemplateChange={handleSelectTemplate}
+      onSeedDemo={handleSeedDemo}
+      onCleanDemo={handleCleanDemo}
+      onOpenErpModal={() => setIsErpModalOpen(true)}
+      loading={loading}
+    />
+  );
+
+  const sidebarElement = (
+    <Sidebar
+      activeTab={activeTab}
+      activeInventorySubTab={activeInventorySubTab}
+      layoutTemplate={layoutTemplate}
+      colorTheme={colorTheme}
+      onTabChange={(tab, invSubTab) => {
+        setActiveTab(tab);
+        if (invSubTab) setActiveInventorySubTab(invSubTab);
+      }}
+      onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
+      currentRole={currentUser.role}
+      partsCount={parts.length}
+      txCount={transactions.length}
+      plansCount={plans.length}
+      coilsCount={coils.length}
+      reorderAlertsCount={reorderAlertsCount}
+    />
+  );
+
+  const mainContentElement = (
+    <main className="flex-1 p-5 md:p-7 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
+      {/* 1. Dashboard */}
+      {activeTab === 'dashboard' && (
+        <DashboardView
+          currentUser={currentUser}
+          summary={summary}
+          recentTransactions={transactions}
+          machines={machines}
+          onNavigateToTab={handleDeepNavigate}
+          onOpenNewVoucher={handleOpenVoucherWithType}
         />
+      )}
 
-        {/* Content Area */}
-        <main className="flex-1 p-5 md:p-7 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
-          {/* 1. Dashboard */}
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              currentUser={currentUser}
-              summary={summary}
-              recentTransactions={transactions}
-              machines={machines}
-              onNavigateToTab={handleDeepNavigate}
-              onOpenNewVoucher={handleOpenVoucherWithType}
-            />
-          )}
+      {/* 2. Master Data Hub (Supports both Image 1 Card Hub & Image 2 Tabbed Workbench) */}
+      {activeTab === 'master_data' && (
+        <MasterDataHubView
+          layoutTemplate={layoutTemplate}
+          colorTheme={colorTheme}
+          parts={parts}
+          routings={routings}
+          machines={machines}
+          dies={dies}
+          operators={operators}
+          halls={halls}
+          coils={coils}
+          onSavePart={handleSavePart}
+          onSaveRouting={handleSaveRouting}
+          onDeleteRouting={handleDeleteRouting}
+          onSaveMachine={handleSaveMachine}
+          onSaveDie={handleSaveDie}
+          onDeleteDie={handleDeleteDie}
+          onSaveOperator={handleSaveOperator}
+          onSaveHall={handleSaveHall}
+          onDirectProduce={partId => {
+            handleOpenVoucherWithType('PRODUCTION_OUTPUT', partId);
+          }}
+          onRefresh={loadAllData}
+          onNavigateToInventoryCoils={() => {
+            setActiveTab('inventory');
+            setActiveInventorySubTab('COILS');
+          }}
+          onNavigateToPlanning={() => setActiveTab('planning')}
+        />
+      )}
 
-          {/* 2. Master Data (Parts & Routings) */}
-          {activeTab === 'master_data' && (
-            <div className="space-y-6">
-              <PartsView parts={parts} onSavePart={handleSavePart} />
-              <div className="pt-6 border-t border-slate-200">
-                <RoutingsView
-                  routings={routings}
-                  parts={parts}
-                  machines={machines}
-                  dies={dies}
-                  onSaveRouting={handleSaveRouting}
-                  onDeleteRouting={handleDeleteRouting}
-                  onDirectProduce={partId => {
-                    handleOpenVoucherWithType('PRODUCTION_OUTPUT', partId);
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 3. Inventory Management Module */}
-          {activeTab === 'inventory' && (
-            <InventoryModuleView
-              parts={parts}
-              stageBalances={summary?.stageBalances || []}
-              currentUser={{
-                uid: currentUser.uid,
-                displayName: currentUser.displayName,
-                role: currentUser.role,
-              }}
-              initialSubTab={activeInventorySubTab}
-              initialActionModal={pendingInventoryModal}
-              onClearInitialAction={() => setPendingInventoryModal(null)}
-              onGlobalRefresh={loadAllData}
-              onNavigateToPlanning={() => setActiveTab('planning')}
-            />
-          )}
+      {/* 3. Inventory Management Module */}
+      {activeTab === 'inventory' && (
+        <InventoryModuleView
+          parts={parts}
+          stageBalances={summary?.stageBalances || []}
+          currentUser={{
+            uid: currentUser.uid,
+            displayName: currentUser.displayName,
+            role: currentUser.role,
+          }}
+          initialSubTab={activeInventorySubTab}
+          initialActionModal={pendingInventoryModal}
+          onClearInitialAction={() => setPendingInventoryModal(null)}
+          onGlobalRefresh={loadAllData}
+          onNavigateToPlanning={() => setActiveTab('planning')}
+        />
+      )}
 
           {/* 4. Production */}
           {activeTab === 'production' && (
@@ -541,8 +592,41 @@ export default function App() {
               firebaseUser={firebaseUser}
             />
           )}
-        </main>
-      </div>
+    </main>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+      {isSidebarFullHeight ? (
+        /* Layout A (Image 1 / ERPNext Workspace): Dark Right Sidebar spans full height, White Top Bar sits above main workspace */
+        <div className="flex-1 flex flex-col md:flex-row min-h-screen">
+          {sidebarElement}
+          <div className="flex-1 flex flex-col min-w-0">
+            {navbarElement}
+            {mainContentElement}
+          </div>
+        </div>
+      ) : (
+        /* Layout B (Image 2 / Odoo / Classic): Full-width Top Header spans across top, Right Sidebar + Main Content below */
+        <>
+          {navbarElement}
+          <div className="flex-1 flex flex-col md:flex-row">
+            {sidebarElement}
+            {mainContentElement}
+          </div>
+        </>
+      )}
+
+      {/* Template & Color Theme Switcher + UX/UI Analysis Modal */}
+      <TemplateSwitcherModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        activeTemplate={layoutTemplate}
+        activeColor={colorTheme}
+        onSelectTemplate={handleSelectTemplate}
+        onSelectColor={handleSelectColor}
+        onPreviewMasterData={() => setActiveTab('master_data')}
+      />
 
       {/* ERP Sync Modal */}
       <ErpSyncModal
@@ -554,3 +638,4 @@ export default function App() {
     </div>
   );
 }
+
