@@ -24,6 +24,7 @@ import {
   Layers,
   FileSpreadsheet,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import { Part, UserRoleProfile } from '../types/inventory';
 import {
@@ -53,6 +54,7 @@ interface NavbarProps {
   ) => void;
   onOpenTemplateModal: () => void;
   onQuickTemplateChange: (tpl: ErpLayoutTemplate) => void;
+  onOpenAiAssistant?: () => void;
   onSeedDemo: () => Promise<void>;
   onCleanDemo: () => Promise<void>;
   onOpenErpModal: () => void;
@@ -93,6 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   onOpenTemplateModal,
   onQuickTemplateChange,
+  onOpenAiAssistant,
   onSeedDemo,
   onCleanDemo,
   onOpenErpModal,
@@ -123,17 +126,21 @@ export const Navbar: React.FC<NavbarProps> = ({
       });
   }, []);
 
-  // Support Ctrl+K / Cmd+K to focus global module & action search
+  // Support Ctrl+K for search and Ctrl+Space for AI assistant
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+        e.preventDefault();
+        if (onOpenAiAssistant) onOpenAiAssistant();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onOpenAiAssistant]);
 
   const roleLabels: Record<UserRoleProfile['role'], string> = {
     WAREHOUSE_KEEPER: 'مسئول انبار و کنترل موجودی',
@@ -535,6 +542,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>رنگ و قالب‌ها</span>
             </button>
           </div>
+
+          {/* AI Assistant Button */}
+          {onOpenAiAssistant && (
+            <button
+              type="button"
+              onClick={onOpenAiAssistant}
+              title="دستیار صوتی و متنی هوش مصنوعی کارخانه (کلید میانبر Ctrl + Space)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-600 hover:brightness-110 shadow-xs transition-all cursor-pointer border border-white/20 active:scale-95"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+              <span>دستیار هوش مصنوعی</span>
+              <span className="hidden xl:inline-block px-1.5 py-0.2 rounded bg-black/25 text-[9px] font-mono text-indigo-100">
+                Ctrl+Space
+              </span>
+            </button>
+          )}
 
           {/* Top Reorder Point Alert Pill -> Navigates directly to Inventory ALERTS page */}
           {reorderAlertsCount > 0 && (

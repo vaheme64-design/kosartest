@@ -7,6 +7,7 @@ import {
   AlertCircle,
   FileText,
   ArrowLeft,
+  Sparkles,
 } from 'lucide-react';
 import {
   Part,
@@ -16,12 +17,26 @@ import {
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
 import { ContextualHelp } from '../common/ContextualHelp';
 
+export interface IssueDraftPayload {
+  partId?: string;
+  partCode?: string;
+  partName?: string;
+  quantity?: number | string;
+  unit?: string;
+  warehouseId?: string;
+  targetWarehouseId?: string;
+  issuePurpose?: string;
+  lotNumber?: string;
+  notes?: string;
+}
+
 interface IssueFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   parts: Part[];
   warehouses: WarehouseDefinition[];
   balances: DetailedStockBalance[];
+  initialDraft?: IssueDraftPayload | null;
   onSubmit: (payload: any) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
@@ -31,6 +46,7 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
   parts,
   warehouses,
   balances,
+  initialDraft,
   onSubmit,
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
@@ -42,9 +58,30 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
   const [quantity, setQuantity] = useState<string>('');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [isAiPrefilled, setIsAiPrefilled] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Sync AI initialDraft when provided
+  React.useEffect(() => {
+    if (initialDraft && isOpen) {
+      setIsAiPrefilled(true);
+      if (initialDraft.quantity) setQuantity(String(initialDraft.quantity));
+      if (initialDraft.warehouseId) setWarehouseId(initialDraft.warehouseId);
+      if (initialDraft.targetWarehouseId) setTargetWarehouseId(initialDraft.targetWarehouseId);
+      if (initialDraft.notes) setNotes(initialDraft.notes);
+      if (initialDraft.partId) {
+        setSelectedPartId(initialDraft.partId);
+      } else if (initialDraft.partCode) {
+        const found = parts.find(p => p.code.toLowerCase() === initialDraft.partCode?.toLowerCase());
+        if (found) setSelectedPartId(found.id);
+      }
+      setStep(1);
+    } else if (!isOpen) {
+      setIsAiPrefilled(false);
+    }
+  }, [initialDraft, isOpen, parts]);
 
   // Eligible items (prioritize raw materials and all parts)
   const eligibleParts = useMemo(() => {
@@ -204,6 +241,23 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
         </div>
 
         <div className="p-6 space-y-4 text-xs">
+          {isAiPrefilled && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between text-amber-950 shadow-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+                <div>
+                  <p className="font-bold text-xs text-amber-900">پیش‌نویس خودکار توسط دستیار هوش مصنوعی</p>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    مقادیر کالا، مقدار خروج و انبارها پر شده است. لطفاً بررسی و تایید بفرمایید.
+                  </p>
+                </div>
+              </div>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-lg bg-amber-200 text-amber-900 font-bold text-[10px]">
+                آماده تایید
+              </span>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />

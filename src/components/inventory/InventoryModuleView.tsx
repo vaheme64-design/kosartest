@@ -72,6 +72,8 @@ interface InventoryModuleViewProps {
   };
   initialSubTab?: InventorySubTab;
   initialActionModal?: 'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER' | null;
+  initialReceiptDraft?: any;
+  initialIssueDraft?: any;
   onClearInitialAction?: () => void;
   onGlobalRefresh?: () => Promise<void>;
   onNavigateToPlanning?: () => void;
@@ -93,6 +95,8 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
   currentUser,
   initialSubTab,
   initialActionModal,
+  initialReceiptDraft,
+  initialIssueDraft,
   onClearInitialAction,
   onGlobalRefresh,
   onNavigateToPlanning,
@@ -896,6 +900,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         parts={parts}
         warehouses={warehouses}
         contracts={contracts}
+        initialDraft={initialReceiptDraft}
         onSubmit={handleCreateDocument}
       />
 
@@ -905,6 +910,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         parts={parts}
         warehouses={warehouses}
         balances={balances}
+        initialDraft={initialIssueDraft}
         onSubmit={handleCreateDocument}
       />
 

@@ -4,6 +4,7 @@ import {
   validateAndPrepareTransaction,
   generateVoucherNumber,
 } from './stockEngine';
+import { executeAiCommand } from './aiEngine';
 import {
   INITIAL_PARTS,
   INITIAL_MACHINES,
@@ -3116,6 +3117,51 @@ apiRouter.get('/reports/inventory-reconciliation', (req: Request, res: Response)
     res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در گزارش انبارگردانی' });
   }
 });
+
+// =========================================================================
+// 20. FACTORY AI COMMAND ASSISTANT (OLLAMA / GROQ / OPENROUTER / GEMINI / LOCAL)
+// =========================================================================
+
+apiRouter.post('/ai/command', async (req: Request, res: Response) => {
+  try {
+    const { prompt, settings } = req.body;
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ success: false, error: 'متن دستور هوش مصنوعی الزامی است.' });
+    }
+
+    const currentParts = partsStore.length > 0 ? partsStore : INITIAL_PARTS;
+    const aiResult = await executeAiCommand(prompt, settings || { provider: 'LOCAL_NLP' }, currentParts, WAREHOUSES_LIST);
+
+    return res.json({ success: true, data: aiResult });
+  } catch (error) {
+    console.error('Error executing AI command:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در اجرای دستور هوش مصنوعی',
+    });
+  }
+});
+
+apiRouter.post('/ai/ping', async (req: Request, res: Response) => {
+  try {
+    const { provider, endpointUrl } = req.body;
+    if (provider === 'OLLAMA') {
+      const url = endpointUrl || 'http://localhost:11434';
+      const check = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, { method: 'GET' });
+      if (check.ok) {
+        const data = await check.json();
+        const models = (data.models || []).map((m: any) => m.name);
+        return res.json({ success: true, message: 'ارتباط با Ollama لوکال برقرار است.', models });
+      } else {
+        return res.json({ success: false, message: `پاسخ Ollama با کد وضعیت ${check.status}` });
+      }
+    }
+    return res.json({ success: true, message: 'موتور هوش مصنوعی آماده است.' });
+  } catch (err: any) {
+    return res.json({ success: false, message: `عدم برقراری ارتباط: ${err.message}` });
+  }
+});
+
 
 
 

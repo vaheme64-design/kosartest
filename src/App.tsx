@@ -13,6 +13,8 @@ import { ProductionPlanningModuleView } from './components/planning/ProductionPl
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
 import { TemplateSwitcherModal } from './components/TemplateSwitcherModal';
+import { AiAssistantModal } from './components/AiAssistantModal';
+import { AiActionPayload } from './types/ai';
 import { ErpLayoutTemplate, ErpColorTheme } from './types/theme';
 
 import {
@@ -37,6 +39,9 @@ export default function App() {
   const [pendingInventoryModal, setPendingInventoryModal] = useState<
     'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER' | null
   >(null);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiReceiptDraft, setAiReceiptDraft] = useState<any>(null);
+  const [aiIssueDraft, setAiIssueDraft] = useState<any>(null);
 
   // Multi-Template & Color Theme Engine (Persisted in localStorage)
   const [layoutTemplate, setLayoutTemplate] = useState<ErpLayoutTemplate>(() => {
@@ -382,6 +387,35 @@ export default function App() {
     }
   };
 
+  const handleExecuteAiAction = (action: AiActionPayload) => {
+    if (action.actionType === 'OPEN_RECEIPT') {
+      setActiveTab('inventory');
+      setActiveInventorySubTab('MOVEMENT');
+      if (action.prefillReceipt) {
+        setAiReceiptDraft(action.prefillReceipt);
+      }
+      setPendingInventoryModal('RECEIPT');
+    } else if (action.actionType === 'OPEN_ISSUE') {
+      setActiveTab('inventory');
+      setActiveInventorySubTab('MOVEMENT');
+      if (action.prefillIssue) {
+        setAiIssueDraft(action.prefillIssue);
+      }
+      setPendingInventoryModal('ISSUE');
+    } else if (action.actionType === 'CHECK_REORDER') {
+      setActiveTab('inventory');
+      setActiveInventorySubTab('ALERTS');
+    } else if (action.actionType === 'NAVIGATE' && action.targetTab) {
+      setActiveTab(action.targetTab as TabKey);
+      if (action.targetSubTab) {
+        setActiveInventorySubTab(action.targetSubTab as InventorySubTab);
+      }
+    } else if (action.actionType === 'QUERY_STOCK') {
+      setActiveTab('inventory');
+      setActiveInventorySubTab('INQUIRY');
+    }
+  };
+
   // Compute top-level reorder alert summary counts for Navbar & Sidebar badges
   const stageBalancesList: any[] = summary?.stageBalances || [];
   let reorderAlertsCount = 0;
@@ -423,6 +457,7 @@ export default function App() {
       onNavigate={handleDeepNavigate}
       onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
       onQuickTemplateChange={handleSelectTemplate}
+      onOpenAiAssistant={() => setIsAiModalOpen(true)}
       onSeedDemo={handleSeedDemo}
       onCleanDemo={handleCleanDemo}
       onOpenErpModal={() => setIsErpModalOpen(true)}
@@ -508,7 +543,13 @@ export default function App() {
           }}
           initialSubTab={activeInventorySubTab}
           initialActionModal={pendingInventoryModal}
-          onClearInitialAction={() => setPendingInventoryModal(null)}
+          initialReceiptDraft={aiReceiptDraft}
+          initialIssueDraft={aiIssueDraft}
+          onClearInitialAction={() => {
+            setPendingInventoryModal(null);
+            setAiReceiptDraft(null);
+            setAiIssueDraft(null);
+          }}
           onGlobalRefresh={loadAllData}
           onNavigateToPlanning={() => setActiveTab('planning')}
         />
@@ -634,6 +675,14 @@ export default function App() {
         onClose={() => setIsErpModalOpen(false)}
         partsCount={parts.length}
         txCount={transactions.length}
+      />
+
+      {/* AI Assistant Modal (Voice & Text with Offline Local NLP / Ollama / Groq / OpenRouter / Gemini) */}
+      <AiAssistantModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        parts={parts}
+        onExecuteAction={handleExecuteAiAction}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import {
   FileText,
   ArrowLeft,
   Info,
+  Sparkles,
 } from 'lucide-react';
 import {
   Part,
@@ -29,12 +30,30 @@ export type GuidedReceiptSubType =
   | 'OPENING_BALANCE'
   | 'FINISHED_PRODUCT';
 
+export interface ReceiptDraftPayload {
+  subType?: GuidedReceiptSubType;
+  partId?: string;
+  partCode?: string;
+  partName?: string;
+  quantity?: number | string;
+  unit?: string;
+  coilPackNumber?: string;
+  physicalCoilCode?: string;
+  heatNumber?: string;
+  warehouseId?: string;
+  locationCode?: string;
+  ownership?: StockOwnership;
+  referenceNumber?: string;
+  notes?: string;
+}
+
 interface ReceiptFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   parts: Part[];
   warehouses: WarehouseDefinition[];
   contracts: SapcoContract[];
+  initialDraft?: ReceiptDraftPayload | null;
   onSubmit: (payload: any) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
@@ -44,6 +63,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
   parts,
   warehouses,
   contracts,
+  initialDraft,
   onSubmit,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -52,6 +72,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
   const [locationCode, setLocationCode] = useState<string>('LOC-RAW-A1');
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [partSearch, setPartSearch] = useState<string>('');
+  const [isAiPrefilled, setIsAiPrefilled] = useState<boolean>(false);
 
   // Tracking fields
   const [coilPackNumber, setCoilPackNumber] = useState<string>('');
@@ -62,6 +83,35 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
   const [ownership, setOwnership] = useState<StockOwnership>('SAPCO_SUPPLIER_OWNED');
   const [qualityStatus, setQualityStatus] = useState<StockQualityStatus>('AVAILABLE');
   const [notes, setNotes] = useState<string>('');
+
+  // Sync with AI initial draft when provided
+  useEffect(() => {
+    if (initialDraft && isOpen) {
+      setIsAiPrefilled(true);
+      if (initialDraft.subType) setReceiptSubType(initialDraft.subType);
+      if (initialDraft.warehouseId) setWarehouseId(initialDraft.warehouseId);
+      if (initialDraft.locationCode) setLocationCode(initialDraft.locationCode);
+      if (initialDraft.quantity) setQuantity(String(initialDraft.quantity));
+      if (initialDraft.coilPackNumber) setCoilPackNumber(initialDraft.coilPackNumber);
+      if (initialDraft.physicalCoilCode) setPhysicalCoilCode(initialDraft.physicalCoilCode);
+      if (initialDraft.heatNumber) setHeatNumber(initialDraft.heatNumber);
+      if (initialDraft.ownership) setOwnership(initialDraft.ownership);
+      if (initialDraft.referenceNumber) setReferenceNumber(initialDraft.referenceNumber);
+      if (initialDraft.notes) setNotes(initialDraft.notes);
+
+      // Find part by id or code
+      if (initialDraft.partId) {
+        setSelectedPartId(initialDraft.partId);
+      } else if (initialDraft.partCode) {
+        const found = parts.find(p => p.code.toLowerCase() === initialDraft.partCode?.toLowerCase());
+        if (found) setSelectedPartId(found.id);
+      }
+      // Jump directly to step 2 (details) so user can see and approve
+      setStep(2);
+    } else if (!isOpen) {
+      setIsAiPrefilled(false);
+    }
+  }, [initialDraft, isOpen, parts]);
 
   // Multi-contract allocation for sheet metal coils
   const [contractAllocations, setContractAllocations] = useState<
@@ -395,6 +445,23 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
         </div>
 
         <div className="p-6 space-y-5 text-xs max-h-[78vh] overflow-y-auto">
+          {isAiPrefilled && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-950 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 animate-pulse" />
+                <div>
+                  <p className="font-bold text-xs text-emerald-800">تکمیل هوشمند توسط دستیار هوش مصنوعی کارخانه</p>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    فیلدهای رسید کالا با مشخصات دریافتی از دستور صوتی/متنی شما پر شده‌اند. لطفاً پس از بازبینی، جهت نهایی‌سازی تایید فرمایید.
+                  </p>
+                </div>
+              </div>
+              <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-emerald-200/80 text-emerald-900 font-bold text-[11px]">
+                آماده تایید
+              </span>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
