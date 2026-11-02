@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -253,10 +253,10 @@ model Material {
   name                 String   // ورق روغنی DC04 کشش عمیق
   grade                String   // DC04, ST12, ST14, DX51D, ST37
   standard             String?  // EN 10130, DIN 1623
-  densityKgM3          Decimal  @default(7850) @db.Decimal(10, 2) // چگالی فولاد (kg/m3)
-  tensileStrengthMpa   Decimal? @db.Decimal(8, 2)  // استحکام کششی
-  yieldStrengthMpa     Decimal? @db.Decimal(8, 2)  // نقطه تسلیم
-  elongationPercent    Decimal? @db.Decimal(5, 2)  // درصد ازدیاد طول
+  densityKgM3          Decimal  @default(7850) // چگالی فولاد (kg/m3)
+  tensileStrengthMpa   Decimal?  // استحکام کششی
+  yieldStrengthMpa     Decimal?  // نقطه تسلیم
+  elongationPercent    Decimal?  // درصد ازدیاد طول
   active               Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -279,13 +279,13 @@ model Part {
   unit                 UnitOfMeasure @relation(fields: [unitId], references: [id])
   materialId           String?
   material             Material?     @relation(fields: [materialId], references: [id])
-  thicknessMm          Decimal?      @db.Decimal(6, 3) // ضخامت ورق (میلیمتر)
-  weightNetKg          Decimal       @default(0) @db.Decimal(12, 4) // وزن خالص قطعه (کیلوگرم)
-  weightGrossKg        Decimal       @default(0) @db.Decimal(12, 4) // وزن ناخالص/بلنک مصرفی (کیلوگرم)
+  thicknessMm          Decimal? // ضخامت ورق (میلیمتر)
+  weightNetKg          Decimal       @default(0) // وزن خالص قطعه (کیلوگرم)
+  weightGrossKg        Decimal       @default(0) // وزن ناخالص/بلنک مصرفی (کیلوگرم)
   customerPartNumber   String?       // کد عظام یا ساپکو قطعه
   carModel             String?       // پژو ۲۰۶، ۲۰۷، تارا، دنا پلاس، شاهین، کوییک
-  minSafetyStock       Decimal       @default(0) @db.Decimal(12, 3) // حداقل موجودی اطمینان
-  maxStock             Decimal?      @db.Decimal(12, 3)
+  minSafetyStock       Decimal       @default(0) // حداقل موجودی اطمینان
+  maxStock             Decimal?
   leadTimeDays         Int           @default(1)
   active               Boolean       @default(true)
   createdAt            DateTime      @default(now())
@@ -317,8 +317,8 @@ model Operation {
   code                         String             @unique // OP-BLANK, OP-DRAW, OP-BEND, OP-TRIM, OP-SPOT-WELD
   name                         String             // بلنکینگ اولیه، کشش پوسته، خم‌کاری، دوربری، جوش نقطه‌ای
   processType                  ProcessType
-  standardLaborCostPerHour     Decimal?           @db.Decimal(12, 2)
-  standardMachineCostPerHour   Decimal?           @db.Decimal(12, 2)
+  standardLaborCostPerHour     Decimal?
+  standardMachineCostPerHour   Decimal?
   active                       Boolean            @default(true)
   createdAt                    DateTime           @default(now())
   updatedAt                    DateTime           @updatedAt
@@ -368,8 +368,8 @@ model RouteOperation {
   die                  Die?            @relation(fields: [dieId], references: [id])
   setupTimeMin         Int             @default(30) // زمان ستاپ و بستن قالب (دقیقه)
   standardCycleTimeSec Int             @default(45) // زمان سیکل استاندارد هر ضرب (ثانیه)
-  scrapNormPercent     Decimal         @default(1.5) @db.Decimal(5, 2) // ضایعات مجاز درصدی استاندارد
-  transferBatchQty     Decimal         @default(100) @db.Decimal(12, 3) // اندازه بسته انتقال به مرحله بعد
+  scrapNormPercent     Decimal         @default(1.5) // ضایعات مجاز درصدی استاندارد
+  transferBatchQty     Decimal         @default(100) // اندازه بسته انتقال به مرحله بعد
 
   productionOperations ProductionOperation[]
 
@@ -383,12 +383,12 @@ model Machine {
   code                 String          @unique // e.g. PRS-800-01, PRS-400-02, BRK-CNC-01
   name                 String          // پرس هیدرولیک ۸۰۰ تن کشش
   machineType          MachineType
-  tonnageCapacity      Decimal?        @db.Decimal(8, 2) // تناژ اسمی پرس (تن)
-  bolsterLengthMm      Decimal?        @db.Decimal(8, 2) // طول میز کار پرس (میلیمتر)
-  bolsterWidthMm       Decimal?        @db.Decimal(8, 2) // عرض میز کار پرس (میلیمتر)
-  strokeLengthMm       Decimal?        @db.Decimal(8, 2) // کورس ضربه پرس (میلیمتر)
+  tonnageCapacity      Decimal? // تناژ اسمی پرس (تن)
+  bolsterLengthMm      Decimal? // طول میز کار پرس (میلیمتر)
+  bolsterWidthMm       Decimal? // عرض میز کار پرس (میلیمتر)
+  strokeLengthMm       Decimal? // کورس ضربه پرس (میلیمتر)
   maxStrokesPerMinute  Int?            // حداکثر ضرب در دقیقه (SPM)
-  shutHeightMm         Decimal?        @db.Decimal(8, 2) // ارتفاع بسته (Shut Height)
+  shutHeightMm         Decimal? // ارتفاع بسته (Shut Height)
   hallLocation         String          @default("سالن پرس سنگین") // سالن استقرار
   status               MachineStatus   @default(ACTIVE)
   active               Boolean         @default(true)
@@ -413,10 +413,10 @@ model MachineCapability {
   machine              Machine    @relation(fields: [machineId], references: [id], onDelete: Cascade)
   operationId          String
   operation            Operation  @relation(fields: [operationId], references: [id])
-  maxTonnage           Decimal?   @db.Decimal(8, 2)
-  minThicknessMm       Decimal?   @db.Decimal(5, 2)
-  maxThicknessMm       Decimal?   @db.Decimal(5, 2)
-  efficiencyFactor     Decimal    @default(1.0) @db.Decimal(4, 2) // ضریب راندمان
+  maxTonnage           Decimal?
+  minThicknessMm       Decimal?
+  maxThicknessMm       Decimal?
+  efficiencyFactor     Decimal    @default(1.0) // ضریب راندمان
   isPreferred          Boolean    @default(false)
   notes                String?
 
@@ -432,11 +432,11 @@ model Die {
   partId                      String
   part                        Part            @relation(fields: [partId], references: [id])
   dieType                     DieType
-  tonnageRequired             Decimal         @db.Decimal(8, 2) // تناژ پرس مورد نیاز
-  shutHeightMm                Decimal?        @db.Decimal(8, 2) // ارتفاع بسته قالب
-  upperWeightKg               Decimal?        @db.Decimal(10, 2) // وزن لنگه بالا
-  lowerWeightKg               Decimal?        @db.Decimal(10, 2) // وزن لنگه پایین
-  totalWeightKg               Decimal?        @db.Decimal(10, 2)
+  tonnageRequired             Decimal // تناژ پرس مورد نیاز
+  shutHeightMm                Decimal? // ارتفاع بسته قالب
+  upperWeightKg               Decimal? // وزن لنگه بالا
+  lowerWeightKg               Decimal? // وزن لنگه پایین
+  totalWeightKg               Decimal?
   totalStrokeTarget           Int             @default(200000) // عمر استاندارد قالب برحسب ضرب
   currentStrokes              Int             @default(0)      // کارکرد ضرب تجمیعی
   lastMaintenanceStrokes      Int             @default(0)      // ضرب در آخرین تعمیرات PM
@@ -509,7 +509,7 @@ model WarehouseLocation {
   rack           String?   // قفسه
   shelf          String?   // طبقه
   bin            String?   // بافت یا پالت
-  maxCapacityKg  Decimal?  @db.Decimal(12, 3)
+  maxCapacityKg  Decimal?
   active         Boolean   @default(true)
   createdAt      DateTime  @default(now())
 
@@ -532,7 +532,7 @@ model Shift {
   startTime        String   // "07:00"
   endTime          String   // "15:30"
   breakDurationMin Int      @default(60)
-  productiveHours  Decimal  @default(7.5) @db.Decimal(4, 2)
+  productiveHours  Decimal  @default(7.5)
   active           Boolean  @default(true)
   createdAt        DateTime @default(now())
 
@@ -578,7 +578,7 @@ model CustomerOrder {
   customerContractNumber  String?        // شماره قرارداد یا برنامه ساپکو
   documentStatus          DocumentStatus @default(DRAFT)
   notes                   String?
-  totalAmount             Decimal?       @db.Decimal(16, 2)
+  totalAmount             Decimal?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -598,9 +598,9 @@ model CustomerOrderLine {
   partId           String
   part             Part             @relation(fields: [partId], references: [id])
   lineNumber       Int
-  orderedQty       Decimal          @db.Decimal(12, 3)
-  deliveredQty     Decimal          @default(0) @db.Decimal(12, 3)
-  unitPrice        Decimal?         @db.Decimal(14, 2)
+  orderedQty       Decimal
+  deliveredQty     Decimal          @default(0)
+  unitPrice        Decimal?
   requestedDate    DateTime
   status           OrderLineStatus  @default(PENDING)
 
@@ -639,8 +639,8 @@ model ProductionPlanLine {
   part               Part               @relation(fields: [partId], references: [id])
   customerOrderId    String?
   customerOrder      CustomerOrder?     @relation(fields: [customerOrderId], references: [id])
-  plannedQty         Decimal            @db.Decimal(12, 3)
-  producedQty        Decimal            @default(0) @db.Decimal(12, 3)
+  plannedQty         Decimal
+  producedQty        Decimal            @default(0)
   plannedStartDate   DateTime
   plannedEndDate     DateTime
   priority           Int                @default(1) // 1: عادی, 2: فوری, 3: بحرانی خط ساپکو
@@ -664,9 +664,9 @@ model ManufacturingOrder {
   plan                 ProductionPlan? @relation(fields: [planId], references: [id])
   planLineId           String?
   planLine             ProductionPlanLine? @relation(fields: [planLineId], references: [id])
-  targetQty            Decimal         @db.Decimal(12, 3) // تعداد کل سفارش
-  completedQty         Decimal         @default(0) @db.Decimal(12, 3) // تعداد سالم نهایی
-  scrapQty             Decimal         @default(0) @db.Decimal(12, 3) // تعداد کل ضایعات
+  targetQty            Decimal // تعداد کل سفارش
+  completedQty         Decimal         @default(0) // تعداد سالم نهایی
+  scrapQty             Decimal         @default(0) // تعداد کل ضایعات
   scheduledStartDate   DateTime
   scheduledEndDate     DateTime
   actualStartDate      DateTime?
@@ -702,10 +702,10 @@ model ProductionOperation {
   plannedMachine       Machine?            @relation(fields: [plannedMachineId], references: [id])
   plannedDieId         String?
   plannedDie           Die?                @relation(fields: [plannedDieId], references: [id])
-  plannedQty           Decimal             @db.Decimal(12, 3)
-  inputQty             Decimal             @default(0) @db.Decimal(12, 3)
-  outputGoodQty        Decimal             @default(0) @db.Decimal(12, 3)
-  outputScrapQty       Decimal             @default(0) @db.Decimal(12, 3)
+  plannedQty           Decimal
+  inputQty             Decimal             @default(0)
+  outputGoodQty        Decimal             @default(0)
+  outputScrapQty       Decimal             @default(0)
   status               ProductionOpStatus  @default(PENDING)
   startDate            DateTime?
   endDate              DateTime?
@@ -740,9 +740,9 @@ model ProductionReport {
   reportDate              DateTime             // تاریخ شیفت کاری (UTC)
   strokeCounterStart      Int?                 // شمارنده ضرب اول شیفت
   strokeCounterEnd        Int?                 // شمارنده ضرب پایان شیفت
-  goodQuantity            Decimal              @db.Decimal(12, 3) // تعداد سالم
-  scrapQuantity           Decimal              @default(0) @db.Decimal(12, 3) // تعداد ضایعات
-  reworkQuantity          Decimal              @default(0) @db.Decimal(12, 3) // تعداد دوباره‌کاری
+  goodQuantity            Decimal // تعداد سالم
+  scrapQuantity           Decimal              @default(0) // تعداد ضایعات
+  reworkQuantity          Decimal              @default(0) // تعداد دوباره‌کاری
   runTimeMinutes          Int                  @default(0) // دقایق کار مفید
   downtimeMinutes         Int                  @default(0) // دقایق توقف پرس
   downtimeReason          String?              // علت توقف (خرابی قالب، تعویض رول، نقص برق)
@@ -767,8 +767,8 @@ model ProductionScrap {
   productionOperationId   String
   productionOperation     ProductionOperation @relation(fields: [productionOperationId], references: [id])
   scrapReason             ScrapReason
-  quantity                Decimal             @db.Decimal(12, 3) // تعداد قطعه ضایعاتی
-  weightKg                Decimal             @db.Decimal(12, 3) // وزن ضایعات آهن (کیلوگرم)
+  quantity                Decimal // تعداد قطعه ضایعاتی
+  weightKg                Decimal // وزن ضایعات آهن (کیلوگرم)
   isRecoverable           Boolean             @default(false)    // آیا قابل بازیافت یا بلنک قطعه کوچکتراست؟
   notes                   String?
   createdAt               DateTime            @default(now())
@@ -792,7 +792,7 @@ model ProductionTransfer {
   fromWarehouse           Warehouse          @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
   toWarehouseId           String
   toWarehouse             Warehouse          @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
-  quantity                Decimal            @db.Decimal(12, 3)
+  quantity                Decimal
   unitId                  String
   unit                    UnitOfMeasure      @relation(fields: [unitId], references: [id])
   dispatchedByUserId      String?
@@ -877,11 +877,11 @@ model InventoryDocumentLine {
   location           WarehouseLocation? @relation("Location", fields: [locationId], references: [id])
   targetLocationId   String?
   targetLocation     WarehouseLocation? @relation("TargetLocation", fields: [targetLocationId], references: [id])
-  quantity           Decimal            @db.Decimal(12, 3)
+  quantity           Decimal
   unitId             String
   unit               UnitOfMeasure      @relation(fields: [unitId], references: [id])
-  weightKg           Decimal            @db.Decimal(12, 3) // وزن متناظر به کیلوگرم
-  unitCost           Decimal?           @db.Decimal(14, 2)
+  weightKg           Decimal // وزن متناظر به کیلوگرم
+  unitCost           Decimal?
   notes              String?
 
   @@unique([documentId, lineNumber])
@@ -905,14 +905,14 @@ model InventoryTransaction {
   locationId              String?
   location                WarehouseLocation? @relation(fields: [locationId], references: [id])
   transactionType         TransactionType
-  quantity                Decimal            @db.Decimal(12, 3) // مقدار مطلق
-  quantitySigned          Decimal            @db.Decimal(12, 3) // مقدار با علامت (مثبت ورودی، منفی خروجی)
+  quantity                Decimal // مقدار مطلق
+  quantitySigned          Decimal // مقدار با علامت (مثبت ورودی، منفی خروجی)
   unitId                  String
   unit                    UnitOfMeasure      @relation(fields: [unitId], references: [id])
-  weightKg                Decimal            @db.Decimal(12, 3) // وزن مطلق به کیلوگرم
-  weightKgSigned          Decimal            @db.Decimal(12, 3) // وزن با علامت (کیلوگرم)
-  balanceAfter            Decimal?           @db.Decimal(12, 3) // مانده مقداری پس از تراکنش
-  balanceKgAfter          Decimal?           @db.Decimal(12, 3) // مانده وزنی پس از تراکنش
+  weightKg                Decimal // وزن مطلق به کیلوگرم
+  weightKgSigned          Decimal // وزن با علامت (کیلوگرم)
+  balanceAfter            Decimal? // مانده مقداری پس از تراکنش
+  balanceKgAfter          Decimal? // مانده وزنی پس از تراکنش
   transactionDate         DateTime           // زمان وقوع به UTC
   postingStatus           PostingStatus      @default(POSTED)
   isReversal              Boolean            @default(false)
@@ -945,8 +945,8 @@ model InventoryReservation {
   reservedForMO      ManufacturingOrder? @relation(fields: [reservedForMOId], references: [id])
   reservedForCOId    String?
   reservedForCO      CustomerOrder?     @relation(fields: [reservedForCOId], references: [id])
-  quantity           Decimal            @db.Decimal(12, 3)
-  weightKg           Decimal            @db.Decimal(12, 3)
+  quantity           Decimal
+  weightKg           Decimal
   status             ReservationStatus  @default(ACTIVE)
   validUntil         DateTime?
   createdByUserId    String
@@ -969,12 +969,12 @@ model StockBalance {
   location             WarehouseLocation? @relation(fields: [locationId], references: [id])
   materialLotId        String?
   materialLot          MaterialLot?       @relation(fields: [materialLotId], references: [id])
-  quantityOnHand       Decimal            @default(0) @db.Decimal(12, 3) // موجودی فیزیکی
-  quantityReserved     Decimal            @default(0) @db.Decimal(12, 3) // مقدار رزرو شده
-  quantityAvailable    Decimal            @default(0) @db.Decimal(12, 3) // مقدار آزاد = موجودی منهای رزرو
-  weightKgOnHand       Decimal            @default(0) @db.Decimal(12, 3) // وزن فیزیکی (کیلوگرم)
-  weightKgReserved     Decimal            @default(0) @db.Decimal(12, 3) // وزن رزرو شده (کیلوگرم)
-  weightKgAvailable    Decimal            @default(0) @db.Decimal(12, 3) // وزن آزاد (کیلوگرم)
+  quantityOnHand       Decimal            @default(0) // موجودی فیزیکی
+  quantityReserved     Decimal            @default(0) // مقدار رزرو شده
+  quantityAvailable    Decimal            @default(0) // مقدار آزاد = موجودی منهای رزرو
+  weightKgOnHand       Decimal            @default(0) // وزن فیزیکی (کیلوگرم)
+  weightKgReserved     Decimal            @default(0) // وزن رزرو شده (کیلوگرم)
+  weightKgAvailable    Decimal            @default(0) // وزن آزاد (کیلوگرم)
   lastTransactionAt    DateTime?
   updatedAt            DateTime           @updatedAt
 
@@ -995,11 +995,11 @@ model MaterialLot {
   supplierContract       MaterialContract?  @relation(fields: [supplierContractId], references: [id])
   heatNumber             String?            // شماره ذوب فولاد مبارکه
   coilSerialNumber       String?            // شماره سریال کلاف سازنده
-  thicknessMm            Decimal            @db.Decimal(6, 3) // ضخامت واقعی اندازه‌گیری شده
-  widthMm                Decimal            @db.Decimal(8, 2) // عرض رول
-  lengthMm               Decimal?           @db.Decimal(10, 2)
-  initialWeightKg        Decimal            @db.Decimal(12, 3) // وزن اولیه ورودی باسکول
-  remainingWeightKg      Decimal            @db.Decimal(12, 3) // مانده وزن فعلی رول
+  thicknessMm            Decimal // ضخامت واقعی اندازه‌گیری شده
+  widthMm                Decimal // عرض رول
+  lengthMm               Decimal?
+  initialWeightKg        Decimal // وزن اولیه ورودی باسکول
+  remainingWeightKg      Decimal // مانده وزن فعلی رول
   warehouseLocationId    String?
   warehouseLocation      WarehouseLocation? @relation(fields: [warehouseLocationId], references: [id])
   status                 LotStatus          @default(AVAILABLE)
@@ -1028,8 +1028,8 @@ model MaterialContract {
   title                   String             // سهمیه سه ماهه سوم ورق DC04 خودرو تارا
   materialId              String
   material                Material           @relation(fields: [materialId], references: [id])
-  totalAllocatedWeightKg  Decimal            @db.Decimal(14, 3) // کل تناژ تخصیصی سهمیه ساپکو
-  receivedWeightKg        Decimal            @default(0) @db.Decimal(14, 3) // تناژ دریافت شده تا کنون
+  totalAllocatedWeightKg  Decimal // کل تناژ تخصیصی سهمیه ساپکو
+  receivedWeightKg        Decimal            @default(0) // تناژ دریافت شده تا کنون
   startDate               DateTime
   endDate                 DateTime
   status                  ContractStatus     @default(ACTIVE)
@@ -1054,7 +1054,7 @@ model MaterialContractTransaction {
   lotId            String?
   lot              MaterialLot?      @relation(fields: [lotId], references: [id])
   transactionType  ContractTxType
-  weightKg         Decimal           @db.Decimal(12, 3)
+  weightKg         Decimal
   waybillNumber    String?           // شماره بارنامه رسمی حمل ساپکو
   receiptDate      DateTime
   notes            String?
@@ -1197,10 +1197,10 @@ model PhysicalCoil {
   materialLotId          String?
   materialLot            MaterialLot?       @relation(fields: [materialLotId], references: [id])
   heatNumber             String?            // شماره ذوب فولاد مبارکه / مبدأ
-  thicknessMm            Decimal            @db.Decimal(6, 3) // ضخامت واقعی (میلیمتر)
-  widthMm                Decimal            @db.Decimal(8, 2) // عرض رول (میلیمتر)
-  originalWeightKg       Decimal            @db.Decimal(12, 3) // وزن اولیه باسکول
-  remainingWeightKg      Decimal            @db.Decimal(12, 3) // مانده وزن فیزیکی فعلی
+  thicknessMm            Decimal // ضخامت واقعی (میلیمتر)
+  widthMm                Decimal // عرض رول (میلیمتر)
+  originalWeightKg       Decimal // وزن اولیه باسکول
+  remainingWeightKg      Decimal // مانده وزن فیزیکی فعلی
   warehouseId            String
   warehouse              Warehouse          @relation(fields: [warehouseId], references: [id])
   warehouseLocationId    String?
@@ -1232,7 +1232,7 @@ model ContractCoilAllocation {
   contract           MaterialContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   coilId             String
   coil               PhysicalCoil     @relation(fields: [coilId], references: [id], onDelete: Cascade)
-  allocatedWeightKg  Decimal          @db.Decimal(12, 3) // وزن تخصیص‌یافته از این رول به این قرارداد
+  allocatedWeightKg  Decimal // وزن تخصیص‌یافته از این رول به این قرارداد
   ownership          String           @default("SAPCO_SUPPLIER_OWNED") // مالکیت حقوقی متریال
   sourceDocumentId   String?          // شماره سند ورود یا تخصیص
   notes              String?
@@ -1252,11 +1252,11 @@ model CoilIssueReturnRecord {
   coil                 PhysicalCoil  @relation(fields: [coilId], references: [id], onDelete: Cascade)
   manufacturingOrderId String?       // شماره دستور ساخت مصرف‌کننده
   documentNumber       String        // شماره حواله خروج یا رسید برگشتی
-  issuedWeightKg       Decimal       @db.Decimal(12, 3) // وزن ارسالی به پای خط
-  consumedWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // وزن خالص مصرف‌شده
-  returnedWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // وزن برگشت داده شده به انبار
-  outstandingWeightKg  Decimal       @db.Decimal(12, 3) // مانده در گردش پای خط (تحویل - برگشت - مصرف)
-  varianceWeightKg     Decimal       @default(0) @db.Decimal(12, 3) // پرت، ضایعات یا افت وزنی باسکول
+  issuedWeightKg       Decimal // وزن ارسالی به پای خط
+  consumedWeightKg     Decimal       @default(0) // وزن خالص مصرف‌شده
+  returnedWeightKg     Decimal       @default(0) // وزن برگشت داده شده به انبار
+  outstandingWeightKg  Decimal // مانده در گردش پای خط (تحویل - برگشت - مصرف)
+  varianceWeightKg     Decimal       @default(0) // پرت، ضایعات یا افت وزنی باسکول
   status               String        @default("ISSUED") // ISSUED, PARTIALLY_RETURNED, FULLY_RETURNED, CONSUMED
   issuedAt             DateTime      @default(now())
   returnedAt           DateTime?
@@ -1295,7 +1295,7 @@ model ItemAttributeDefinition {
   isRequired           Boolean   @default(false)
   isSearchable         Boolean   @default(true)
   isReportable         Boolean   @default(true)
-  applicableCategories String[]  // رده‌های قابل انتساب
+  applicableCategories Json  // رده‌های قابل انتساب
   validationRules      String?   // قوانین اعتبارسنجی
   createdAt            DateTime  @default(now())
 
@@ -1309,7 +1309,7 @@ model ItemAttributeValue {
   part           Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
   attributeKey   String
   textValue      String?
-  numberValue    Decimal?  @db.Decimal(14, 4)
+  numberValue    Decimal?
   dateValue      DateTime?
   booleanValue   Boolean?
   createdAt      DateTime  @default(now())
@@ -1327,12 +1327,12 @@ model ContractCommercialLine {
   partId                  String?
   partCode                String
   partName                String
-  contractQty             Decimal          @default(0) @db.Decimal(12, 3)
-  contractWeightKg        Decimal          @default(0) @db.Decimal(14, 3)
-  deliveredOrReceivedQty  Decimal          @default(0) @db.Decimal(12, 3)
-  deliveredOrReceivedKg   Decimal          @default(0) @db.Decimal(14, 3)
-  remainingQty            Decimal          @default(0) @db.Decimal(12, 3)
-  remainingKg             Decimal          @default(0) @db.Decimal(14, 3)
+  contractQty             Decimal          @default(0)
+  contractWeightKg        Decimal          @default(0)
+  deliveredOrReceivedQty  Decimal          @default(0)
+  deliveredOrReceivedKg   Decimal          @default(0)
+  remainingQty            Decimal          @default(0)
+  remainingKg             Decimal          @default(0)
   unit                    String           @default("KG")
   notes                   String?
   createdAt               DateTime         @default(now())
@@ -1346,8 +1346,8 @@ model SavedReportConfig {
   id              String    @id @default(uuid())
   name            String    // عنوان گزارش ذخیره‌شده
   reportType      String    // COILS_SUMMARY, COIL_PACK_INQUIRY, CONTRACT_STOCK, WAREHOUSE_STOCK, OWNERSHIP_REPORT
-  selectedColumns String[]  // ستون‌های انتخابی کاربر
-  groupBy         String[]  // ابعاد گروه‌بندی
+  selectedColumns Json  // ستون‌های انتخابی کاربر
+  groupBy Json  // ابعاد گروه‌بندی
   filters         Json      // فیلترهای اعمال‌شده
   sortBy          String?
   sortOrder       String?   @default("asc")
