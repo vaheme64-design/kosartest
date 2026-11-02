@@ -1576,6 +1576,10 @@ apiRouter.get('/inventory/sapco-account', (_req: Request, res: Response) => {
     const { contractsWithBalances, ledgerEntries } = calculateSapcoContractLedger(contractsStore, inventoryDocsStore);
     res.json({
       success: true,
+      data: {
+        contracts: contractsWithBalances,
+        ledger: ledgerEntries,
+      },
       contracts: contractsWithBalances,
       ledger: ledgerEntries,
     });

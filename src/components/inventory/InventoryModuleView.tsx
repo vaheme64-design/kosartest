@@ -162,18 +162,22 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         fetch('/api/inventory/contracts').then(r => r.json()),
       ]);
 
-      if (metricsRes.success) setMetrics(metricsRes.data);
-      if (whRes.success && whRes.data.length > 0) setWarehouses(whRes.data);
-      if (inquiryRes.success) setBalances(inquiryRes.data);
-      if (docsRes.success) setDocuments(docsRes.data);
-      if (coilsRes.success) setCoils(coilsRes.data || []);
-      if (contractsRes.success && contractsRes.data.length > 0) {
+      if (metricsRes?.success && metricsRes.data) setMetrics(metricsRes.data);
+      if (whRes?.success && Array.isArray(whRes.data) && whRes.data.length > 0) setWarehouses(whRes.data);
+      if (inquiryRes?.success && Array.isArray(inquiryRes.data)) setBalances(inquiryRes.data);
+      if (docsRes?.success && Array.isArray(docsRes.data)) setDocuments(docsRes.data);
+      if (coilsRes?.success && Array.isArray(coilsRes.data)) setCoils(coilsRes.data);
+      
+      if (contractsRes?.success && Array.isArray(contractsRes.data) && contractsRes.data.length > 0) {
         setContracts(contractsRes.data);
-      } else if (sapcoRes.success) {
-        setContracts(sapcoRes.data.contracts || []);
+      } else if (sapcoRes?.success) {
+        const contractsList = sapcoRes.data?.contracts || sapcoRes.contracts || [];
+        setContracts(contractsList);
       }
-      if (sapcoRes.success) {
-        setSapcoLedger(sapcoRes.data.ledger || []);
+      
+      if (sapcoRes?.success) {
+        const ledgerList = sapcoRes.data?.ledger || sapcoRes.ledger || [];
+        setSapcoLedger(ledgerList);
       }
     } catch (err) {
       console.error('Error fetching inventory module data:', err);

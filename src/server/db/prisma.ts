@@ -16,9 +16,28 @@ export const isDatabaseUrlConfigured = (): boolean => {
 
 export const getPrismaClient = (): PrismaClient => {
   if (!global.__prismaClient) {
-    global.__prismaClient = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    const client = new PrismaClient({
+      log: [
+        { emit: 'event', level: 'error' },
+        { emit: 'event', level: 'warn' },
+      ],
     });
+
+    // Intercept Prisma connection events to gracefully handle remote socket closures
+    // (e.g. remote host idle timeout, Cloud SQL scale-to-zero) without dumping unhandled errors
+    (client as any).$on('error', (e: any) => {
+      const msg = String(e?.message || '');
+      if (msg.includes('Closed') || msg.includes('kind: Closed')) {
+        try {
+          client.$disconnect().catch(() => {});
+        } catch {}
+        global.__prismaClient = undefined;
+      } else {
+        console.warn('[PostgreSQL/Prisma Notice]:', msg || e);
+      }
+    });
+
+    global.__prismaClient = client;
   }
   return global.__prismaClient;
 };
@@ -55,8 +74,13 @@ export async function checkDatabaseConnection(): Promise<DatabaseStatus> {
 
   try {
     const prisma = getPrismaClient();
-    // Test simple connectivity query with raw SQL
-    await prisma.$queryRaw`SELECT 1 as connected`;
+    // Test simple connectivity query with raw SQL and a safe 3.5s timeout
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1 as connected`,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('اتصال به PostgreSQL منقضی شد (Timeout)')), 3500)
+      ),
+    ]);
     return {
       isConfigured: true,
       isConnected: true,
@@ -65,6 +89,12 @@ export async function checkDatabaseConnection(): Promise<DatabaseStatus> {
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
+    // If connection was closed or broken, safely clean up and reset client
+    try {
+      await global.__prismaClient?.$disconnect().catch(() => {});
+    } catch {}
+    global.__prismaClient = undefined;
+
     const errorMsg = error instanceof Error ? error.message : 'خطای نامشخص در اتصال به دیتابیس PostgreSQL';
     return {
       isConfigured: true,
