@@ -354,6 +354,19 @@ export function initializeProductionWipSeed() {
 // Initialize seed on module load
 initializeProductionWipSeed();
 
+export function clearProductionWipData() {
+  manufacturingOrdersStore.length = 0;
+  wipTransfersStore.length = 0;
+  productionLogsStore.length = 0;
+}
+
+export function reseedProductionWipData() {
+  manufacturingOrdersStore.length = 0;
+  wipTransfersStore.length = 0;
+  productionLogsStore.length = 0;
+  initializeProductionWipSeed();
+}
+
 // =========================================================================
 // ENGINE CORE FUNCTIONS
 // =========================================================================

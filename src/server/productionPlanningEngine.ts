@@ -16,7 +16,7 @@ import { calculateDetailedStockBalances } from './inventoryEngine';
 import { INITIAL_INVENTORY_DOCUMENTS, INITIAL_INVENTORY_RESERVATIONS } from './inventorySampleData';
 
 // Store for Open Customer Orders
-export const customerOrdersStore: CustomerOrder[] = [
+export const INITIAL_CUSTOMER_ORDERS: CustomerOrder[] = [
   {
     id: 'ORD-2026-001',
     orderNumber: 'SO-SAPCO-1405-88',
@@ -97,6 +97,8 @@ export const customerOrdersStore: CustomerOrder[] = [
   },
 ];
 
+export const customerOrdersStore: CustomerOrder[] = [...INITIAL_CUSTOMER_ORDERS];
+
 // Store for Generated Production Planning Suggestions
 export const planSuggestionsStore: ProductionPlanSuggestion[] = [];
 
@@ -113,6 +115,33 @@ export const machineWorkloadHoursMap: Record<string, number> = {
   'MCH-009': 8.0, // Cataphoresis Paint
   'MCH-010': 3.0, // Assembly Jig
 };
+
+export function clearCustomerOrdersAndPlans() {
+  customerOrdersStore.length = 0;
+  planSuggestionsStore.length = 0;
+  Object.keys(machineWorkloadHoursMap).forEach(k => {
+    machineWorkloadHoursMap[k] = 0;
+  });
+}
+
+export function reseedCustomerOrdersAndPlans() {
+  customerOrdersStore.length = 0;
+  customerOrdersStore.push(...JSON.parse(JSON.stringify(INITIAL_CUSTOMER_ORDERS)));
+  planSuggestionsStore.length = 0;
+  planSuggestionsStore.push(...generateProductionPlanSuggestions());
+  Object.assign(machineWorkloadHoursMap, {
+    'MCH-001': 4.5,
+    'MCH-002': 6.0,
+    'MCH-003': 3.0,
+    'MCH-004': 2.0,
+    'MCH-005': 1.5,
+    'MCH-006': 3.5,
+    'MCH-007': 5.0,
+    'MCH-008': 4.0,
+    'MCH-009': 8.0,
+    'MCH-010': 3.0,
+  });
+}
 
 // =========================================================================
 // 1. NET PRODUCTION REQUIREMENTS CALCULATION (WIP & RESERVATION NETTING)

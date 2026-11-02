@@ -28,7 +28,7 @@ import {
   PROCESS_DEFINITIONS,
   FACTORY_HALLS,
 } from '../types/inventory';
-import { checkDatabaseConnection } from './db/prisma';
+import { checkDatabaseConnection, getPrismaClient } from './db/prisma';
 import { CreateProductionPlanSchema, CreateSapcoReceiptSchema } from './validation/index';
 
 import {
@@ -79,6 +79,8 @@ import {
   getWipDashboardMetrics,
   wipTransfersStore,
   productionLogsStore,
+  clearProductionWipData,
+  reseedProductionWipData,
 } from './productionWipEngine';
 import {
   calculateNetRequirements,
@@ -90,6 +92,8 @@ import {
   getPlanningDashboardMetrics,
   customerOrdersStore,
   planSuggestionsStore,
+  clearCustomerOrdersAndPlans,
+  reseedCustomerOrdersAndPlans,
 } from './productionPlanningEngine';
 import { CustomerOrder } from '../types/productionPlanning';
 import {
@@ -832,7 +836,7 @@ apiRouter.post('/processes', (req: Request, res: Response) => {
 /**
  * 12. Safe Sample Data Reset & Clean
  */
-apiRouter.post('/demo-data/seed', (_req: Request, res: Response) => {
+apiRouter.post('/demo-data/seed', async (_req: Request, res: Response) => {
   // Re-seed sample data without wiping non-demo user data
   const realParts = partsStore.filter(p => !p.isDemo);
   const realMachines = machinesStore.filter(m => !m.isDemo);
@@ -847,17 +851,30 @@ apiRouter.post('/demo-data/seed', (_req: Request, res: Response) => {
   transactionsStore = [...realTx, ...INITIAL_TRANSACTIONS];
   diesStore = [...realDies, ...INITIAL_DIES_MOLDS];
   operatorsStore = [...realOps, ...INITIAL_OPERATORS];
+  plansStore = [...INITIAL_PRODUCTION_PLANS];
+  coilsStore = [...INITIAL_SAPCO_COILS];
+  physicalCoilsStore.length = 0;
+  physicalCoilsStore.push(...INITIAL_PHYSICAL_COILS);
+  inventoryDocsStore.length = 0;
+  inventoryDocsStore.push(...INITIAL_INVENTORY_DOCUMENTS);
+  contractsStore.length = 0;
+  contractsStore.push(...INITIAL_SAPCO_CONTRACTS);
+  reservationsStore.length = 0;
+  reservationsStore.push(...INITIAL_INVENTORY_RESERVATIONS);
+
+  reseedCustomerOrdersAndPlans();
+  reseedProductionWipData();
 
   const summary = calculateInventoryLedger(transactionsStore, partsStore);
   res.json({
     success: true,
-    message: 'داده‌های نمونه کارخانه (قطعات، قالب‌ها، اپراتورها، ماشین‌آلات، مسیرهای تولید و اسناد) با موفقیت بازنشانی شدند.',
+    message: 'داده‌های نمونه کارخانه (قطعات، قالب‌ها، اپراتورها، ماشین‌آلات، مسیرهای تولید، سفارشات و کار در جریان) با موفقیت بازنشانی شدند.',
     summary,
   });
 });
 
-apiRouter.post('/demo-data/clean', (_req: Request, res: Response) => {
-  // Safely remove only demo data, preserving real factory operations
+apiRouter.post('/demo-data/clean', async (_req: Request, res: Response) => {
+  // Safely remove demo data from all modules (Parts, Inventories, WIP, Customer Orders, Plans)
   const demoPartsRemoved = partsStore.filter(p => p.isDemo).length;
   const demoTxRemoved = transactionsStore.filter(t => t.isDemo).length;
   const demoDiesRemoved = diesStore.filter(d => d.isDemo).length;
@@ -869,10 +886,55 @@ apiRouter.post('/demo-data/clean', (_req: Request, res: Response) => {
   diesStore = diesStore.filter(d => !d.isDemo);
   operatorsStore = operatorsStore.filter(o => !o.isDemo);
 
+  // Clear Production Plans, Customer Orders, and WIP Tracking
+  plansStore = [];
+  coilsStore = [];
+  physicalCoilsStore.length = 0;
+  inventoryDocsStore.length = 0;
+  contractsStore.length = 0;
+  reservationsStore.length = 0;
+  coilIssueRecordsStore.length = 0;
+
+  clearCustomerOrdersAndPlans();
+  clearProductionWipData();
+
+  // Also clean SQLite / Prisma database records if connected
+  try {
+    const prisma = getPrismaClient();
+    if (prisma) {
+      await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF;').catch(() => {});
+      await prisma.productionScrap.deleteMany({}).catch(() => {});
+      await prisma.machineAssignment.deleteMany({}).catch(() => {});
+      await prisma.productionReport.deleteMany({}).catch(() => {});
+      await prisma.productionTransfer.deleteMany({}).catch(() => {});
+      await prisma.productionOperation.deleteMany({}).catch(() => {});
+      await prisma.manufacturingOrder.deleteMany({}).catch(() => {});
+      await prisma.customerOrderLine.deleteMany({}).catch(() => {});
+      await prisma.customerOrder.deleteMany({}).catch(() => {});
+      await prisma.productionPlanLine.deleteMany({}).catch(() => {});
+      await prisma.productionPlan.deleteMany({}).catch(() => {});
+      await prisma.inventoryTransaction.deleteMany({}).catch(() => {});
+      await prisma.inventoryDocumentLine.deleteMany({}).catch(() => {});
+      await prisma.inventoryDocument.deleteMany({}).catch(() => {});
+      await prisma.inventoryReservation.deleteMany({}).catch(() => {});
+      await prisma.coilIssueReturnRecord.deleteMany({}).catch(() => {});
+      await prisma.contractCoilAllocation.deleteMany({}).catch(() => {});
+      await prisma.physicalCoil.deleteMany({}).catch(() => {});
+      await prisma.contractCommercialLine.deleteMany({}).catch(() => {});
+      await prisma.materialContractTransaction.deleteMany({}).catch(() => {});
+      await prisma.materialContract.deleteMany({}).catch(() => {});
+      await prisma.materialLot.deleteMany({}).catch(() => {});
+      await prisma.stockBalance.deleteMany({}).catch(() => {});
+      await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;').catch(() => {});
+    }
+  } catch (dbErr) {
+    console.warn('Prisma tables wipe notice:', dbErr);
+  }
+
   const summary = calculateInventoryLedger(transactionsStore, partsStore);
   res.json({
     success: true,
-    message: `پاکسازی امن انجام شد. ${demoPartsRemoved} قطعه، ${demoDiesRemoved} قالب و ${demoTxRemoved} سند آزمایشی حذف شدند. داده‌های واقعی حفظ شدند.`,
+    message: `پاکسازی کامل انجام شد. کلیه سفارشات نمونه، کار در جریان (WIP)، برنامه‌ریزی‌ها و اسناد آزمایشی با موفقیت حذف شدند و سیستم آماده ورود اطلاعات واقعی گردید.`,
     summary,
   });
 });

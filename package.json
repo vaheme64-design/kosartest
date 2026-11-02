@@ -9,6 +9,7 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --outfile=server.js --packages=external",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "clean": "rm -rf dist server.js",
+    "clean-db": "tsx scripts/clean-database.ts",
     "lint": "tsc --noEmit",
     "seed": "tsx prisma/seed.ts",
     "test": "tsx scripts/test-inventory.ts && tsx scripts/test-wip-reconciliation.ts && tsx scripts/test-production-planning.ts && tsx scripts/test-management-reports.ts"
