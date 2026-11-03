@@ -30,6 +30,7 @@ import { PlanningDashboardView } from './PlanningDashboardView';
 import { MachineRecommendationView } from './MachineRecommendationView';
 import { NewCustomerOrderModal } from './NewCustomerOrderModal';
 import { MrpModuleView } from './MrpModuleView';
+import { ConsumablesForecastView } from './ConsumablesForecastView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 
@@ -47,7 +48,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   onGlobalRefresh,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'mrp' | 'recommendations' | 'orders' | 'approved_plans'
+    'dashboard' | 'mrp' | 'consumables' | 'recommendations' | 'orders' | 'approved_plans'
   >('dashboard');
 
   const [loading, setLoading] = useState(false);
@@ -283,6 +284,24 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
           <button
             type="button"
+            onClick={() => setActiveSubTab('consumables')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'consumables'
+                ? 'bg-teal-600 text-white font-bold shadow-md shadow-teal-600/30'
+                : 'text-teal-700 bg-teal-50/70 hover:bg-teal-100 hover:text-teal-900'
+            }`}
+          >
+            <Package className={`w-3.5 h-3.5 ${activeSubTab === 'consumables' ? 'text-white' : 'text-teal-600'}`} />
+            <span>پیش‌بینی مواد مصرفی کارگاه</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+              activeSubTab === 'consumables' ? 'bg-teal-700 text-teal-100' : 'bg-teal-200 text-teal-800'
+            }`}>
+              ROP
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveSubTab('recommendations')}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeSubTab === 'recommendations'
@@ -373,6 +392,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
       {/* 1.1. MRP & Material Requirements Forecast Sub-Tab */}
       {activeSubTab === 'mrp' && (
         <MrpModuleView onRefreshGlobal={onGlobalRefresh} />
+      )}
+
+      {/* 1.2. Consumables & Shop-Floor Supplies Forecast Sub-Tab */}
+      {activeSubTab === 'consumables' && (
+        <ConsumablesForecastView />
       )}
 
       {/* 2. Machine Recommendations Sub-Tab */}

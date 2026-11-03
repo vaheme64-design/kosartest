@@ -31,6 +31,8 @@ import {
   FACTORY_HALLS,
 } from '../types/inventory';
 import { toPersianDigits, formatNumber } from '../utils/formatters';
+import { OeeModuleView } from './reports/OeeModuleView';
+import { MachineUtilizationView } from './reports/MachineUtilizationView';
 
 interface MachinesViewProps {
   machines: Machine[];
@@ -57,7 +59,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   onSaveOperator,
   onSaveHall,
 }) => {
-  type SubTab = 'machines' | 'dies' | 'halls' | 'operators';
+  type SubTab = 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('machines');
 
   // Search & Filter
@@ -334,7 +336,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveSubTab('machines')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'machines'
               ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -345,41 +347,71 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveSubTab('oee')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubTab === 'oee'
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Gauge className="w-4 h-4" />
+          <span>۲. ماژول OEE و ۶ ضایعه بزرگ</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('utilization')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubTab === 'utilization'
+              ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>۳. گزارش بهره ماشین و کارکرد</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('dies')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'dies'
               ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Wrench className="w-4 h-4" />
-          <span>۲. قالب‌های پرس و فیکسچرها ({toPersianDigits(dies.length)})</span>
+          <span>۴. قالب‌های پرس و فیکسچرها ({toPersianDigits(dies.length)})</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('halls')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'halls'
               ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Building className="w-4 h-4" />
-          <span>۳. سالن‌ها و نواحی کارخانه ({toPersianDigits(halls.length)})</span>
+          <span>۵. سالن‌ها و نواحی کارخانه ({toPersianDigits(halls.length)})</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('operators')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'operators'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>۴. اپراتورها و پرسنل خطوط ({toPersianDigits(operators.length)})</span>
+          <span>۶. اپراتورها و پرسنل خطوط ({toPersianDigits(operators.length)})</span>
         </button>
       </div>
+
+      {/* TAB OEE MODULE */}
+      {activeSubTab === 'oee' && <OeeModuleView machines={machines} />}
+
+      {/* TAB MACHINE UTILIZATION MODULE */}
+      {activeSubTab === 'utilization' && <MachineUtilizationView machines={machines} />}
 
       {/* TAB 1: MACHINES & MULTI-CAPABILITY PRESSES */}
       {activeSubTab === 'machines' && (

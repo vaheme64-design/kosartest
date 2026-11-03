@@ -137,6 +137,15 @@ import {
   issueTraceabilityTag,
   getAllTraceabilityTags,
 } from './bomAndParallelEngine';
+import {
+  getMachineUtilizationReport,
+  logMachineDowntimeOrRuntime,
+  getOeeDashboardSummary,
+  getConsumablesForecastReport,
+  createConsumablesPurchaseRequisition,
+  updateConsumableStockOrRate,
+} from './oeeAndConsumablesEngine';
+import { ShiftFilterKey } from '../types/oeeAndConsumables';
 
 // Server-side State Store (in production can be wired to PostgreSQL / Prisma / SQL Server / ERP)
 let partsStore: Part[] = [...INITIAL_PARTS];
@@ -4313,6 +4322,158 @@ apiRouter.post('/mrp/mos/:id/reserve', (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در رزرو خودکار مواد' });
   }
 });
+
+// =========================================================================
+// 21. MACHINE UTILIZATION REPORT, OEE MODULE & CONSUMABLES FORECASTING
+// =========================================================================
+
+// 21.1 Machine Utilization Detailed Report
+apiRouter.get('/machines/utilization-report', (req: Request, res: Response) => {
+  try {
+    const shift = (req.query.shift as ShiftFilterKey) || 'ALL';
+    const hallFilter = req.query.hall as string | undefined;
+    const processType = req.query.processType as string | undefined;
+    const data = getMachineUtilizationReport({ shift, hallFilter, processType });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در دریافت گزارش بهره‌وری ماشین‌آلات',
+    });
+  }
+});
+
+// 21.2 Log Machine Downtime or Production Runtime
+apiRouter.post('/machines/log-downtime', (req: Request, res: Response) => {
+  try {
+    const { machineId, eventType, durationMinutes, strokesExecuted, scrapCount, reasonTitleFa } = req.body || {};
+    if (!machineId) {
+      return res.status(400).json({ success: false, error: 'انتخاب ماشین الزامی است.' });
+    }
+    const updated = logMachineDowntimeOrRuntime({
+      machineId,
+      eventType: eventType || 'UNPLANNED_DOWNTIME',
+      durationMinutes: Number(durationMinutes) || 30,
+      strokesExecuted: Number(strokesExecuted) || 0,
+      scrapCount: Number(scrapCount) || 0,
+      reasonTitleFa,
+    });
+    res.json({
+      success: true,
+      message: 'رویداد کارکرد / توقف دستگاه ثبت شد و شاخص‌های بهره‌وری و OEE به‌روزرسانی گردیدند.',
+      data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت رویداد دستگاه',
+    });
+  }
+});
+
+// 21.3 OEE Dashboard & Six Big Losses Analysis
+apiRouter.get('/oee/dashboard', (req: Request, res: Response) => {
+  try {
+    const shift = (req.query.shift as ShiftFilterKey) || 'ALL';
+    const hallFilter = req.query.hall as string | undefined;
+    const data = getOeeDashboardSummary({ shift, hallFilter });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در محاسبه شاخص OEE تجهیزات',
+    });
+  }
+});
+
+// 21.4 Log Shift OEE Event
+apiRouter.post('/oee/log-shift', (req: Request, res: Response) => {
+  try {
+    const { machineId, eventType, durationMinutes, strokesExecuted, scrapCount, reasonTitleFa } = req.body || {};
+    if (!machineId) {
+      return res.status(400).json({ success: false, error: 'انتخاب ماشین الزامی است.' });
+    }
+    logMachineDowntimeOrRuntime({
+      machineId,
+      eventType: eventType || 'PRODUCTION_RUN',
+      durationMinutes: Number(durationMinutes) || 0,
+      strokesExecuted: Number(strokesExecuted) || 0,
+      scrapCount: Number(scrapCount) || 0,
+      reasonTitleFa,
+    });
+    const updatedOee = getOeeDashboardSummary();
+    res.json({
+      success: true,
+      message: 'آمار شیفت ثبت گردید و شاخص OEE کارخانه بازمحاسبه شد.',
+      data: updatedOee,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت آمار OEE شیفت',
+    });
+  }
+});
+
+// 21.5 Consumables & Shop-Floor Supplies Forecasting
+apiRouter.get('/consumables/forecast', (req: Request, res: Response) => {
+  try {
+    const horizonDays = req.query.horizonDays ? Number(req.query.horizonDays) : 30;
+    const demandGrowthPercent = req.query.growth ? Number(req.query.growth) : 0;
+    const category = req.query.category as string | undefined;
+    const data = getConsumablesForecastReport({ horizonDays, demandGrowthPercent, category });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در پیش‌بینی مواد مصرفی کارگاه',
+    });
+  }
+});
+
+// 21.6 Create Purchase Requisition for Consumables
+apiRouter.post('/consumables/requisition', (req: Request, res: Response) => {
+  try {
+    const { itemCodes, requestedBy, urgency, notes } = req.body || {};
+    const pr = createConsumablesPurchaseRequisition({ itemCodes, requestedBy, urgency, notes });
+    res.status(201).json({
+      success: true,
+      message: `درخواست خرید تدارکات شماره ${pr.prNumber} با موفقیت صادر و ثبت گردید.`,
+      data: pr,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در صدور درخواست خرید تدارکات',
+    });
+  }
+});
+
+// 21.7 Update Consumable Stock or Standard Rate
+apiRouter.post('/consumables/update-stock', (req: Request, res: Response) => {
+  try {
+    const { code, newStock, newStandardRate, newMinSafetyStock } = req.body || {};
+    if (!code) {
+      return res.status(400).json({ success: false, error: 'کد کالای مصرفی الزامی است.' });
+    }
+    const ok = updateConsumableStockOrRate({ code, newStock, newStandardRate, newMinSafetyStock });
+    if (!ok) {
+      return res.status(404).json({ success: false, error: 'کالای مصرفی مورد نظر یافت نشد.' });
+    }
+    const data = getConsumablesForecastReport();
+    res.json({
+      success: true,
+      message: 'موجودی و ضریب مصرف کالای مصرفی با موفقیت به‌روزرسانی شد.',
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در بروزرسانی کالای مصرفی',
+    });
+  }
+});
+
 
 
 

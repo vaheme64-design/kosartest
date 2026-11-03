@@ -48,6 +48,10 @@ import { DrillDownModal, DrillDownData } from './DrillDownModal';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
+import { OeeModuleView } from './OeeModuleView';
+import { MachineUtilizationView } from './MachineUtilizationView';
+import { ConsumablesForecastView } from '../planning/ConsumablesForecastView';
+import { MrpModuleView } from '../planning/MrpModuleView';
 
 export type ReportTypeKey =
   | 'plan_vs_actual'
@@ -65,7 +69,11 @@ export type ReportTypeKey =
   | 'reconciliation'
   | 'coil_inventory'
   | 'lot_consumption'
-  | 'supplier_matrix';
+  | 'supplier_matrix'
+  | 'oee_module'
+  | 'machine_utilization'
+  | 'consumables_forecast'
+  | 'mrp_forecast';
 
 interface ManagementReportsModuleViewProps {
   parts: Part[];
@@ -126,9 +134,20 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
     { id: 'coil_inventory', title: '۱۴. موجودی تفکیکی کویل‌ها و رول‌های ورق', category: 'مواد', description: 'وضعیت هر رول (سالم، بازشده، مصرف‌شده) با وزن اولیه، باقیمانده و شماره ذوب' },
     { id: 'lot_consumption', title: '۱۵. ردیابی مصرف رول و لوت پای خطوط پرس', category: 'تولید', description: 'حواله‌های مصرف لوت پای پرس با شماره MO، قطعه تولیدی و پرت کیلوگرمی' },
     { id: 'supplier_matrix', title: '۱۶. ماتریس حساب مواد تأمین‌کننده (گرید × ضخامت)', category: 'مواد', description: 'جدول ماتریسی دریافتی، مصرفی و مانده ورق‌ها به تفکیک گرید و ضخامت' },
+    { id: 'oee_module', title: '۱۷. ماژول OEE (اثربخشی کلی تجهیزات و ۶ ضایعه بزرگ)', category: 'ماشین‌آلات', description: 'محاسبه دسترس‌پذیری × کارایی × کیفیت، TEEP، MTBF/MTTR و پارتو ۶ ضایعه بزرگ TPM' },
+    { id: 'machine_utilization', title: '۱۸. ماژول گزارش بهره ماشین و کارکرد پرس‌ها', category: 'ماشین‌آلات', description: 'تحلیل ساعات کارکرد مفید، تعویض قالب SMED، توقفات اضطراری و راندمان ضرب در دقیقه (SPM)' },
+    { id: 'consumables_forecast', title: '۱۹. ماژول پیش‌بینی مواد مصرفی کارگاه (Consumables)', category: 'مواد', description: 'پیش‌بینی نرخ مصرف سیم جوش، گاز CO2، روغن کشش و قطعات یدکی قالب با نقطه سفارش ROP' },
+    { id: 'mrp_forecast', title: '۲۰. پیش‌بینی نیازمندی مواد و موازنه کلاف (MRP)', category: 'مواد', description: 'انفجار چندسطحی BOM، کسری خالص ورق و پیش‌بینی نیازمندی کلاف بر اساس سفارشات ساپکو' },
   ];
 
+  const isStandaloneModule =
+    activeReport === 'oee_module' ||
+    activeReport === 'machine_utilization' ||
+    activeReport === 'consumables_forecast' ||
+    activeReport === 'mrp_forecast';
+
   const fetchActiveReport = async () => {
+    if (isStandaloneModule) return;
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
@@ -526,12 +545,12 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
   };
 
   const categories = [
-    { id: 'ALL', label: 'همه گزارش‌ها (۱۶)' },
+    { id: 'ALL', label: 'همه گزارش‌ها و ماژول‌ها (۲۰)' },
     { id: 'تولید', label: 'تولید و خطوط پرس' },
-    { id: 'مواد', label: 'مواد اولیه و ساپکو' },
+    { id: 'مواد', label: 'مواد اولیه، مصرفی و ساپکو' },
     { id: 'انبار', label: 'انبار و کاردکس' },
     { id: 'فروش', label: 'فروش و تعهدات' },
-    { id: 'ماشین‌آلات', label: 'ماشین‌آلات و ظرفیت' },
+    { id: 'ماشین‌آلات', label: 'ماشین‌آلات، بهره و OEE' },
   ];
 
   const filteredReports = reportDefinitions.filter(
@@ -569,15 +588,15 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
-                KPIMS Reports Engine
+                KPIMS Reports & OEE Engine
               </span>
               <span className="text-slate-300">|</span>
               <h2 className="text-sm font-bold text-slate-900 tracking-wide">
-                مرکز جامع گزارش‌های مدیریتی، نظارتی و OEE کارخانه
+                مرکز جامع گزارش‌های مدیریتی، بهره‌وری ماشین، پیش‌بینی مواد و OEE کارخانه
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              {currentDef ? currentDef.description : '۱۶ گزارش تحلیلی، تطبیق برنامه و واقعی، بیلان امانی ساپکو، کویل‌ها و کاردکس اسناد'}
+              {currentDef ? currentDef.description : '۲۰ گزارش و ماژول تحلیلی: تأخیرات تولید، OEE، بهره ماشین، پیش‌بینی مواد مصرفی و MRP'}
             </p>
           </div>
 
@@ -590,15 +609,104 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
               <span>چاپ رسمی گزارش</span>
             </button>
 
-            <button
-              onClick={fetchActiveReport}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-              <span>بروزرسانی</span>
-            </button>
+            {!isStandaloneModule && (
+              <button
+                onClick={fetchActiveReport}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+                <span>بروزرسانی</span>
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Featured 5 Analytical & Forecasting Modules Quick Bar */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold text-slate-700 px-2 py-1 flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
+            ماژول‌های تحلیلی و پیش‌بینی ویژه:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setActiveReport('oee_module');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeReport === 'oee_module'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Percent className="w-3.5 h-3.5" />
+            <span>ماژول OEE و ۶ ضایعه بزرگ</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setActiveReport('machine_utilization');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeReport === 'machine_utilization'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            <span>گزارش بهره ماشین</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setActiveReport('consumables_forecast');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeReport === 'consumables_forecast'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5" />
+            <span>پیش‌بینی مواد مصرفی</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setActiveReport('mrp_forecast');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeReport === 'mrp_forecast'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>پیش‌بینی نیازمندی مواد (MRP)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setActiveReport('delays');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeReport === 'delays'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'bg-white hover:bg-rose-50 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>گزارش تحلیلی تأخیر تولید</span>
+          </button>
         </div>
 
         {/* Category Pills & Report Selector */}
@@ -673,17 +781,26 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <ReportFiltersBar
-        parts={parts}
-        machines={machines}
-        filters={filters}
-        onFilterChange={setFilters}
-        onExportCsv={handleExportCsv}
-        isExporting={loading}
-      />
+      {/* Standalone Analytical & Forecasting Modules */}
+      {activeReport === 'oee_module' && <OeeModuleView machines={machines} />}
+      {activeReport === 'machine_utilization' && <MachineUtilizationView machines={machines} />}
+      {activeReport === 'consumables_forecast' && <ConsumablesForecastView />}
+      {activeReport === 'mrp_forecast' && <MrpModuleView />}
+
+      {/* Filters Bar (for standard tabular reports) */}
+      {!isStandaloneModule && (
+        <ReportFiltersBar
+          parts={parts}
+          machines={machines}
+          filters={filters}
+          onFilterChange={setFilters}
+          onExportCsv={handleExportCsv}
+          isExporting={loading}
+        />
+      )}
 
       {/* Main Report Table Container */}
+      {!isStandaloneModule && (
       <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs">
         <div className="px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
@@ -1739,6 +1856,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           )}
         </div>
       </div>
+      )}
 
       {/* Drill-down modal */}
       <DrillDownModal
