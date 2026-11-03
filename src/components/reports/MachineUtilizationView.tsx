@@ -23,7 +23,11 @@ import {
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 
-export const MachineUtilizationView: React.FC = () => {
+export interface MachineUtilizationViewProps {
+  machines?: any[];
+}
+
+export const MachineUtilizationView: React.FC<MachineUtilizationViewProps> = () => {
   const [data, setData] = useState<MachineUtilizationSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [shiftFilter, setShiftFilter] = useState<ShiftFilterKey>('ALL');

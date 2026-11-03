@@ -26,7 +26,11 @@ import {
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 
-export const OeeModuleView: React.FC = () => {
+export interface OeeModuleViewProps {
+  machines?: any[];
+}
+
+export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
   const [data, setData] = useState<OeeDashboardSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [shiftFilter, setShiftFilter] = useState<ShiftFilterKey>('ALL');
