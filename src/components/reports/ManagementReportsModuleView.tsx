@@ -16,6 +16,9 @@ import {
   Info,
   Scale,
   Percent,
+  Printer,
+  FileText,
+  Filter,
 } from 'lucide-react';
 import {
   ReportFilterParams,
@@ -31,8 +34,13 @@ import {
   ScrapByPartAndOperationItem,
   MachineWorkloadCapacityItem,
   ProductionDelaysItem,
+  ProductionDelaySection,
+  ProductionDelayAnalyticsSummary,
   InventoryMovementItem,
   InventoryReconciliationItem,
+  CoilInventoryReportItem,
+  LotConsumptionReportItem,
+  SupplierMatrixReportItem,
 } from '../../types/managementReports';
 import { Part, Machine } from '../../types/inventory';
 import { ReportFiltersBar } from './ReportFiltersBar';
@@ -54,7 +62,10 @@ export type ReportTypeKey =
   | 'machine_workload'
   | 'delays'
   | 'movements'
-  | 'reconciliation';
+  | 'reconciliation'
+  | 'coil_inventory'
+  | 'lot_consumption'
+  | 'supplier_matrix';
 
 interface ManagementReportsModuleViewProps {
   parts: Part[];
@@ -71,6 +82,8 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
   const [filters, setFilters] = useState<ReportFilterParams>({});
   const [loading, setLoading] = useState(false);
   const [reportMeta, setReportMeta] = useState<ReportMeta | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
 
   // Report Data Stores
   const [planVsActualData, setPlanVsActualData] = useState<PlanVsActualItem[]>([]);
@@ -84,26 +97,35 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
   const [scrapData, setScrapData] = useState<ScrapByPartAndOperationItem[]>([]);
   const [machineData, setMachineData] = useState<MachineWorkloadCapacityItem[]>([]);
   const [delaysData, setDelaysData] = useState<ProductionDelaysItem[]>([]);
+  const [delayAnalytics, setDelayAnalytics] = useState<ProductionDelayAnalyticsSummary | null>(null);
+  const [delaySectionFilter, setDelaySectionFilter] = useState<'ALL' | ProductionDelaySection>('ALL');
+  const [delayCauseFilter, setDelayCauseFilter] = useState<string>('ALL');
   const [movementsData, setMovementsData] = useState<InventoryMovementItem[]>([]);
   const [reconciliationData, setReconciliationData] = useState<InventoryReconciliationItem[]>([]);
+  const [coilInventoryData, setCoilInventoryData] = useState<CoilInventoryReportItem[]>([]);
+  const [lotConsumptionData, setLotConsumptionData] = useState<LotConsumptionReportItem[]>([]);
+  const [supplierMatrixData, setSupplierMatrixData] = useState<SupplierMatrixReportItem[]>([]);
 
   // Drill-down Modal State
   const [drillDownItem, setDrillDownItem] = useState<DrillDownData | null>(null);
 
-  const reportDefinitions: { id: ReportTypeKey; title: string; category: string }[] = [
-    { id: 'plan_vs_actual', title: '۱. تطبیق برنامه در برابر تولید واقعی (Plan vs Actual)', category: 'تولید' },
-    { id: 'fulfillment', title: '۲. وضعیت تحقق سفارشات مشتریان (ساپکو/سایپا)', category: 'فروش' },
-    { id: 'backlog', title: '۳. تعهدات معوق و عقب‌افتاده تولید (Backlog)', category: 'فروش' },
-    { id: 'wip_operation', title: '۴. کار در جریان ساخت به تفکیک قطعه و مرحله (WIP)', category: 'تولید' },
-    { id: 'wip_aging', title: '۵. سن‌یابی و ماندگاری اقلام در خطوط (WIP Aging)', category: 'تولید' },
-    { id: 'consumption', title: '۶. مصرف مواد در برابر استاندارد مهندسی', category: 'مواد' },
-    { id: 'sapco_account', title: '۷. حساب و بیلان امانی کلاف‌های ساپکو', category: 'مواد' },
-    { id: 'valuation_qty', title: '۸. تفکیک مقداری موجودی انبارها و قرنطینه', category: 'انبار' },
-    { id: 'scrap_analysis', title: '۹. ضایعات به تفکیک قطعه و مرحله عملیات', category: 'کیفیت' },
-    { id: 'machine_workload', title: '۱۰. لود کاری و ظرفیت آزاد ماشین‌آلات پرس', category: 'ماشین‌آلات' },
-    { id: 'delays', title: '۱۱. گزارش تأخیرات تولید و علل انحرافات', category: 'برنامه‌ریزی' },
-    { id: 'movements', title: '۱۲. کاردکس و گردش تحلیلی اسناد انبار', category: 'انبار' },
-    { id: 'reconciliation', title: '۱۳. انبارگردانی و موازنه مغایرت فیزیکی', category: 'انبار' },
+  const reportDefinitions: { id: ReportTypeKey; title: string; category: string; description: string }[] = [
+    { id: 'plan_vs_actual', title: '۱. تطبیق برنامه در برابر تولید واقعی (Plan vs Actual)', category: 'تولید', description: 'مقایسه تناژ و تیراژ مصوب ماهانه با آمار تولید واقعی پرس‌ها و محاسبه درصد تحقق' },
+    { id: 'fulfillment', title: '۲. وضعیت تحقق سفارشات مشتریان (ساپکو/سایپا)', category: 'فروش', description: 'تعهدات تحویل قطعات بدنه به خطوط خودروساز و پایش کسری‌های خطوط مشتری' },
+    { id: 'backlog', title: '۳. تعهدات معوق و عقب‌افتاده تولید (Backlog)', category: 'فروش', description: 'سفارشات باز و دارای تأخیر نسبت به موعد تحویل و پوشش با موجودی محصول و WIP' },
+    { id: 'wip_operation', title: '۴. کار در جریان ساخت به تفکیک قطعه و مرحله (WIP)', category: 'تولید', description: 'ردیابی قطعات در صف برش، پرس ضربه‌ای، پرس هیدرولیک و جوشکاری' },
+    { id: 'wip_aging', title: '۵. سن‌یابی و ماندگاری اقلام در خطوط (WIP Aging)', category: 'تولید', description: 'شناسایی پالت‌های راکد و خوابیده بین اوپراسیون‌ها بالای ۴۸ ساعت' },
+    { id: 'consumption', title: '۶. مصرف مواد در برابر استاندارد مهندسی', category: 'مواد', description: 'مقایسه مصرف واقعی ورق با ضرایب مصرف BOM و انحرافات وزنی' },
+    { id: 'sapco_account', title: '۷. حساب و بیلان امانی کلاف‌های ساپکو', category: 'مواد', description: 'کاردکس کیلوگرمی کلاف‌های امانی با تفکیک دریافتی، مصرفی و باقیمانده' },
+    { id: 'valuation_qty', title: '۸. تفکیک مقداری موجودی انبارها و قرنطینه', category: 'انبار', description: 'موجودی رسمی فیزیکی، ملکی کارخانه، امانی ساپکو و توقیف کیفی' },
+    { id: 'scrap_analysis', title: '۹. ضایعات به تفکیک قطعه و مرحله عملیات', category: 'تولید', description: 'سهم ضایعات سنبه‌ماتریس، اشکالات اپراتوری و نقص ورق ورودی' },
+    { id: 'machine_workload', title: '۱۰. لود کاری و ظرفیت آزاد ماشین‌آلات پرس', category: 'ماشین‌آلات', description: 'ساعات تخصیص‌یافته به پرس‌ها، راندمان OEE و گلوگاه‌های سالن پرس' },
+    { id: 'delays', title: '۱۱. گزارش تأخیرات تولید و علل انحرافات', category: 'تولید', description: 'علت‌یابی توقفات ناشی از کمبود رول ورق، شکستگی قالب یا قطعی برق' },
+    { id: 'movements', title: '۱۲. کاردکس و گردش تحلیلی اسناد انبار', category: 'انبار', description: 'دفتر کل ورود، خروج، انتقال بین‌انباری و اسناد تعدیل و ابطال' },
+    { id: 'reconciliation', title: '۱۳. انبارگردانی و موازنه مغایرت فیزیکی', category: 'انبار', description: 'تطبیق موجودی شمارش‌شده با موجودی دفتری و کسری/اضافی انبار' },
+    { id: 'coil_inventory', title: '۱۴. موجودی تفکیکی کویل‌ها و رول‌های ورق', category: 'مواد', description: 'وضعیت هر رول (سالم، بازشده، مصرف‌شده) با وزن اولیه، باقیمانده و شماره ذوب' },
+    { id: 'lot_consumption', title: '۱۵. ردیابی مصرف رول و لوت پای خطوط پرس', category: 'تولید', description: 'حواله‌های مصرف لوت پای پرس با شماره MO، قطعه تولیدی و پرت کیلوگرمی' },
+    { id: 'supplier_matrix', title: '۱۶. ماتریس حساب مواد تأمین‌کننده (گرید × ضخامت)', category: 'مواد', description: 'جدول ماتریسی دریافتی، مصرفی و مانده ورق‌ها به تفکیک گرید و ضخامت' },
   ];
 
   const fetchActiveReport = async () => {
@@ -159,6 +181,15 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         case 'reconciliation':
           endpoint = `/api/reports/inventory-reconciliation?${queryParams}`;
           break;
+        case 'coil_inventory':
+          endpoint = `/api/reports/coil-inventory?${queryParams}`;
+          break;
+        case 'lot_consumption':
+          endpoint = `/api/reports/lot-consumption?${queryParams}`;
+          break;
+        case 'supplier_matrix':
+          endpoint = `/api/reports/supplier-matrix?${queryParams}`;
+          break;
       }
 
       const res = await fetch(endpoint);
@@ -175,9 +206,18 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         else if (activeReport === 'valuation_qty') setValuationData(data.data);
         else if (activeReport === 'scrap_analysis') setScrapData(data.data);
         else if (activeReport === 'machine_workload') setMachineData(data.data);
-        else if (activeReport === 'delays') setDelaysData(data.data);
+        else if (activeReport === 'delays') {
+          setDelaysData(data.data);
+          fetch(`/api/reports/production-delays/analytics?${queryParams}`)
+            .then(r => r.json())
+            .then(d => { if (d.success) setDelayAnalytics(d.data); })
+            .catch(() => {});
+        }
         else if (activeReport === 'movements') setMovementsData(data.data);
         else if (activeReport === 'reconciliation') setReconciliationData(data.data);
+        else if (activeReport === 'coil_inventory') setCoilInventoryData(data.data);
+        else if (activeReport === 'lot_consumption') setLotConsumptionData(data.data);
+        else if (activeReport === 'supplier_matrix') setSupplierMatrixData(data.data);
       }
     } catch (err) {
       console.error('Failed to fetch report data:', err);
@@ -369,18 +409,21 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         break;
       }
       case 'delays': {
-        const headers = ['نوع سند', 'شماره مرجع', 'مشتری / برنامه', 'کد قطعه', 'نام قطعه', 'تیراژ', 'موعد مصوب', 'تکمیل تخمینی', 'روزهای تأخیر', 'علت اصلی تأخیر'];
+        const headers = ['بخش', 'شماره مرجع', 'طرف حساب / ایستگاه', 'کد قطعه', 'نام قطعه', 'تیراژ معوق', 'موعد مصوب', 'تکمیل (تخمینی/واقعی)', 'روزهای تأخیر', 'علت ریشه‌ای تأخیر', 'سطح فوریت', 'ریسک جریمه (ریال)', 'شرح علت'];
         const rows = delaysData.map(r => [
-          r.documentType,
+          r.sectionLabelFa,
           r.referenceNumber,
           r.customerOrPlan,
           r.partCode,
-          r.partName,
+          `"${r.partName.replace(/"/g, '""')}"`,
           r.quantity,
           r.plannedDueDate,
           r.estimatedCompletionDate,
           r.delayDays,
           r.primaryDelayCause,
+          r.urgencyLevel,
+          r.delayPenaltyRiskRials || 0,
+          `"${(r.delayDescription || '').replace(/"/g, '""')}"`,
         ]);
         exportToCsv(filename, headers, rows);
         break;
@@ -421,48 +464,212 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         exportToCsv(filename, headers, rows);
         break;
       }
+      case 'coil_inventory': {
+        const headers = ['شماره کویل', 'کد ماده', 'گرید', 'ضخامت (mm)', 'عرض (mm)', 'وزن اولیه (kg)', 'مصرف شده (kg)', 'مانده فعلی (kg)', 'مالکیت', 'قرارداد', 'شماره ذوب', 'پکینگ لیست', 'موقعیت', 'وضعیت'];
+        const rows = coilInventoryData.map(r => [
+          r.coilNumber,
+          r.materialCode,
+          r.materialGrade,
+          r.thicknessMm,
+          r.widthMm,
+          r.receivedWeightKg,
+          r.consumedWeightKg,
+          r.remainingWeightKg,
+          r.ownership === 'SAPCO_CONSIGNMENT' ? 'امانی ساپکو' : 'ملکی کارخانه',
+          r.contractNumber,
+          r.heatNumber,
+          r.packingNumber,
+          r.warehouseLocation,
+          r.status,
+        ]);
+        exportToCsv(filename, headers, rows);
+        break;
+      }
+      case 'lot_consumption': {
+        const headers = ['شماره سند حواله', 'تاریخ', 'شماره کویل', 'شماره ذوب', 'گرید ورق', 'ضخامت', 'مصرف (kg)', 'دستگاه مقصد', 'شماره MO', 'کد قطعه', 'نام قطعه', 'قطعات تولیدی', 'ضایعات (kg)', 'درصد ضایعات', 'اپراتور'];
+        const rows = lotConsumptionData.map(r => [
+          r.issueDocumentNumber,
+          r.issueDate,
+          r.coilNumber,
+          r.heatNumber,
+          r.materialGrade,
+          r.thicknessMm,
+          r.consumedKg,
+          r.destinationMachine,
+          r.targetMoNumber,
+          r.targetPartCode,
+          r.targetPartName,
+          r.piecesProduced,
+          r.scrapKg,
+          `${r.scrapPercent}%`,
+          r.operatorName,
+        ]);
+        exportToCsv(filename, headers, rows);
+        break;
+      }
+      case 'supplier_matrix': {
+        const headers = ['گرید فولاد', 'ضخامت (mm)', 'اول دوره (kg)', 'رسید ملکی/خرید (kg)', 'رسید امانی ساپکو (kg)', 'جمع مصرف (kg)', 'مانده پایانی دوره (kg)', 'تعداد کویل'];
+        const rows = supplierMatrixData.map(r => [
+          r.grade,
+          r.thicknessMm,
+          r.openingBalanceKg,
+          r.financialReceivedKg,
+          r.consignmentReceivedKg,
+          r.totalConsumptionKg,
+          r.closingBalanceKg,
+          r.totalCoilsCount,
+        ]);
+        exportToCsv(filename, headers, rows);
+        break;
+      }
     }
   };
+
+  const categories = [
+    { id: 'ALL', label: 'همه گزارش‌ها (۱۶)' },
+    { id: 'تولید', label: 'تولید و خطوط پرس' },
+    { id: 'مواد', label: 'مواد اولیه و ساپکو' },
+    { id: 'انبار', label: 'انبار و کاردکس' },
+    { id: 'فروش', label: 'فروش و تعهدات' },
+    { id: 'ماشین‌آلات', label: 'ماشین‌آلات و ظرفیت' },
+  ];
+
+  const filteredReports = reportDefinitions.filter(
+    r => selectedCategory === 'ALL' || r.category === selectedCategory
+  );
+
+  const applyQuickPeriod = (period: 'TODAY' | 'WEEK' | 'MONTH' | '3MONTH' | 'ALL') => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    if (period === 'ALL') {
+      setFilters(prev => ({ ...prev, startDate: undefined, endDate: undefined }));
+      return;
+    }
+    let startStr = todayStr;
+    if (period === 'WEEK') {
+      const d = new Date(now.getTime() - 7 * 86400000);
+      startStr = d.toISOString().slice(0, 10);
+    } else if (period === 'MONTH') {
+      const d = new Date(now.getTime() - 30 * 86400000);
+      startStr = d.toISOString().slice(0, 10);
+    } else if (period === '3MONTH') {
+      const d = new Date(now.getTime() - 90 * 86400000);
+      startStr = d.toISOString().slice(0, 10);
+    }
+    setFilters(prev => ({ ...prev, startDate: startStr, endDate: todayStr }));
+  };
+
+  const currentDef = reportDefinitions.find(r => r.id === activeReport);
 
   return (
     <div className="space-y-6">
       {/* Sleek Header & Report Selector */}
-      <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-900 tracking-wide">
-              گزارش‌های نظارتی و کنترل تولید (KPIMS)
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              ۱۳ گزارش تحلیلی، تطبیق برنامه و واقعی، بیلان امانی ساپکو و گردش اسناد
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
+                KPIMS Reports Engine
+              </span>
+              <span className="text-slate-300">|</span>
+              <h2 className="text-sm font-bold text-slate-900 tracking-wide">
+                مرکز جامع گزارش‌های مدیریتی، نظارتی و OEE کارخانه
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {currentDef ? currentDef.description : '۱۶ گزارش تحلیلی، تطبیق برنامه و واقعی، بیلان امانی ساپکو، کویل‌ها و کاردکس اسناد'}
             </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>چاپ رسمی گزارش</span>
+            </button>
+
+            <button
+              onClick={fetchActiveReport}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+              <span>بروزرسانی</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 shrink-0">گزارش:</span>
+        {/* Category Pills & Report Selector */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setSelectedCategory(cat.id);
+                  const firstInCat = reportDefinitions.find(
+                    r => cat.id === 'ALL' || r.category === cat.id
+                  );
+                  if (firstInCat && activeReport !== firstInCat.id) {
+                    setActiveReport(firstInCat.id);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  selectedCategory === cat.id
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-slate-500 font-medium">انتخاب گزارش:</span>
             <select
               value={activeReport}
               onChange={e => setActiveReport(e.target.value as ReportTypeKey)}
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:bg-white focus:border-slate-900 cursor-pointer"
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:bg-white focus:border-indigo-600 cursor-pointer max-w-xs sm:max-w-md truncate shadow-2xs"
             >
-              {reportDefinitions.map(r => (
+              {filteredReports.map(r => (
                 <option key={r.id} value={r.id}>
                   {r.title}
                 </option>
               ))}
             </select>
           </div>
+        </div>
 
-          <button
-            onClick={fetchActiveReport}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-            <span>بروزرسانی</span>
-          </button>
+        {/* Quick Date Range Buttons */}
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-slate-400 ml-1">بازه زمانی سریع:</span>
+            {[
+              { id: 'TODAY', label: 'امروز' },
+              { id: 'WEEK', label: '۷ روز اخیر' },
+              { id: 'MONTH', label: 'این ماه' },
+              { id: '3MONTH', label: '۳ ماهه اخیر' },
+              { id: 'ALL', label: 'کل سال / کل دوره' },
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => applyQuickPeriod(p.id as any)}
+                className="px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-[11px] transition-colors cursor-pointer"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {reportMeta && (
+            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
+              <span>تولید سند:</span>
+              <span className="font-semibold text-slate-700">{formatToJalali(reportMeta.generatedAt)}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1042,43 +1249,267 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
             </table>
           )}
 
-          {/* 11. Production Delays */}
+          {/* 11. Production Delays (Comprehensive Analytical Delay Audit) */}
           {activeReport === 'delays' && (
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="py-3 px-3">نوع و شماره مرجع</th>
-                  <th className="py-3 px-3">مشتری</th>
-                  <th className="py-3 px-3">قطعه</th>
-                  <th className="py-3 px-3 text-center">تیراژ</th>
-                  <th className="py-3 px-3 text-center">موعد مصوب</th>
-                  <th className="py-3 px-3 text-center text-amber-400">تکمیل تخمینی ▲</th>
-                  <th className="py-3 px-3 text-center text-rose-400 font-black">روزهای تأخیر</th>
-                  <th className="py-3 px-3">علت اصلی تأخیر</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
-                {delaysData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.referenceNumber}</td>
-                    <td className="py-3 px-3 font-sans font-bold text-slate-200">{r.customerOrPlan}</td>
-                    <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
-                    </td>
-                    <td className="py-3 px-3 text-center font-bold">{formatNumber(r.quantity)}</td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px]">{formatToJalali(r.plannedDueDate)}</td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px] text-amber-400 font-bold">
-                      {formatToJalali(r.estimatedCompletionDate)}
-                    </td>
-                    <td className="py-3 px-3 text-center text-rose-400 font-black text-sm">
-                      {toPersianDigits(r.delayDays)} روز
-                    </td>
-                    <td className="py-3 px-3 font-sans text-slate-300 text-[11px]">{r.delayDescription}</td>
-                  </tr>
+            <div className="space-y-4 p-4">
+              {/* Analytic KPI Cards */}
+              {delayAnalytics && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-400 block font-sans">میانگین روزهای تأخیر</span>
+                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.averageDelayDays)} <span className="text-xs font-sans font-normal text-slate-400">روز</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">از سررسید تعهدات</span>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-emerald-400 block font-sans">نرخ تحویل به‌موقع (OTIF)</span>
+                    <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.onTimeDeliveryRatePercent)}٪
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">شاخص کیفی ساپکو</span>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-400 block font-sans">کل موارد دارای تأخیر</span>
+                    <div className="text-xl font-black text-slate-100 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.totalDelayedItemsCount)}
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">سفارش، MO و عملیات</span>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-rose-400 block font-sans">بیشترین روز تأخیر</span>
+                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.maxDelayDays)} <span className="text-xs font-sans font-normal text-slate-400">روز</span>
+                    </div>
+                    <span className="text-[10px] text-rose-400/80 mt-1 block">اقلام با دیرکرد بالا</span>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-amber-400 block font-sans">فوریت بحرانی</span>
+                    <div className="text-xl font-black text-amber-400 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.criticalUrgencyCount)} <span className="text-xs font-sans font-normal text-slate-400">مورد</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">ریسک توقف خط مشتری</span>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-400 block font-sans">برآورد ریسک جریمه ساپکو</span>
+                    <div className="text-lg font-black text-rose-300 font-mono mt-1">
+                      {formatNumber(Math.round(delayAnalytics.estimatedPenaltyRiskRials / 1000000))} <span className="text-[11px] font-sans font-normal text-slate-400">م.ریال</span>
+                    </div>
+                    <span className="text-[10px] text-rose-400/70 mt-1 block">جریمه تأخیر قرارداد</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Root Cause Distribution Bars */}
+              {delayAnalytics && (
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200 font-sans flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                      تفکیک سهم علل ریشه‌ای تأخیرات (Root Cause Breakdown) — روی هر علت جهت فیلتر جدول کلیک کنید:
+                    </span>
+                    {delayCauseFilter !== 'ALL' && (
+                      <button
+                        onClick={() => setDelayCauseFilter('ALL')}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-300 font-sans cursor-pointer underline"
+                      >
+                        حذف فیلتر علت
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                    {delayAnalytics.causesBreakdown.map(cause => {
+                      const isSelected = delayCauseFilter === cause.causeKey;
+                      return (
+                        <button
+                          key={cause.causeKey}
+                          onClick={() => setDelayCauseFilter(isSelected ? 'ALL' : cause.causeKey)}
+                          className={`p-2.5 rounded-lg border text-right transition cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? 'bg-slate-800 border-indigo-500 ring-2 ring-indigo-500/30'
+                              : 'bg-slate-950 border-slate-800/80 hover:bg-slate-900'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-[11px] font-bold text-slate-200">{cause.causeLabelFa}</span>
+                            <span className="text-xs font-mono font-black text-rose-400">
+                              {toPersianDigits(cause.percentage)}٪
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                            <span>{toPersianDigits(cause.itemsCount)} ردیف</span>
+                            <span>{formatNumber(cause.totalDelayedPieces)} عدد</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1 rounded-full mt-1.5 overflow-hidden">
+                            <div
+                              className="bg-indigo-500 h-full rounded-full transition-all"
+                              style={{ width: `${cause.percentage}%` }}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Section Filters (kosar_za standard) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <span className="text-slate-400 font-sans ml-1 text-[11px]">فیلتر بخش:</span>
+                {[
+                  { id: 'ALL', label: 'همه بخش‌ها' },
+                  { id: 'CUSTOMER_ORDER', label: 'ردیف سفارشات باز معوق' },
+                  { id: 'OPEN_MO', label: 'دستور کارهای باز عقب‌افتاده' },
+                  { id: 'COMPLETED_LATE_MO', label: 'تکمیل‌شده با تأخیر (سوابق)' },
+                  { id: 'LATE_OPERATION', label: 'عملیات و ایستگاه‌های اجرایی' },
+                ].map(sec => (
+                  <button
+                    key={sec.id}
+                    onClick={() => setDelaySectionFilter(sec.id as any)}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+                      delaySectionFilter === sec.id
+                        ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    {sec.label}
+                  </button>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* Table */}
+              <div className="rounded-xl border border-slate-800 overflow-hidden">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                    <tr>
+                      <th className="py-3 px-3">بخش و شماره مرجع</th>
+                      <th className="py-3 px-3">طرف حساب / ایستگاه</th>
+                      <th className="py-3 px-3">کد و نام قطعه خودرویی</th>
+                      <th className="py-3 px-3 text-center text-slate-200">تیراژ معوق</th>
+                      <th className="py-3 px-3 text-center">موعد مصوب</th>
+                      <th className="py-3 px-3 text-center text-amber-400">تکمیل (تخمینی / واقعی)</th>
+                      <th className="py-3 px-3 text-center text-rose-400 font-black">روزهای تأخیر</th>
+                      <th className="py-3 px-3">علت ریشه‌ای تأخیر</th>
+                      <th className="py-3 px-3 text-center">سطح فوریت</th>
+                      <th className="py-3 px-3 text-center">بررسی</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                    {delaysData
+                      .filter(r => {
+                        if (delaySectionFilter !== 'ALL' && r.section !== delaySectionFilter) return false;
+                        if (delayCauseFilter !== 'ALL' && r.primaryDelayCause !== delayCauseFilter) return false;
+                        return true;
+                      })
+                      .map((r, i) => (
+                        <tr key={i} className="hover:bg-slate-800/40 transition">
+                          <td className="py-3 px-3 font-sans">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold block w-fit mb-1 ${
+                              r.section === 'CUSTOMER_ORDER'
+                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                : r.section === 'OPEN_MO'
+                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                : r.section === 'COMPLETED_LATE_MO'
+                                ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                            }`}>
+                              {r.sectionLabelFa}
+                            </span>
+                            <div className="font-bold text-slate-100 font-mono">{r.referenceNumber}</div>
+                          </td>
+                          <td className="py-3 px-3 font-sans text-slate-300">
+                            <div className="font-semibold">{r.customerOrPlan}</div>
+                            {r.operationName && (
+                              <div className="text-[10px] text-slate-500">{r.operationName}</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 font-sans">
+                            <div className="font-bold text-slate-200">{r.partName}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-bold text-sm text-slate-100">
+                            {formatNumber(r.quantity)}
+                          </td>
+                          <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-300">
+                            {formatToJalali(r.plannedDueDate)}
+                          </td>
+                          <td className="py-3 px-3 text-center font-sans text-[11px] text-amber-400 font-bold">
+                            {formatToJalali(r.estimatedCompletionDate)}
+                          </td>
+                          <td className="py-3 px-3 text-center font-black text-sm">
+                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              {toPersianDigits(r.delayDays)} روز
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-sans">
+                            <span className="font-bold text-slate-200 block text-[11px]">
+                              {r.primaryDelayCause === 'RAW_MATERIAL_SHORTAGE' && 'کسری کلاف ساپکو'}
+                              {r.primaryDelayCause === 'MACHINE_BREAKDOWN' && 'خرابی پرس و قالب'}
+                              {r.primaryDelayCause === 'WIP_BOTTLENECK' && 'گلوگاه کار در جریان'}
+                              {r.primaryDelayCause === 'CAPACITY_OVERLOAD' && 'بیش‌بار ظرفیت تناژ'}
+                              {r.primaryDelayCause === 'QUALITY_HOLD' && 'توقف کیفی ابعادی'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5 line-clamp-1" title={r.delayDescription}>
+                              {r.delayDescription}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center font-sans">
+                            {r.urgencyLevel === 'CRITICAL' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                بحرانی
+                              </span>
+                            )}
+                            {r.urgencyLevel === 'HIGH' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                بالا
+                              </span>
+                            )}
+                            {r.urgencyLevel === 'MEDIUM' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                                متوسط
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <button
+                              onClick={() => {
+                                setDrillDownItem({
+                                  title: `علت‌یابی تأخیر: ${r.referenceNumber}`,
+                                  subtitle: r.partName,
+                                  badge: {
+                                    text: r.urgencyLevel === 'CRITICAL' ? 'بحرانی' : 'عادی',
+                                    color: r.urgencyLevel === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-300',
+                                  },
+                                  fields: [
+                                    { label: 'شماره سند', value: r.referenceNumber, isMono: true },
+                                    { label: 'بخش', value: r.sectionLabelFa },
+                                    { label: 'کد و نام قطعه', value: `${r.partCode} — ${r.partName}` },
+                                    { label: 'تیراژ معوق', value: `${formatNumber(r.quantity)} عدد`, isMono: true, isHighlight: true },
+                                    { label: 'موعد مصوب', value: formatToJalali(r.plannedDueDate) },
+                                    { label: 'روزهای تأخیر', value: `${toPersianDigits(r.delayDays)} روز`, isHighlight: true },
+                                    { label: 'علت ریشه‌ای', value: r.delayDescription },
+                                    { label: 'ریسک تخمینی جریمه', value: r.delayPenaltyRiskRials ? `${formatNumber(r.delayPenaltyRiskRials)} ریال` : 'ندارد' },
+                                    { label: 'سطح فوریت', value: r.urgencyLevel },
+                                  ],
+                                });
+                              }}
+                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-sans cursor-pointer transition"
+                            >
+                              جزئیات
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           {/* 12. Inventory Movements */}
@@ -1159,6 +1590,147 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                     </td>
                     <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-400">
                       {formatToJalali(r.lastReconciledAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* 14. Coil Inventory */}
+          {activeReport === 'coil_inventory' && (
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-3">شماره کویل</th>
+                  <th className="py-3 px-3">مشخصات متریال (گرید و ضخامت)</th>
+                  <th className="py-3 px-3 text-center">ابعاد (mm)</th>
+                  <th className="py-3 px-3 text-center">وزن دریافتی (kg)</th>
+                  <th className="py-3 px-3 text-center text-amber-400">مصرف شده (kg)</th>
+                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">مانده موجودی (kg)</th>
+                  <th className="py-3 px-3 text-center">مالکیت</th>
+                  <th className="py-3 px-3 text-center">وضعیت رول</th>
+                  <th className="py-3 px-3 text-center">موقعیت انبار</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {coilInventoryData.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                    <td className="py-3 px-3 font-bold text-slate-100 font-mono">
+                      <div>{r.coilNumber}</div>
+                      <div className="text-[10px] text-slate-400 font-sans">ذوب: {r.heatNumber}</div>
+                    </td>
+                    <td className="py-3 px-3 font-sans">
+                      <div className="font-bold text-slate-200">{r.materialGrade}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">قرارداد: {r.contractNumber}</div>
+                    </td>
+                    <td className="py-3 px-3 text-center text-slate-300 font-mono">
+                      {r.thicknessMm} × {r.widthMm}
+                    </td>
+                    <td className="py-3 px-3 text-center text-slate-300">{formatNumber(r.receivedWeightKg)}</td>
+                    <td className="py-3 px-3 text-center text-amber-400">{formatNumber(r.consumedWeightKg)}</td>
+                    <td className="py-3 px-3 text-center font-bold text-emerald-400">{formatNumber(r.remainingWeightKg)}</td>
+                    <td className="py-3 px-3 text-center font-sans">
+                      <span className={`px-2 py-0.5 rounded text-[10px] ${r.ownership === 'SAPCO_CONSIGNMENT' ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-slate-800 text-slate-300'}`}>
+                        {r.ownership === 'SAPCO_CONSIGNMENT' ? 'امانی ساپکو' : 'ملکی'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-sans">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        r.status === 'FULL'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : r.status === 'PARTIAL'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'bg-slate-800 text-slate-500'
+                      }`}>
+                        {r.status === 'FULL' ? 'سالم (کامل)' : r.status === 'PARTIAL' ? 'بازشده (ناقص)' : 'مصرف‌شده'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px]">{r.warehouseLocation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* 15. Lot Consumption */}
+          {activeReport === 'lot_consumption' && (
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-3">سند و تاریخ حواله</th>
+                  <th className="py-3 px-3">شناسه کویل / ذوب</th>
+                  <th className="py-3 px-3">جنس و ضخامت</th>
+                  <th className="py-3 px-3 text-center">مصرف (kg)</th>
+                  <th className="py-3 px-3 text-center">دستور کار (MO)</th>
+                  <th className="py-3 px-3">قطعه خروجی</th>
+                  <th className="py-3 px-3 text-center">تیراژ تولیدی</th>
+                  <th className="py-3 px-3 text-center text-rose-400">ضایعات پرسی</th>
+                  <th className="py-3 px-3 text-center">اپراتور</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {lotConsumptionData.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                    <td className="py-3 px-3">
+                      <div className="font-bold text-slate-100 font-mono">{r.issueDocumentNumber}</div>
+                      <div className="text-[10px] text-slate-400 font-sans">{formatToJalali(r.issueDate)}</div>
+                    </td>
+                    <td className="py-3 px-3 font-mono">
+                      <div className="text-slate-200 font-bold">{r.coilNumber}</div>
+                      <div className="text-[10px] text-slate-400">{r.heatNumber}</div>
+                    </td>
+                    <td className="py-3 px-3 font-sans">
+                      <span className="text-slate-200 font-semibold">{r.materialGrade}</span>
+                      <span className="text-slate-400 font-mono mr-1">({r.thicknessMm}mm)</span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-100">{formatNumber(r.consumedKg)}</td>
+                    <td className="py-3 px-3 text-center text-indigo-300 font-mono">{r.targetMoNumber}</td>
+                    <td className="py-3 px-3 font-sans">
+                      <div className="font-bold text-slate-200">{r.targetPartName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{r.targetPartCode}</div>
+                    </td>
+                    <td className="py-3 px-3 text-center font-bold text-emerald-400">{formatNumber(r.piecesProduced)} عدد</td>
+                    <td className="py-3 px-3 text-center text-rose-400 font-mono">
+                      <div>{formatNumber(r.scrapKg)} kg</div>
+                      <div className="text-[10px] text-slate-400 font-sans">({r.scrapPercent}%)</div>
+                    </td>
+                    <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px]">{r.operatorName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* 16. Supplier Matrix (Grade x Thickness) */}
+          {activeReport === 'supplier_matrix' && (
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-3">گرید فولاد</th>
+                  <th className="py-3 px-3 text-center">ضخامت ورق (mm)</th>
+                  <th className="py-3 px-3 text-center">اول دوره (kg)</th>
+                  <th className="py-3 px-3 text-center text-blue-400">رسید امانی ساپکو (kg)</th>
+                  <th className="py-3 px-3 text-center text-indigo-400">رسید خرید آزاد / ملکی (kg)</th>
+                  <th className="py-3 px-3 text-center text-amber-400">جمع مصرف پرسی (kg)</th>
+                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">مانده پایان دوره (kg)</th>
+                  <th className="py-3 px-3 text-center">تعداد کویل</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {supplierMatrixData.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                    <td className="py-3 px-3 font-bold text-slate-100 font-sans">{r.grade}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-300 font-mono">{r.thicknessMm} mm</td>
+                    <td className="py-3 px-3 text-center text-slate-400">{formatNumber(r.openingBalanceKg)}</td>
+                    <td className="py-3 px-3 text-center text-blue-400">{formatNumber(r.consignmentReceivedKg)}</td>
+                    <td className="py-3 px-3 text-center text-indigo-400">{formatNumber(r.financialReceivedKg)}</td>
+                    <td className="py-3 px-3 text-center text-amber-400 font-bold">{formatNumber(r.totalConsumptionKg)}</td>
+                    <td className="py-3 px-3 text-center font-black text-emerald-400">{formatNumber(r.closingBalanceKg)}</td>
+                    <td className="py-3 px-3 text-center font-sans">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-bold">
+                        {toPersianDigits(r.totalCoilsCount)} کلاف
+                      </span>
                     </td>
                   </tr>
                 ))}

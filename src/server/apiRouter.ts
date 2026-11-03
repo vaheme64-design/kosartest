@@ -81,6 +81,7 @@ import {
   rejectOperationTransfer,
   calculateMoReconciliation,
   getWipDashboardMetrics,
+  manufacturingOrdersStore,
   wipTransfersStore,
   productionLogsStore,
   clearProductionWipData,
@@ -112,10 +113,20 @@ import {
   getScrapByPartAndOperationReport,
   getMachineWorkloadCapacityReport,
   getProductionDelaysReport,
+  getProductionDelayAnalytics,
   getInventoryMovementsReport,
   getInventoryReconciliationReport,
   getManagementDashboardSummary,
+  getCoilInventoryReport,
+  getLotConsumptionReport,
+  getSupplierMatrixReport,
 } from './managementReportsEngine';
+import { executeGlobalSearch } from './searchEngine';
+import {
+  runFullMrp,
+  checkMoMaterialAvailability,
+  autoReserveMoMaterials,
+} from './mrpEngine';
 import { ReportFilterParams } from '../types/managementReports';
 import {
   getAllBoms,
@@ -4078,6 +4089,16 @@ apiRouter.get('/reports/production-delays', (req: Request, res: Response) => {
   }
 });
 
+apiRouter.get('/reports/production-delays/analytics', (req: Request, res: Response) => {
+  try {
+    const filters = extractReportFilters(req);
+    const analytics = getProductionDelayAnalytics(filters);
+    res.json({ success: true, data: analytics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در تحلیل شاخص‌های تأخیر تولید' });
+  }
+});
+
 // 19.12 Inventory Movements
 apiRouter.get('/reports/inventory-movements', (req: Request, res: Response) => {
   try {
@@ -4097,6 +4118,53 @@ apiRouter.get('/reports/inventory-reconciliation', (req: Request, res: Response)
     res.json({ success: true, ...report });
   } catch (error) {
     res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در گزارش انبارگردانی' });
+  }
+});
+
+// 19.14 Coil & Sheet Stock Inventory
+apiRouter.get('/reports/coil-inventory', (req: Request, res: Response) => {
+  try {
+    const filters = extractReportFilters(req);
+    const report = getCoilInventoryReport(filters);
+    res.json({ success: true, ...report });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در گزارش رول‌ها و کویل‌ها' });
+  }
+});
+
+// 19.15 Lot & Coil Consumption Ledger
+apiRouter.get('/reports/lot-consumption', (req: Request, res: Response) => {
+  try {
+    const filters = extractReportFilters(req);
+    const report = getLotConsumptionReport(filters);
+    res.json({ success: true, ...report });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در گزارش مصرف لوت و کویل' });
+  }
+});
+
+// 19.16 Supplier Matrix (Grade x Thickness)
+apiRouter.get('/reports/supplier-matrix', (req: Request, res: Response) => {
+  try {
+    const filters = extractReportFilters(req);
+    const report = getSupplierMatrixReport(filters);
+    res.json({ success: true, ...report });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در گزارش ماتریس مواد تأمین‌کننده' });
+  }
+});
+
+// =========================================================================
+// 19.17 UNIVERSAL GLOBAL SEARCH (Search across all modules & entities)
+// =========================================================================
+apiRouter.get('/search', (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || '');
+    const limit = Number(req.query.limit) || 6;
+    const result = executeGlobalSearch(q, limit);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در جستجوی سراسری' });
   }
 });
 
@@ -4143,6 +4211,109 @@ apiRouter.post('/ai/ping', async (req: Request, res: Response) => {
     return res.json({ success: false, message: `عدم برقراری ارتباط: ${err.message}` });
   }
 });
+
+// =========================================================================
+// 20. MATERIAL REQUIREMENTS PLANNING (MRP) & PREDICTIVE STOCK NETTING
+// =========================================================================
+
+// 20.1 Run full MRP calculation (Read-only explosion over open demand)
+apiRouter.get('/mrp/run', (req: Request, res: Response) => {
+  try {
+    const horizonDays = req.query.horizonDays ? Number(req.query.horizonDays) : undefined;
+    const demandGrowthPercent = req.query.growth ? Number(req.query.growth) : 0;
+    const includeWip = req.query.includeWip !== 'false';
+    const includeConsignment = req.query.includeConsignment !== 'false';
+    const partIds = req.query.partIds ? String(req.query.partIds).split(',') : undefined;
+
+    const result = runFullMrp({
+      partIds,
+      horizonDays,
+      demandGrowthPercent,
+      includeWip,
+      includeConsignment,
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در اجرای محاسبات MRP' });
+  }
+});
+
+apiRouter.post('/mrp/run', (req: Request, res: Response) => {
+  try {
+    const { horizonDays, demandGrowthPercent, includeWip, includeConsignment, partIds } = req.body || {};
+    const result = runFullMrp({
+      partIds,
+      horizonDays,
+      demandGrowthPercent,
+      includeWip,
+      includeConsignment,
+    });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در محاسبه MRP' });
+  }
+});
+
+// 20.2 What-If MRP Simulation
+apiRouter.post('/mrp/simulate', (req: Request, res: Response) => {
+  try {
+    const { demandGrowthPercent, horizonDays, includeWip, includeConsignment } = req.body || {};
+    const result = runFullMrp({
+      demandGrowthPercent: Number(demandGrowthPercent) || 0,
+      horizonDays: Number(horizonDays) || 30,
+      includeWip: includeWip ?? true,
+      includeConsignment: includeConsignment ?? true,
+    });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در شبیه‌سازی سناریوی تقاضا' });
+  }
+});
+
+// 20.3 List open Manufacturing Orders for Pre-Issue Check
+apiRouter.get('/mrp/mos', (req: Request, res: Response) => {
+  try {
+    const mos = manufacturingOrdersStore.map(m => ({
+      id: m.id,
+      moNumber: m.moNumber,
+      partId: m.partId,
+      partCode: m.partCode,
+      partName: m.partName,
+      targetQuantity: m.targetQuantity,
+      completedQuantity: m.completedQuantity,
+      status: m.status,
+      dueDate: m.dueDate,
+    }));
+    res.json({ success: true, count: mos.length, data: mos });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در دریافت لیست دستور کارها' });
+  }
+});
+
+// 20.4 Pre-Issue Check for a single MO
+apiRouter.get('/mrp/mos/:id/check', (req: Request, res: Response) => {
+  try {
+    const check = checkMoMaterialAvailability(req.params.id);
+    if (!check) {
+      return res.status(404).json({ success: false, error: 'دستور کار مورد نظر یافت نشد' });
+    }
+    res.json({ success: true, data: check });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در بررسی مواد دستور کار' });
+  }
+});
+
+// 20.5 Auto-Reserve materials for an MO from ATP
+apiRouter.post('/mrp/mos/:id/reserve', (req: Request, res: Response) => {
+  try {
+    const result = autoReserveMoMaterials(req.params.id);
+    res.json({ success: true, message: 'رزرو خودکار مواد با موفقیت انجام شد.', data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در رزرو خودکار مواد' });
+  }
+});
+
 
 
 

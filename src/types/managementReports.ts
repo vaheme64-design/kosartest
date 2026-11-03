@@ -196,7 +196,11 @@ export interface MachineWorkloadCapacityItem {
 }
 
 // 11. Production Delays
+export type ProductionDelaySection = 'CUSTOMER_ORDER' | 'OPEN_MO' | 'COMPLETED_LATE_MO' | 'LATE_OPERATION';
+
 export interface ProductionDelaysItem {
+  section: ProductionDelaySection;
+  sectionLabelFa: string;
   documentType: 'CUSTOMER_ORDER' | 'MANUFACTURING_ORDER';
   referenceNumber: string;
   customerOrPlan: string;
@@ -209,6 +213,45 @@ export interface ProductionDelaysItem {
   primaryDelayCause: 'RAW_MATERIAL_SHORTAGE' | 'MACHINE_BREAKDOWN' | 'WIP_BOTTLENECK' | 'CAPACITY_OVERLOAD' | 'QUALITY_HOLD';
   delayDescription: string;
   isEstimate: boolean;
+  machineCode?: string;
+  machineName?: string;
+  operationName?: string;
+  urgencyLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  delayPenaltyRiskRials?: number;
+}
+
+export interface DelayCauseDistribution {
+  causeKey: 'RAW_MATERIAL_SHORTAGE' | 'MACHINE_BREAKDOWN' | 'WIP_BOTTLENECK' | 'CAPACITY_OVERLOAD' | 'QUALITY_HOLD';
+  causeLabelFa: string;
+  itemsCount: number;
+  percentage: number;
+  totalDelayedPieces: number;
+  recommendedAction: string;
+  badgeColor: string;
+}
+
+export interface ProductionDelayAnalyticsSummary {
+  totalDelayedItemsCount: number;
+  averageDelayDays: number;
+  maxDelayDays: number;
+  onTimeDeliveryRatePercent: number; // OTIF
+  customerOrdersDelayedCount: number;
+  openMosDelayedCount: number;
+  completedLateMosCount: number;
+  lateOperationsCount: number;
+  criticalUrgencyCount: number;
+  estimatedPenaltyRiskRials: number;
+  causesBreakdown: DelayCauseDistribution[];
+  topDelayedParts: {
+    partCode: string;
+    partName: string;
+    carModel?: string;
+    delayedCount: number;
+    maxDelayDays: number;
+    openDelayedQty: number;
+    primaryCause: string;
+  }[];
+  notes: string[];
 }
 
 // 12. Inventory Movements (Analytical Ledger)
@@ -262,3 +305,67 @@ export interface ManagementDashboardSummary {
   stagnantWipItemsCount: number;
   lastUpdatedTimestamp: string;
 }
+
+// 14. Coil Inventory (موجودی رول‌ها و کویل‌های ماده اولیه)
+export interface CoilInventoryReportItem {
+  coilId: string;
+  coilNumber: string;
+  materialCode: string;
+  materialGrade: string;
+  thicknessMm: number;
+  widthMm: number;
+  receivedWeightKg: number;
+  consumedWeightKg: number;
+  remainingWeightKg: number;
+  warehouseLocation: string;
+  ownership: 'SAPCO_CONSIGNMENT' | 'FACTORY_OWNED';
+  contractNumber: string;
+  heatNumber: string;
+  packingNumber: string;
+  status: 'FULL' | 'PARTIAL' | 'CONSUMED' | 'BLOCKED';
+  receiptDate: string;
+}
+
+// 15. Lot Consumption (ردیابی مصرف رول/لوت پای پرس‌ها)
+export interface LotConsumptionReportItem {
+  issueDocumentNumber: string;
+  issueDate: string;
+  coilNumber: string;
+  heatNumber: string;
+  materialGrade: string;
+  thicknessMm: number;
+  consumedKg: number;
+  destinationMachine: string;
+  targetMoNumber: string;
+  targetPartCode: string;
+  targetPartName: string;
+  piecesProduced: number;
+  scrapKg: number;
+  scrapPercent: number;
+  operatorName: string;
+}
+
+// 16. Supplier Matrix (ماتریس حساب مواد تأمین‌کننده گرید × ضخامت)
+export interface SupplierMatrixReportItem {
+  grade: string;
+  thicknessMm: number;
+  openingBalanceKg: number;
+  financialReceivedKg: number;
+  consignmentReceivedKg: number;
+  totalConsumptionKg: number;
+  closingBalanceKg: number;
+  totalCoilsCount: number;
+  status: 'BALANCED' | 'DEFICIT' | 'SURPLUS';
+}
+
+export type ValueKind = 'IDENTIFIER' | 'ACTUAL' | 'PLANNED' | 'STANDARD' | 'ESTIMATED' | 'INFO';
+
+export const VALUE_KIND_LABELS: Record<ValueKind, { label: string; color: string }> = {
+  IDENTIFIER: { label: 'شناسه', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  ACTUAL: { label: 'واقعی', color: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+  PLANNED: { label: 'برنامه‌ای', color: 'bg-blue-50 text-blue-700 border-blue-300' },
+  STANDARD: { label: 'استاندارد BOM', color: 'bg-purple-50 text-purple-700 border-purple-300' },
+  ESTIMATED: { label: 'تخمینی', color: 'bg-amber-50 text-amber-700 border-amber-300' },
+  INFO: { label: 'اطلاعاتی', color: 'bg-slate-50 text-slate-600 border-slate-200' },
+};
+

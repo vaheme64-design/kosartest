@@ -17,6 +17,7 @@ import {
   Clock,
   Building2,
   FileText,
+  Calculator,
 } from 'lucide-react';
 import {
   CustomerOrder,
@@ -28,6 +29,7 @@ import { Part, Machine, DieMold } from '../../types/inventory';
 import { PlanningDashboardView } from './PlanningDashboardView';
 import { MachineRecommendationView } from './MachineRecommendationView';
 import { NewCustomerOrderModal } from './NewCustomerOrderModal';
+import { MrpModuleView } from './MrpModuleView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 
@@ -45,7 +47,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   onGlobalRefresh,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'recommendations' | 'orders' | 'approved_plans'
+    'dashboard' | 'mrp' | 'recommendations' | 'orders' | 'approved_plans'
   >('dashboard');
 
   const [loading, setLoading] = useState(false);
@@ -258,7 +260,25 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             }`}
           >
             <TrendingUp className={`w-3.5 h-3.5 ${activeSubTab === 'dashboard' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>موازنه تقاضا، ورق و ظرفیت (MRP)</span>
+            <span>داشبورد موازنه تقاضا و ظرفیت</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('mrp')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'mrp'
+                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900'
+            }`}
+          >
+            <Calculator className={`w-3.5 h-3.5 ${activeSubTab === 'mrp' ? 'text-white' : 'text-indigo-600'}`} />
+            <span>پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+              activeSubTab === 'mrp' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-800'
+            }`}>
+              ATP
+            </span>
           </button>
 
           <button
@@ -348,6 +368,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
           onNavigateToRecommendations={navigateToRecommendationsForPart}
           loading={loading}
         />
+      )}
+
+      {/* 1.1. MRP & Material Requirements Forecast Sub-Tab */}
+      {activeSubTab === 'mrp' && (
+        <MrpModuleView onRefreshGlobal={onGlobalRefresh} />
       )}
 
       {/* 2. Machine Recommendations Sub-Tab */}

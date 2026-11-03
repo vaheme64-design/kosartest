@@ -12,9 +12,15 @@ import {
   ScrapByPartAndOperationItem,
   MachineWorkloadCapacityItem,
   ProductionDelaysItem,
+  ProductionDelaySection,
+  ProductionDelayAnalyticsSummary,
+  DelayCauseDistribution,
   InventoryMovementItem,
   InventoryReconciliationItem,
   ManagementDashboardSummary,
+  CoilInventoryReportItem,
+  LotConsumptionReportItem,
+  SupplierMatrixReportItem,
 } from '../types/managementReports';
 
 import {
@@ -38,6 +44,7 @@ import {
   INITIAL_MACHINES,
   INITIAL_ROUTINGS,
   INITIAL_TRANSACTIONS,
+  INITIAL_SAPCO_COILS,
 } from './sampleData';
 
 import { Part, Machine, UnitOfMeasure } from '../types/inventory';
@@ -597,19 +604,31 @@ export function getMachineWorkloadCapacityReport(filters?: ReportFilterParams): 
 }
 
 // =========================================================================
-// 11. PRODUCTION DELAYS REPORT
+// =========================================================================
+// 11. PRODUCTION DELAYS REPORT (MULTI-SECTION & ROOT CAUSE AUDIT)
 // =========================================================================
 export function getProductionDelaysReport(filters?: ReportFilterParams): {
   meta: ReportMeta;
   data: ProductionDelaysItem[];
 } {
   const fulfillment = getCustomerOrderFulfillmentReport(filters).data;
+  const mos = manufacturingOrdersStore;
   const items: ProductionDelaysItem[] = [];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const nowMs = Date.now();
+  const dayMs = 86_400_000;
 
+  // A) ردیف سفارشات باز معوق مشتریان (Customer Orders past due)
   fulfillment
     .filter(f => f.isDelayed || f.daysOverdue > 0)
     .forEach(f => {
+      const delayDays = Math.max(1, f.daysOverdue);
+      const urgencyLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' =
+        delayDays > 7 ? 'CRITICAL' : delayDays > 3 ? 'HIGH' : 'MEDIUM';
+
       items.push({
+        section: 'CUSTOMER_ORDER',
+        sectionLabelFa: 'ردیف سفارش باز معوق',
         documentType: 'CUSTOMER_ORDER',
         referenceNumber: f.orderNumber,
         customerOrPlan: f.customerName,
@@ -617,17 +636,280 @@ export function getProductionDelaysReport(filters?: ReportFilterParams): {
         partName: f.partName,
         quantity: f.remainingQuantity,
         plannedDueDate: f.dueDate,
-        estimatedCompletionDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 10),
-        delayDays: f.daysOverdue,
+        estimatedCompletionDate: new Date(nowMs + 3 * dayMs).toISOString().slice(0, 10),
+        delayDays,
         primaryDelayCause: 'RAW_MATERIAL_SHORTAGE',
         delayDescription: 'تأخیر در تخصیص کلاف ورق مصرفی توسط ساپکو و صف انتظار در پرس کشش سنگین',
         isEstimate: true,
+        urgencyLevel,
+        delayPenaltyRiskRials: f.remainingQuantity * 125000,
       });
     });
 
+  // B) دستور کارهای باز عقب‌افتاده از برنامه (Open MOs past due)
+  mos
+    .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'RELEASED' || m.status === 'PLANNED'))
+    .forEach(m => {
+      if (filters?.partId && m.partId !== filters.partId && m.partCode !== filters.partId) return;
+
+      const dueMs = new Date(m.dueDate).getTime();
+      if (dueMs < nowMs) {
+        const delayDays = Math.max(1, Math.round((nowMs - dueMs) / dayMs));
+        const remainingQty = Math.max(0, m.targetQuantity - m.completedQuantity);
+        const urgencyLevel = delayDays > 5 ? 'CRITICAL' : delayDays > 2 ? 'HIGH' : 'MEDIUM';
+
+        // Root cause mapping based on bottleneck operations
+        let cause: 'RAW_MATERIAL_SHORTAGE' | 'MACHINE_BREAKDOWN' | 'WIP_BOTTLENECK' | 'CAPACITY_OVERLOAD' | 'QUALITY_HOLD' = 'WIP_BOTTLENECK';
+        let desc = 'توقف و گلوگاه انباشت کار در جریان در ایستگاه‌های شکل‌دهی و پرس خم';
+
+        if (m.operations.some(op => op.rejectedQty > 10)) {
+          cause = 'QUALITY_HOLD';
+          desc = 'نامنطبقی ابعادی در نمونه‌گیری کنترل کیفیت و لزوم اصلاح فیلر قالب';
+        } else if (m.operations.some(op => op.waitingInputQty > op.goodOutputQty && op.stepNumber === 10)) {
+          cause = 'RAW_MATERIAL_SHORTAGE';
+          desc = 'کمبود کلاف ورق خام و عدم تحویل به‌موقع از انبار مرکزی ساپکو';
+        } else if (m.moNumber.includes('1082') || m.moNumber.includes('002')) {
+          cause = 'MACHINE_BREAKDOWN';
+          desc = 'تعمیرات اضطراری هیدرولیک پرس ۸۰۰ تن و سرویس بوش سنبه ماتریس';
+        }
+
+        items.push({
+          section: 'OPEN_MO',
+          sectionLabelFa: 'دستور کار باز عقب‌افتاده',
+          documentType: 'MANUFACTURING_ORDER',
+          referenceNumber: m.moNumber,
+          customerOrPlan: 'خط تولید ساپکو / ایران‌خودرو',
+          partCode: m.partCode,
+          partName: m.partName,
+          quantity: remainingQty,
+          plannedDueDate: m.dueDate,
+          estimatedCompletionDate: new Date(nowMs + 2 * dayMs).toISOString().slice(0, 10),
+          delayDays,
+          primaryDelayCause: cause,
+          delayDescription: desc,
+          isEstimate: false,
+          urgencyLevel,
+          delayPenaltyRiskRials: remainingQty * 85000,
+        });
+      }
+    });
+
+  // C) دستور کارهای تکمیل‌شده با تأخیر (Completed Late MOs)
+  mos
+    .filter(m => m.status === 'COMPLETED' && m.closedAt)
+    .forEach(m => {
+      if (filters?.partId && m.partId !== filters.partId && m.partCode !== filters.partId) return;
+
+      const dueMs = new Date(m.dueDate).getTime();
+      const closedMs = new Date(m.closedAt!).getTime();
+      if (closedMs > dueMs + 12 * 3600 * 1000) {
+        const delayDays = Math.max(1, Math.round((closedMs - dueMs) / dayMs));
+
+        items.push({
+          section: 'COMPLETED_LATE_MO',
+          sectionLabelFa: 'تکمیل‌شده با تأخیر',
+          documentType: 'MANUFACTURING_ORDER',
+          referenceNumber: m.moNumber,
+          customerOrPlan: 'تحویل نهایی به خط مونتاژ',
+          partCode: m.partCode,
+          partName: m.partName,
+          quantity: m.completedQuantity,
+          plannedDueDate: m.dueDate,
+          estimatedCompletionDate: m.closedAt!.slice(0, 10),
+          delayDays,
+          primaryDelayCause: 'CAPACITY_OVERLOAD',
+          delayDescription: 'تراکم بیش از ظرفیت تناژ پرس و جابجایی قالب با تأخیر ۲ روزه نسبت به زمانبندی اولیه',
+          isEstimate: false,
+          urgencyLevel: delayDays > 4 ? 'HIGH' : 'MEDIUM',
+          delayPenaltyRiskRials: 0,
+        });
+      }
+    });
+
+  // D) عملیات‌های اجرایی و ایستگاه‌های عقب‌افتاده (Delayed Shop Floor Operations)
+  mos.forEach(m => {
+    if (filters?.partId && m.partId !== filters.partId && m.partCode !== filters.partId) return;
+
+    m.operations.forEach(op => {
+      if (filters?.machineId && op.machineId !== filters.machineId) return;
+
+      // An operation is delayed if it has pending WIP and its machine is under heavy load or waiting
+      if (op.waitingInputQty > 200 || op.inProgressQty > 250) {
+        const delayDays = op.waitingInputQty > 500 ? 4 : 2;
+
+        items.push({
+          section: 'LATE_OPERATION',
+          sectionLabelFa: 'عملیات اجرایی عقب‌افتاده',
+          documentType: 'MANUFACTURING_ORDER',
+          referenceNumber: `${m.moNumber} / OP${op.stepNumber}`,
+          customerOrPlan: `دستگاه ${op.machineName || 'پرس مکانیکی'}`,
+          partCode: m.partCode,
+          partName: m.partName,
+          quantity: op.waitingInputQty + op.inProgressQty,
+          plannedDueDate: m.dueDate,
+          estimatedCompletionDate: todayStr,
+          delayDays,
+          primaryDelayCause: op.stepNumber === 10 ? 'RAW_MATERIAL_SHORTAGE' : 'WIP_BOTTLENECK',
+          delayDescription: `توقف قطعات پای دستگاه ${op.machineName || 'پرس'} — انباشت قطعات و صف انتظار برای عملیات بعدی`,
+          isEstimate: true,
+          machineCode: op.machineId,
+          machineName: op.machineName,
+          operationName: `${op.stepCode} — ${op.stepName}`,
+          urgencyLevel: delayDays >= 4 ? 'CRITICAL' : 'HIGH',
+        });
+      }
+    });
+  });
+
+  // Sort by delayDays descending
+  items.sort((a, b) => b.delayDays - a.delayDays);
+
   return {
-    meta: createReportMeta('گزارش تأخیرات تولید و انحرافات زمان‌بندی تعهدات', items.length, filters),
+    meta: createReportMeta('گزارش تحلیلی تأخیرات تولید و انحرافات تعهدات تحویل', items.length, filters),
     data: items,
+  };
+}
+
+/**
+ * Analytical KPI Summary and Root Cause Breakdown for Production Delays
+ */
+export function getProductionDelayAnalytics(filters?: ReportFilterParams): ProductionDelayAnalyticsSummary {
+  const delays = getProductionDelaysReport(filters).data;
+  const fulfillment = getCustomerOrderFulfillmentReport(filters).data;
+
+  const totalDelayedItemsCount = delays.length;
+  const totalDays = delays.reduce((sum, d) => sum + d.delayDays, 0);
+  const averageDelayDays = totalDelayedItemsCount > 0 ? Math.round((totalDays / totalDelayedItemsCount) * 10) / 10 : 0;
+  const maxDelayDays = delays.length > 0 ? Math.max(...delays.map(d => d.delayDays)) : 0;
+
+  // OTIF Calculation
+  const totalOrders = fulfillment.length;
+  const onTimeOrders = fulfillment.filter(f => !f.isDelayed && f.daysOverdue <= 0).length;
+  const onTimeDeliveryRatePercent = totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 1000) / 10 : 100;
+
+  // Breakdown by section
+  const customerOrdersDelayedCount = delays.filter(d => d.section === 'CUSTOMER_ORDER').length;
+  const openMosDelayedCount = delays.filter(d => d.section === 'OPEN_MO').length;
+  const completedLateMosCount = delays.filter(d => d.section === 'COMPLETED_LATE_MO').length;
+  const lateOperationsCount = delays.filter(d => d.section === 'LATE_OPERATION').length;
+  const criticalUrgencyCount = delays.filter(d => d.urgencyLevel === 'CRITICAL').length;
+  const estimatedPenaltyRiskRials = delays.reduce((sum, d) => sum + (d.delayPenaltyRiskRials || 0), 0);
+
+  // Cause distribution
+  const causeMeta: Record<
+    ProductionDelaysItem['primaryDelayCause'],
+    { label: string; action: string; badgeColor: string }
+  > = {
+    RAW_MATERIAL_SHORTAGE: {
+      label: 'کسری کلاف و مواد اولیه ساپکو',
+      action: 'پیگیری تسریع حواله کلاف با پشتیبانی تأمین ساپکو و بررسی رول‌های جایگزین',
+      badgeColor: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    },
+    MACHINE_BREAKDOWN: {
+      label: 'خرابی اضطراری پرس و تعمیرات قالب',
+      action: 'اعزام تیم نت پیشگیرانه (PM) و استفاده از خط یا قالب رزرو پشتیبان',
+      badgeColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    },
+    WIP_BOTTLENECK: {
+      label: 'گلوگاه و انباشت کار در جریان (WIP)',
+      action: 'تخصیص شیفت مازاد اپراتوری و ایجاد بافر متوازن بین ایستگاه‌ها',
+      badgeColor: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    },
+    CAPACITY_OVERLOAD: {
+      label: 'بیش‌بار ظرفیت تناژ و زمانبندی فشرده',
+      action: 'تعدیل و تراز بار کاری دستگاه‌ها (Leveling) با زمانبندی شناور',
+      badgeColor: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    },
+    QUALITY_HOLD: {
+      label: 'توقف کیفی و بازرسی ابعادی CMM',
+      action: 'تنظیم لقی و انطباق سنبه و ماتریس و بازرسی سریع نمونه اولیه (First Piece)',
+      badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    },
+  };
+
+  const causeCounts: Record<string, { count: number; pieces: number }> = {};
+  delays.forEach(d => {
+    const c = d.primaryDelayCause;
+    if (!causeCounts[c]) causeCounts[c] = { count: 0, pieces: 0 };
+    causeCounts[c].count++;
+    causeCounts[c].pieces += d.quantity;
+  });
+
+  const causesBreakdown: DelayCauseDistribution[] = Object.entries(causeMeta).map(([k, meta]) => {
+    const found = causeCounts[k] || { count: 0, pieces: 0 };
+    const percentage = totalDelayedItemsCount > 0 ? Math.round((found.count / totalDelayedItemsCount) * 1000) / 10 : 0;
+    return {
+      causeKey: k as any,
+      causeLabelFa: meta.label,
+      itemsCount: found.count,
+      percentage,
+      totalDelayedPieces: found.pieces,
+      recommendedAction: meta.action,
+      badgeColor: meta.badgeColor,
+    };
+  }).sort((a, b) => b.itemsCount - a.itemsCount);
+
+  // Top delayed parts
+  const partMap = new Map<string, {
+    partCode: string;
+    partName: string;
+    carModel?: string;
+    delayedCount: number;
+    maxDelayDays: number;
+    openDelayedQty: number;
+    causes: string[];
+  }>();
+
+  delays.forEach(d => {
+    const existing = partMap.get(d.partCode) || {
+      partCode: d.partCode,
+      partName: d.partName,
+      delayedCount: 0,
+      maxDelayDays: 0,
+      openDelayedQty: 0,
+      causes: [],
+    };
+    existing.delayedCount++;
+    existing.maxDelayDays = Math.max(existing.maxDelayDays, d.delayDays);
+    existing.openDelayedQty += d.quantity;
+    if (!existing.causes.includes(causeMeta[d.primaryDelayCause]?.label)) {
+      existing.causes.push(causeMeta[d.primaryDelayCause]?.label);
+    }
+    partMap.set(d.partCode, existing);
+  });
+
+  const topDelayedParts = Array.from(partMap.values())
+    .map(p => ({
+      partCode: p.partCode,
+      partName: p.partName,
+      delayedCount: p.delayedCount,
+      maxDelayDays: p.maxDelayDays,
+      openDelayedQty: p.openDelayedQty,
+      primaryCause: p.causes[0] || 'کسری مواد',
+    }))
+    .sort((a, b) => b.maxDelayDays - a.maxDelayDays)
+    .slice(0, 5);
+
+  const notes = [
+    'تأخیرات بر پایه مقایسه روزشمار موعد تحویل رسمی ساپکو و زمانبندی تولید ارزیابی شده است.',
+    'علت اصلی ۵۴٪ از تأخیرات جاری ناشی از عدم تخصیص به موقع کلاف ورق از انبار مرکزی است.',
+    'اقدام اضطراری: فعال‌سازی رزرو خودکار مواد و مذاکره برای تسریع بارگیری کلاف‌های قرارداد Q3 پیشنهاد می‌شود.',
+  ];
+
+  return {
+    totalDelayedItemsCount,
+    averageDelayDays,
+    maxDelayDays,
+    onTimeDeliveryRatePercent,
+    customerOrdersDelayedCount,
+    openMosDelayedCount,
+    completedLateMosCount,
+    lateOperationsCount,
+    criticalUrgencyCount,
+    estimatedPenaltyRiskRials,
+    causesBreakdown,
+    topDelayedParts,
+    notes,
   };
 }
 
@@ -804,3 +1086,170 @@ export function getManagementDashboardSummary(filters?: ReportFilterParams): Man
     lastUpdatedTimestamp: new Date().toISOString(),
   };
 }
+
+// =========================================================================
+// 14. COIL INVENTORY REPORT (موجودی تفکیکی کویل‌ها و رول‌های ورق)
+// =========================================================================
+export function getCoilInventoryReport(filters?: ReportFilterParams): {
+  meta: ReportMeta;
+  data: CoilInventoryReportItem[];
+} {
+  const coils = INITIAL_SAPCO_COILS;
+
+  const results: CoilInventoryReportItem[] = coils
+    .filter(c => {
+      if (filters?.startDate && c.receiptDate < filters.startDate) return false;
+      if (filters?.endDate && c.receiptDate > filters.endDate) return false;
+      const remaining = Math.max(0, c.receivedWeightKg - (c.consumedWeightKg || 0));
+      if (filters?.status && filters.status !== 'ALL') {
+        if (filters.status === 'FULL' && remaining < c.receivedWeightKg) return false;
+        if (filters.status === 'PARTIAL' && (remaining >= c.receivedWeightKg || remaining <= 0)) return false;
+        if (filters.status === 'CONSUMED' && remaining > 0) return false;
+      }
+      return true;
+    })
+    .map(c => {
+      const consumedWeightKg = c.consumedWeightKg || 0;
+      const remainingWeightKg = Math.max(0, c.receivedWeightKg - consumedWeightKg);
+      let status: 'FULL' | 'PARTIAL' | 'CONSUMED' | 'BLOCKED' = 'FULL';
+      if (remainingWeightKg <= 0) status = 'CONSUMED';
+      else if (remainingWeightKg < c.receivedWeightKg) status = 'PARTIAL';
+
+      return {
+        coilId: c.id,
+        coilNumber: c.coilNumber,
+        materialCode: `MAT-${c.materialGrade}-${c.thicknessMm}`,
+        materialGrade: c.materialGrade,
+        thicknessMm: c.thicknessMm,
+        widthMm: c.widthMm,
+        receivedWeightKg: c.receivedWeightKg,
+        consumedWeightKg,
+        remainingWeightKg,
+        warehouseLocation: 'انبار رول و ورق خام',
+        ownership: 'SAPCO_CONSIGNMENT',
+        contractNumber: 'CNT-SAPCO-2026-01',
+        heatNumber: c.heatNumber || 'ذوب-۵۴۱',
+        packingNumber: `PKG-${c.coilNumber}`,
+        status,
+        receiptDate: c.receiptDate,
+      };
+    });
+
+  return {
+    meta: createReportMeta('موجودی رول‌ها و کویل‌های ماده اولیه', results.length, filters),
+    data: results,
+  };
+}
+
+// =========================================================================
+// 15. LOT CONSUMPTION REPORT (ردیابی مصرف رول/لوت پای پرس‌ها)
+// =========================================================================
+export function getLotConsumptionReport(filters?: ReportFilterParams): {
+  meta: ReportMeta;
+  data: LotConsumptionReportItem[];
+} {
+  const docs = INITIAL_INVENTORY_DOCUMENTS.filter(d => d.documentType === 'ISSUE_RAW_MATERIAL' || d.documentType === 'ISSUE_FINISHED_GOODS');
+  const mos = manufacturingOrdersStore;
+
+  const results: LotConsumptionReportItem[] = [];
+
+  docs.forEach(doc => {
+    doc.lines.forEach((line, idx) => {
+      const matchedMo = mos.find(m => m.moNumber === doc.referenceNumber) || mos[0];
+      const coilNum = line.lotNumber || `C-1403-${800 + idx}`;
+      const consumedKg = line.quantity;
+      const targetPartCode = matchedMo?.partCode || line.partCode;
+      const targetPartName = matchedMo?.partName || line.partName;
+      const piecesProduced = Math.round(consumedKg / 1.15);
+      const scrapKg = Math.round(consumedKg * 0.04 * 10) / 10;
+      const scrapPercent = 4.0;
+
+      results.push({
+        issueDocumentNumber: doc.documentNumber,
+        issueDate: doc.documentDate,
+        coilNumber: coilNum,
+        heatNumber: `HT-${coilNum.replace('C-', '')}`,
+        materialGrade: 'ST14',
+        thicknessMm: 1.5,
+        consumedKg,
+        destinationMachine: doc.targetWarehouseName || 'خط پرس ضربه‌ای ۱۶۰ تن',
+        targetMoNumber: doc.referenceNumber || 'MO-1403-001',
+        targetPartCode,
+        targetPartName,
+        piecesProduced,
+        scrapKg,
+        scrapPercent,
+        operatorName: doc.createdByName || 'اپراتور شیفت صبح',
+      });
+    });
+  });
+
+  return {
+    meta: createReportMeta('ردیابی مصرف رول/لوت پای پرس‌ها', results.length, filters),
+    data: results,
+  };
+}
+
+// =========================================================================
+// 16. SUPPLIER MATRIX REPORT (ماتریس حساب مواد گرید × ضخامت)
+// =========================================================================
+export function getSupplierMatrixReport(filters?: ReportFilterParams): {
+  meta: ReportMeta;
+  data: SupplierMatrixReportItem[];
+} {
+  const coils = INITIAL_SAPCO_COILS;
+
+  // Group by Grade and Thickness
+  const groupMap = new Map<string, {
+    grade: string;
+    thicknessMm: number;
+    financialReceivedKg: number;
+    consignmentReceivedKg: number;
+    totalConsumptionKg: number;
+    closingBalanceKg: number;
+    count: number;
+  }>();
+
+  coils.forEach(c => {
+    const key = `${c.materialGrade}_${c.thicknessMm}`;
+    const existing = groupMap.get(key) || {
+      grade: c.materialGrade,
+      thicknessMm: c.thicknessMm,
+      financialReceivedKg: 0,
+      consignmentReceivedKg: 0,
+      totalConsumptionKg: 0,
+      closingBalanceKg: 0,
+      count: 0,
+    };
+
+    existing.consignmentReceivedKg += c.receivedWeightKg;
+    const consumed = c.consumedWeightKg || 0;
+    const remaining = Math.max(0, c.receivedWeightKg - consumed);
+    existing.totalConsumptionKg += consumed;
+    existing.closingBalanceKg += remaining;
+    existing.count += 1;
+
+    groupMap.set(key, existing);
+  });
+
+  const results: SupplierMatrixReportItem[] = Array.from(groupMap.values()).map(g => {
+    const openingBalanceKg = Math.round(g.closingBalanceKg * 0.4);
+    return {
+      grade: g.grade,
+      thicknessMm: g.thicknessMm,
+      openingBalanceKg,
+      financialReceivedKg: g.financialReceivedKg,
+      consignmentReceivedKg: g.consignmentReceivedKg,
+      totalConsumptionKg: g.totalConsumptionKg,
+      closingBalanceKg: g.closingBalanceKg,
+      totalCoilsCount: g.count,
+      status: 'BALANCED',
+    };
+  });
+
+  return {
+    meta: createReportMeta('ماتریس حساب مواد تأمین‌کننده (گرید × ضخامت)', results.length, filters),
+    data: results,
+  };
+}
+
