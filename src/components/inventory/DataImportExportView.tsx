@@ -147,6 +147,21 @@ export const DataImportExportView: React.FC<DataImportExportViewProps> = ({ curr
     }
   };
 
+  const safeParseResponse = async (res: Response): Promise<any> => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+    const text = await res.text();
+    if (res.status === 413) {
+      throw new Error('حجم فایل انتخاب‌شده بیش از حد مجاز سرور است (خطای ۴۱۳). لطفاً فایل را در بخش‌های کوچکتری وارد نمایید.');
+    }
+    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+      throw new Error(`خطای پاسخ سرور (${res.status}). لطفاً دوباره تلاش نمایید.`);
+    }
+    throw new Error(text || `خطای سرور (${res.status})`);
+  };
+
   const handleValidate = async () => {
     setIsValidating(true);
     setValidationResult(null);
@@ -160,7 +175,7 @@ export const DataImportExportView: React.FC<DataImportExportViewProps> = ({ curr
         }),
       });
 
-      const data = await res.json();
+      const data = await safeParseResponse(res);
       if (!res.ok || !data.success) {
         setNotification({ type: 'error', message: data.error || 'خطا در بررسی اطلاعات' });
       } else {
@@ -199,7 +214,7 @@ export const DataImportExportView: React.FC<DataImportExportViewProps> = ({ curr
         body: JSON.stringify(validationResult.missingMasterData),
       });
 
-      const data = await res.json();
+      const data = await safeParseResponse(res);
       if (!res.ok || !data.success) {
         setNotification({ type: 'error', message: data.error || 'خطا در ثبت اطلاعات پایه' });
       } else {
@@ -233,7 +248,7 @@ export const DataImportExportView: React.FC<DataImportExportViewProps> = ({ curr
         }),
       });
 
-      const data = await res.json();
+      const data = await safeParseResponse(res);
       if (!res.ok || !data.success) {
         setNotification({ type: 'error', message: data.error || 'خطا در ثبت اطلاعات در پایگاه داده' });
       } else {

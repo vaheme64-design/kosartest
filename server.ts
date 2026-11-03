@@ -26,7 +26,9 @@ const HOST = process.env.HOST || hostFromArgs || '0.0.0.0';
 async function startServer() {
   const app = express();
 
-  app.use(express.json());
+  // Support large Excel/CSV file imports (up to 50MB payloads)
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Cloud Run / Kubernetes Health Check Endpoint
   app.get('/healthz', (_req, res) => {
@@ -35,6 +37,30 @@ async function startServer() {
 
   // Mount backend API router
   app.use('/api', apiRouter);
+
+  // Global JSON error handler for API routes to always return structured JSON instead of HTML
+  app.use('/api', (err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+      return res.status(413).json({
+        success: false,
+        error: 'حجم داده‌های فایل ارسالی بیش از حد مجاز سرور است (خطای ۴۱۳). لطفاً فایل را در بخش‌های کوچکتری وارد نمایید.',
+      });
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({
+        success: false,
+        error: 'ساختار داده‌های ارسالی نامعتبر است (خطای اعتبارسنجی JSON).',
+      });
+    }
+    console.error('API Error:', err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'خطای غیرمنتظره در سرور رخ داد.',
+    });
+  });
 
   // In development, mount Vite dev server middlewares
   if (process.env.NODE_ENV !== 'production') {

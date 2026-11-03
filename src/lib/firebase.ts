@@ -7,7 +7,7 @@ import {
   signOut,
   Auth,
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Clean up any stale persisted auth tokens in IndexedDB/localStorage that may fail if Token Service API is disabled
@@ -30,7 +30,16 @@ if (typeof window !== 'undefined') {
 setLogLevel('silent');
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+let firestoreInstance: any;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  }, firebaseConfig.firestoreDatabaseId);
+} catch {
+  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+export const db = firestoreInstance;
 
 let authInstance: Auth;
 try {
