@@ -20,6 +20,9 @@ import {
   ShieldCheck,
   Search,
   Sparkles,
+  Tag,
+  HelpCircle,
+  Filter,
 } from 'lucide-react';
 import {
   Routing,
@@ -31,6 +34,8 @@ import {
   PROCESS_DEFINITIONS,
 } from '../types/inventory';
 import { toPersianDigits, formatNumber } from '../utils/formatters';
+import { MasterDataDifferenceGuideModal } from './common/MasterDataDifferenceGuideModal';
+import { TraceabilityTagModal } from './wip/TraceabilityTagModal';
 
 interface RoutingsViewProps {
   routings: Routing[];
@@ -54,10 +59,16 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
   const [selectedRoutingId, setSelectedRoutingId] = useState<string>(routings[0]?.id || '');
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
 
+  // Search & Filtering State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCarModel, setSelectedCarModel] = useState<string>('ALL');
+
   // Modals
   const [isNewRoutingModalOpen, setIsNewRoutingModalOpen] = useState(false);
   const [isStepModalOpen, setIsStepModalOpen] = useState(false);
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
 
   // New Routing State
   const [newRoutingPartId, setNewRoutingPartId] = useState('');
@@ -82,9 +93,33 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Filtered Routings by Search Query & Car Model
+  const filteredRoutings = useMemo(() => {
+    return routings.filter(r => {
+      const part = parts.find(p => p.id === r.partId || p.code === r.partCode);
+      const matchesSearch =
+        !searchQuery.trim() ||
+        r.partCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.partName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (part?.carModel && part.carModel.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        r.operations.some(op => op.stepName.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesCar =
+        selectedCarModel === 'ALL' ||
+        (part?.carModel && part.carModel.includes(selectedCarModel)) ||
+        r.partName.includes(selectedCarModel);
+
+      return matchesSearch && matchesCar;
+    });
+  }, [routings, parts, searchQuery, selectedCarModel]);
+
   const activeRouting = useMemo(() => {
-    return routings.find(r => r.id === selectedRoutingId) || routings[0] || null;
-  }, [routings, selectedRoutingId]);
+    if (selectedRoutingId) {
+      const found = routings.find(r => r.id === selectedRoutingId);
+      if (found) return found;
+    }
+    return filteredRoutings[0] || routings[0] || null;
+  }, [routings, selectedRoutingId, filteredRoutings]);
 
   const toggleStep = (stepNumber: number) => {
     setExpandedSteps(prev => ({ ...prev, [stepNumber]: !prev[stepNumber] }));
@@ -239,45 +274,132 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
-            <GitFork className="w-5 h-5 text-indigo-400" />
-            مرکز مهندسی تولید و ترتیب عملیات قطعات خودرو (BOM & Routing)
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            تعریف گام‌به‌گام فرایندهای تولید هر محصول (از ورق خام، بلنکینگ، کشش، خم، پانچ تا جوشکاری و رنگ) و اتصال قالب‌ها و پرس‌ها
-          </p>
+      <div className="bg-slate-850 p-5 sm:p-6 rounded-3xl border border-slate-700/60 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
+              <GitFork className="w-5 h-5 text-indigo-400" />
+              مرکز مهندسی تولید و ترتیب عملیات قطعات خودرو (BOM & Routing)
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              تعریف گام‌به‌گام فرایندهای تولید هر محصول (از ورق خام، بلنکینگ، کشش، خم، پانچ تا جوشکاری و رنگ) و اتصال قالب‌ها و پرس‌ها
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            {/* Guide Button */}
+            <button
+              onClick={() => setIsGuideModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4 text-indigo-400" />
+              <span>راهنمای کاتالوگ و کویل</span>
+            </button>
+
+            {/* Traceability Tag Button */}
+            <button
+              onClick={() => setIsTraceabilityModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              <Tag className="w-4 h-4 text-purple-400" />
+              <span>صدور کارت رهگیری بچ</span>
+            </button>
+
+            {/* New Routing Button */}
+            <button
+              onClick={() => {
+                setNewRoutingPartId('');
+                setNewRoutingVersion('V1.0');
+                setNewRoutingNotes('');
+                setFormError(null);
+                setIsNewRoutingModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-900/30 whitespace-nowrap cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>تعریف مسیر تولید جدید</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Part Selector Dropdown */}
-          <select
-            value={selectedRoutingId}
-            onChange={e => setSelectedRoutingId(e.target.value)}
-            className="flex-1 md:w-80 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
-          >
-            {routings.map(r => (
-              <option key={r.id} value={r.id}>
-                [{r.partCode}] {r.partName} ({r.operations.length} مرحله)
-              </option>
-            ))}
-          </select>
+        {/* Advanced Search & Car Model Filter Toolbar */}
+        <div className="pt-3 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs">
+          {/* Instant Search Input */}
+          <div className="md:col-span-5 relative">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="جستجوی سریع بر اساس کد فنی، نام قطعه، مرحله یا مدل خودرو..."
+              className="w-full bg-slate-900/90 border border-slate-700 rounded-xl pr-9 pl-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
-          {/* New Routing Button */}
-          <button
-            onClick={() => {
-              setNewRoutingPartId('');
-              setNewRoutingVersion('V1.0');
-              setNewRoutingNotes('');
-              setFormError(null);
-              setIsNewRoutingModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-900/30 whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            <span>تعریف مسیر تولید جدید</span>
-          </button>
+          {/* Car Model Quick Filter Pills */}
+          <div className="md:col-span-4 flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-[11px]">
+            {[
+              { id: 'ALL', label: 'همه' },
+              { id: 'پژو ۲۰۶', label: '۲۰۶' },
+              { id: '۲۰۷', label: '۲۰۷' },
+              { id: 'تارا', label: 'تارا' },
+              { id: 'دنا', label: 'دنا پلاس' },
+              { id: 'شاهین', label: 'شاهین' },
+              { id: 'کوییک', label: 'کوییک' },
+            ].map(m => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedCarModel(m.id)}
+                className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap cursor-pointer ${
+                  selectedCarModel === m.id
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Result Selector */}
+          <div className="md:col-span-3 flex items-center gap-2">
+            <select
+              value={activeRouting?.id || ''}
+              onChange={e => setSelectedRoutingId(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 focus:outline-none focus:border-indigo-500 font-bold cursor-pointer"
+            >
+              {filteredRoutings.length === 0 ? (
+                <option value="">هیچ موردی با این فیلتر یافت نشد</option>
+              ) : (
+                filteredRoutings.map(r => (
+                  <option key={r.id} value={r.id}>
+                    [{r.partCode}] {r.partName} ({toPersianDigits(r.operations.length)} مرحله)
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        </div>
+
+        {/* Counter Badge */}
+        <div className="text-[11px] text-slate-400 flex items-center justify-between">
+          <span>
+            نمایش <strong>{toPersianDigits(filteredRoutings.length)}</strong> از مجموع <strong>{toPersianDigits(routings.length)}</strong> مسیر مهندسی
+          </span>
+          {activeRouting && (
+            <span className="text-indigo-300 font-mono">
+              محصول انتخابی: [{activeRouting.partCode}] {activeRouting.partName}
+            </span>
+          )}
         </div>
       </div>
 
@@ -772,6 +894,22 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Master Data Difference Guide Modal */}
+      <MasterDataDifferenceGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+      />
+
+      {/* Traceability Lot & Tag Generator Modal */}
+      <TraceabilityTagModal
+        isOpen={isTraceabilityModalOpen}
+        onClose={() => setIsTraceabilityModalOpen(false)}
+        parts={parts}
+        machines={machines}
+        dies={dies}
+        initialPartCode={activeRouting?.partCode}
+      />
     </div>
   );
 };

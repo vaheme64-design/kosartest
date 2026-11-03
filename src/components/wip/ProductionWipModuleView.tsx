@@ -28,8 +28,11 @@ import { OperationInputModal } from './OperationInputModal';
 import { OperationProductionModal } from './OperationProductionModal';
 import { OperationTransferModal } from './OperationTransferModal';
 import { WipReconciliationModal } from './WipReconciliationModal';
+import { ParallelProductionFlowView } from './ParallelProductionFlowView';
+import { TraceabilityTagModal } from './TraceabilityTagModal';
+import { GitFork, Tag } from 'lucide-react';
 
-export type WipSubTab = 'DASHBOARD' | 'ORDERS' | 'TRANSFERS' | 'STAGES';
+export type WipSubTab = 'DASHBOARD' | 'ORDERS' | 'TRANSFERS' | 'STAGES' | 'PARALLEL_FLOWS';
 
 interface ProductionWipModuleViewProps {
   parts: Part[];
@@ -65,6 +68,7 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
     operation: ManufacturingOperation;
   } | null>(null);
   const [reconciliationMoId, setReconciliationMoId] = useState<string | null>(null);
+  const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
 
   // Auto-clear notification after 4s
   useEffect(() => {
@@ -269,6 +273,7 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
       icon: ArrowRightLeft,
       count: transfers.filter(t => t.status === 'PENDING_APPROVAL').length,
     },
+    { id: 'PARALLEL_FLOWS', label: 'خطوط موازی و چپ/راست (Co-Production)', icon: GitFork },
     { id: 'STAGES', label: 'نمای تراز ایستگاهی کارخانه', icon: Cpu },
   ];
 
@@ -300,31 +305,42 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
         </div>
       )}
 
-      {/* Sub-Tabs Navigation */}
-      <div className="flex items-center gap-1 border-b border-slate-200/80 overflow-x-auto">
-        {navTabs.map(tab => {
-          const isActive = activeSubTab === tab.id;
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 py-2.5 text-xs transition-colors whitespace-nowrap cursor-pointer -mb-px ${
-                isActive
-                  ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
-                  : 'text-slate-500 hover:text-slate-800 border-b-2 border-transparent'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
-              <span>{tab.label}</span>
-              {tab.count !== undefined && tab.count > 0 && (
-                <span className="font-mono text-[10px] text-slate-400 mr-0.5">
-                  ({tab.count})
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Sub-Tabs Navigation & Quick Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 gap-2">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {navTabs.map(tab => {
+            const isActive = activeSubTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2.5 text-xs transition-colors whitespace-nowrap cursor-pointer -mb-px ${
+                  isActive
+                    ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 border-b-2 border-transparent'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="font-mono text-[10px] text-slate-400 mr-0.5">
+                    ({tab.count})
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 pb-2 sm:pb-0">
+          <button
+            onClick={() => setIsTraceabilityModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium cursor-pointer shadow-xs transition-colors"
+          >
+            <Tag className="w-3.5 h-3.5 text-indigo-600" />
+            <span>صدور لیبل شناسایی و ردیابی پای خط</span>
+          </button>
+        </div>
       </div>
 
       {/* Sub-Tab 1: WIP Dashboard */}
@@ -376,7 +392,14 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
         />
       )}
 
-      {/* Sub-Tab 4: Legacy Stage WIP Overview */}
+      {/* Sub-Tab 4: Parallel & Co-Production Flows */}
+      {activeSubTab === 'PARALLEL_FLOWS' && (
+        <ParallelProductionFlowView
+          onOpenTraceabilityModal={() => setIsTraceabilityModalOpen(true)}
+        />
+      )}
+
+      {/* Sub-Tab 5: Legacy Stage WIP Overview */}
       {activeSubTab === 'STAGES' && (
         <WipTrackingView
           balances={stageBalances}
@@ -430,6 +453,13 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
         isOpen={!!reconciliationMoId}
         onClose={() => setReconciliationMoId(null)}
         moId={reconciliationMoId}
+      />
+
+      <TraceabilityTagModal
+        isOpen={isTraceabilityModalOpen}
+        onClose={() => setIsTraceabilityModalOpen(false)}
+        parts={parts}
+        machines={machines}
       />
     </div>
   );

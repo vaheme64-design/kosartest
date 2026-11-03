@@ -26,6 +26,7 @@ import {
   Phone,
   Mail,
   Check,
+  GitFork,
 } from 'lucide-react';
 import {
   Part,
@@ -44,6 +45,9 @@ import { ErpColorTheme, ErpLayoutTemplate, COLOR_THEMES } from '../types/theme';
 import { PartsView } from './PartsView';
 import { RoutingsView } from './RoutingsView';
 import { MachinesView } from './MachinesView';
+import { AdvancedBomModuleView } from './bom/AdvancedBomModuleView';
+import { ParallelProductionFlowView } from './wip/ParallelProductionFlowView';
+import { TraceabilityTagModal } from './wip/TraceabilityTagModal';
 import { toPersianDigits } from '../utils/formatters';
 
 export type MasterSubSection =
@@ -51,6 +55,7 @@ export type MasterSubSection =
   | 'PARTS'
   | 'RAW_MATERIALS'
   | 'BOM'
+  | 'PARALLEL_FLOWS'
   | 'ROUTINGS'
   | 'OPERATIONS'
   | 'WAREHOUSES'
@@ -499,10 +504,17 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
     },
     {
       id: 'BOM',
-      title: 'سرانه مصرف (BOM)',
-      description: 'مصرف ماده اولیه به ازای هر عدد قطعه — ورودی محاسبه کسری',
+      title: 'درخت محصول و اجزا (BOM)',
+      description: 'ساختار چندسطحی قطعات مرکب، ورق‌های مختلف، پیچ و مهره و قطعات لاستیکی',
       icon: ListTree,
-      countBadge: 'فرمول ساخت',
+      countBadge: 'درخت محصول چندسطحی',
+    },
+    {
+      id: 'PARALLEL_FLOWS',
+      title: 'تولید موازی و انشعاب',
+      description: 'منطق قالب‌های دوگانه چپ/راست، انشعاب ورق و الحاق در جوشکاری',
+      icon: GitFork,
+      countBadge: 'قالب‌های مشترک و ادغام',
     },
     {
       id: 'ROUTINGS',
@@ -559,11 +571,12 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
   const segmentedTabs: { id: MasterSubSection; label: string }[] = [
     { id: 'PARTS', label: 'قطعات' },
     { id: 'RAW_MATERIALS', label: 'ماده اولیه' },
+    { id: 'BOM', label: 'درخت محصول (BOM)' },
+    { id: 'PARALLEL_FLOWS', label: 'تولید موازی و چپ/راست' },
+    { id: 'ROUTINGS', label: 'مسیر تولید' },
     { id: 'OPERATIONS', label: 'عملیات' },
     { id: 'MACHINES', label: 'ماشین‌آلات' },
     { id: 'DIES', label: 'قالب‌ها' },
-    { id: 'ROUTINGS', label: 'مسیر تولید' },
-    { id: 'BOM', label: 'سرانه مصرف (BOM)' },
     { id: 'WAREHOUSES', label: 'انبارها' },
     { id: 'CUSTOMERS', label: 'مشتریان' },
     { id: 'ORDERS', label: 'سفارشات' },
@@ -950,73 +963,19 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
         />
       )}
 
-      {/* 5. BOM (سرانه مصرف ماده اولیه به ازای هر قطعه) */}
+      {/* 5. BOM (درخت محصول پیشرفته چندسطحی) */}
       {activeSection === 'BOM' && (
-        <div
-          className={`bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs ${themeMeta.borderAccentClass}`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                جدول سرانه مصرف مواد اولیه و ورق (BOM)
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                ارتباط مستقیم هر قطعه خودرویی با گرید ورق، ضخامت، وزن ناخالص برش و ضریب مصرف در محاسبات کسری (MRP)
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveSection('PARTS')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
-            >
-              ویرایش سرانه مصرف در شناسنامه قطعه
-            </button>
-          </div>
+        <AdvancedBomModuleView
+          parts={parts}
+          onNavigateToParallelFlow={() => setActiveSection('PARALLEL_FLOWS')}
+        />
+      )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                <tr>
-                  <th className="py-3 px-4">کد قطعه محصول</th>
-                  <th className="py-3 px-4">نام قطعه خودرویی</th>
-                  <th className="py-3 px-4">گرید و جنس ورق مصرفی</th>
-                  <th className="py-3 px-4">ضخامت ورق (mm)</th>
-                  <th className="py-3 px-4">سرانه مصرف ناخالص (kg)</th>
-                  <th className="py-3 px-4">نقطه سفارش قطعه</th>
-                  <th className="py-3 px-4">وضعیت BOM</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {parts
-                  .filter(p => p.category !== 'RAW_MATERIAL')
-                  .map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 font-bold text-slate-900">{p.code}</td>
-                      <td className="py-3 px-4 font-medium text-slate-800">{p.name}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">
-                        {p.materialGrade || 'ST12'}
-                      </td>
-                      <td className="py-3 px-4 tabular-nums">
-                        {toPersianDigits(p.thicknessMm || 1.2)} میلی‌متر
-                      </td>
-                      <td className="py-3 px-4 tabular-nums font-bold text-emerald-700">
-                        {toPersianDigits(p.weightPerUnitKg || 1.45)} کیلوگرم
-                      </td>
-                      <td className="py-3 px-4 tabular-nums">
-                        {toPersianDigits(p.minStock || 500)} {p.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>تایید مهندسی</span>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* 5.1. PARALLEL PRODUCTION & CO-PRODUCTION FLOWS */}
+      {activeSection === 'PARALLEL_FLOWS' && (
+        <ParallelProductionFlowView
+          onNavigateToBom={() => setActiveSection('BOM')}
+        />
       )}
 
       {/* 6. OPERATIONS (عملیات تولید استاندارد) */}

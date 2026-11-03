@@ -117,6 +117,15 @@ import {
   getManagementDashboardSummary,
 } from './managementReportsEngine';
 import { ReportFilterParams } from '../types/managementReports';
+import {
+  getAllBoms,
+  getBomByPartId,
+  saveAdvancedBom,
+  getAllParallelFlows,
+  saveParallelFlow,
+  issueTraceabilityTag,
+  getAllTraceabilityTags,
+} from './bomAndParallelEngine';
 
 // Server-side State Store (in production can be wired to PostgreSQL / Prisma / SQL Server / ERP)
 let partsStore: Part[] = [...INITIAL_PARTS];
@@ -680,6 +689,101 @@ apiRouter.delete('/routings/:id', (req: Request, res: Response) => {
     res.json({ success: true, message: 'مسیر تولید حذف گردید.' });
   } else {
     res.status(404).json({ success: false, error: 'مسیر تولید یافت نشد.' });
+  }
+});
+
+/**
+ * 7.1. Advanced Multi-Level BOM Endpoints
+ */
+apiRouter.get('/production/boms', (_req: Request, res: Response) => {
+  const boms = getAllBoms();
+  res.json({ success: true, count: boms.length, data: boms });
+});
+
+apiRouter.get('/production/boms/:partId', (req: Request, res: Response) => {
+  const { partId } = req.params;
+  const bom = getBomByPartId(partId);
+  if (!bom) {
+    return res.status(404).json({ success: false, error: 'BOM برای این قطعه یافت نشد.' });
+  }
+  res.json({ success: true, data: bom });
+});
+
+apiRouter.post('/production/boms', (req: Request, res: Response) => {
+  try {
+    const saved = saveAdvancedBom(req.body);
+    res.json({ success: true, message: 'ساختار درخت محصول (BOM) با موفقیت ذخیره شد.', data: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'خطا در ثبت BOM' });
+  }
+});
+
+apiRouter.post('/production/boms/generate-sub-mos', (req: Request, res: Response) => {
+  try {
+    const { bomId, plannedQty = 500, masterMoNumber = `MO-${Date.now()}` } = req.body;
+    const bom = getAllBoms().find(b => b.id === bomId);
+    if (!bom) {
+      return res.status(404).json({ success: false, error: 'BOM مورد نظر یافت نشد.' });
+    }
+
+    const subComponents = bom.components.filter(c => c.subMoRequired);
+    const createdSubMos = subComponents.map((c, idx) => {
+      const subMoNumber = `SUB-${masterMoNumber}-${String.fromCharCode(65 + idx)}`;
+      const reqQty = Math.ceil(Number(plannedQty) * c.quantityPerAssembly * (1 + (c.scrapAllowancePercent || 0) / 100));
+      return {
+        subMoNumber,
+        masterMoNumber,
+        componentPartCode: c.componentPartCode,
+        componentPartName: c.componentPartName,
+        requiredQty: reqQty,
+        unit: c.unit,
+        stageJoined: c.stageJoinedStepNumber || 30,
+        status: 'PLANNED',
+        createdAt: new Date().toISOString(),
+      };
+    });
+
+    res.json({
+      success: true,
+      message: `تعداد ${createdSubMos.length} دستور ساخت فرعی (Sub-MO) متناظر با قطعات درخت محصول صادر گردید.`,
+      data: createdSubMos,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * 7.2. Parallel Production, Co-Production & Split/Merge Flows
+ */
+apiRouter.get('/production/parallel-flows', (_req: Request, res: Response) => {
+  const flows = getAllParallelFlows();
+  res.json({ success: true, count: flows.length, data: flows });
+});
+
+apiRouter.post('/production/parallel-flows', (req: Request, res: Response) => {
+  try {
+    const saved = saveParallelFlow(req.body);
+    res.json({ success: true, message: 'جریان تولید موازی با موفقیت ذخیره گردید.', data: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * 7.3. Traceability Lot & Batch Tag Issuance
+ */
+apiRouter.get('/production/traceability/history', (_req: Request, res: Response) => {
+  const tags = getAllTraceabilityTags();
+  res.json({ success: true, count: tags.length, data: tags });
+});
+
+apiRouter.post('/production/traceability/generate-tag', (req: Request, res: Response) => {
+  try {
+    const tag = issueTraceabilityTag(req.body);
+    res.json({ success: true, message: 'شناسه بچ و کارت رهگیری استاندارد با موفقیت صادر شد.', data: tag });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
