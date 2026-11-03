@@ -75,7 +75,8 @@ export function calculateInventoryLedger(
         break;
 
       case 'ISSUE':
-        // Issuance from store to factory (reduces raw material or parts)
+      case 'CUSTOMER_DELIVERY':
+        // Issuance from store to factory or outbound delivery to customer
         entry.totalQty -= quantity;
         break;
 
@@ -265,6 +266,7 @@ export function validateAndPrepareTransaction(
   // Check stage stock balance to prevent negative inventory
   const requiresStockDeduction = [
     'ISSUE',
+    'CUSTOMER_DELIVERY',
     'SCRAP',
     'WIP_TRANSFER_DISPATCH',
   ].includes(payload.voucherType);
@@ -314,7 +316,7 @@ export function validateAndPrepareTransaction(
     stageId: payload.stageId,
     stageName: stageConfig ? stageConfig.name : payload.stageId,
     targetStageId: payload.targetStageId,
-    targetStageName: targetConfig ? targetConfig.name : undefined,
+    targetStageName: targetConfig ? targetConfig.name : payload.targetStageName,
     quantity: qty,
     unit: part.unit,
     quantityKg,
@@ -339,6 +341,7 @@ export function generateVoucherNumber(type: string): string {
     OPENING_BALANCE: 'OB',
     RECEIPT: 'RC',
     ISSUE: 'IS',
+    CUSTOMER_DELIVERY: 'DLV',
     PRODUCTION_OUTPUT: 'PR',
     SCRAP: 'SC',
     WIP_TRANSFER_DISPATCH: 'TD',

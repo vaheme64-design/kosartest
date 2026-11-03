@@ -19,6 +19,7 @@ import {
   Wrench,
   UserCheck,
   Zap,
+  Plus,
 } from 'lucide-react';
 import {
   Part,
@@ -30,8 +31,11 @@ import {
   DieMold,
   Operator,
   PartCategory,
+  CustomerDefinition,
+  SapcoContract,
 } from '../types/inventory';
 import { formatNumber, formatWeightKg, getVoucherTypeLabel, toPersianDigits } from '../utils/formatters';
+import { QuickEntryModals, QuickCreateEntityType } from './common/QuickEntryModals';
 
 interface TransactionsVouchersViewProps {
   parts: Part[];
@@ -47,7 +51,7 @@ interface TransactionsVouchersViewProps {
 }
 
 export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> = ({
-  parts,
+  parts: initialParts,
   machines,
   dies = [],
   operators = [],
@@ -57,10 +61,31 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
   initialStageId,
   onSubmitVoucher,
 }) => {
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [localCustomers, setLocalCustomers] = useState<CustomerDefinition[]>([]);
+  const [localContracts, setLocalContracts] = useState<SapcoContract[]>([]);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/customers').then(r => r.json()).catch(() => null),
+      fetch('/api/inventory/contracts').then(r => r.json()).catch(() => null),
+    ]).then(([custRes, cntRes]) => {
+      if (custRes?.success && Array.isArray(custRes.data)) setLocalCustomers(custRes.data);
+      if (cntRes?.success && Array.isArray(cntRes.data)) setLocalContracts(cntRes.data);
+    });
+  }, []);
+
   const [voucherType, setVoucherType] = useState<VoucherType>(initialVoucherType);
   const [selectedPartId, setSelectedPartId] = useState<string>(initialPartId || '');
   const [selectedStageId, setSelectedStageId] = useState<string>(initialStageId || 'STAGE_RAW_STORE');
   const [targetStageId, setTargetStageId] = useState<string>('STAGE_BLANKING');
+  const [customerName, setCustomerName] = useState<string>('شرکت ساپکو');
+  const [contractNumber, setContractNumber] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
   const [referenceDoc, setReferenceDoc] = useState<string>('');
   const [operatorName, setOperatorName] = useState<string>('');
@@ -83,45 +108,47 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
   // Auto-configure category default based on voucher type
   useEffect(() => {
     if (voucherType === 'RECEIPT') {
-      // 95% of receipts in this factory are Raw Material Steel Coils/Sheets from SAPCO
       setCategoryFilter('RAW_MATERIAL');
       setSelectedStageId('STAGE_RAW_STORE');
-      const rawPart = parts.find(p => p.category === 'RAW_MATERIAL');
+      const rawPart = localParts.find(p => p.category === 'RAW_MATERIAL');
       if (rawPart) setSelectedPartId(rawPart.id);
     } else if (voucherType === 'ISSUE') {
-      // Raw Material issuance to shearing/stamping lines
       setCategoryFilter('RAW_MATERIAL');
       setSelectedStageId('STAGE_RAW_STORE');
       setTargetStageId('STAGE_SHEARING');
-      const rawPart = parts.find(p => p.category === 'RAW_MATERIAL');
+      const rawPart = localParts.find(p => p.category === 'RAW_MATERIAL');
       if (rawPart) setSelectedPartId(rawPart.id);
+    } else if (voucherType === 'CUSTOMER_DELIVERY') {
+      setCategoryFilter('FINISHED_GOOD');
+      setSelectedStageId('STAGE_FINISHED_STORE');
+      const finPart = localParts.find(p => p.category === 'FINISHED_GOOD') || localParts[0];
+      if (finPart) setSelectedPartId(finPart.id);
     } else if (voucherType === 'PRODUCTION_OUTPUT' || voucherType === 'SCRAP') {
-      // Production is for WIP or Finished Goods
       setCategoryFilter('WIP_PART');
       setSelectedStageId('STAGE_BLANKING');
-      const wipPart = parts.find(p => p.category === 'WIP_PART') || parts[0];
+      const wipPart = localParts.find(p => p.category === 'WIP_PART') || localParts[0];
       if (wipPart) setSelectedPartId(wipPart.id);
     } else if (voucherType === 'WIP_TRANSFER_DISPATCH') {
       setCategoryFilter('WIP_PART');
       setSelectedStageId('STAGE_SHEARING');
       setTargetStageId('STAGE_BLANKING');
-      const wipPart = parts.find(p => p.category === 'WIP_PART') || parts[0];
+      const wipPart = localParts.find(p => p.category === 'WIP_PART') || localParts[0];
       if (wipPart) setSelectedPartId(wipPart.id);
     } else if (voucherType === 'WIP_TRANSFER_RECEIPT') {
       setCategoryFilter('WIP_PART');
       setSelectedStageId('STAGE_BLANKING');
-      const wipPart = parts.find(p => p.category === 'WIP_PART') || parts[0];
+      const wipPart = localParts.find(p => p.category === 'WIP_PART') || localParts[0];
       if (wipPart) setSelectedPartId(wipPart.id);
     } else if (voucherType === 'OPENING_BALANCE') {
       setCategoryFilter('ALL');
     }
     setErrorMessage(null);
-  }, [voucherType, parts]);
+  }, [voucherType, localParts]);
 
   // Unique car models for quick filtering
   const carModelsList = useMemo(() => {
     const list = new Set<string>();
-    parts.forEach(p => {
+    localParts.forEach(p => {
       if (p.carModel) {
         if (p.carModel.includes('۲۰۶')) list.add('پژو ۲۰۶ / ۲۰۷');
         else if (p.carModel.includes('تارا')) list.add('تارا');
@@ -131,11 +158,11 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
       }
     });
     return Array.from(list);
-  }, [parts]);
+  }, [localParts]);
 
   // Filtered parts for selection
   const eligibleParts = useMemo(() => {
-    return parts.filter(p => {
+    return localParts.filter(p => {
       if (categoryFilter !== 'ALL' && p.category !== categoryFilter) {
         return false;
       }
@@ -156,9 +183,9 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
       }
       return true;
     });
-  }, [parts, categoryFilter, carModelFilter, partSearch]);
+  }, [localParts, categoryFilter, carModelFilter, partSearch]);
 
-  const selectedPart = parts.find(p => p.id === selectedPartId);
+  const selectedPart = localParts.find(p => p.id === selectedPartId);
 
   // Dies compatible with selected part or all dies
   const matchingDies = useMemo(() => {
@@ -197,7 +224,7 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
     : 0;
 
   // Stock depletion check
-  const isDeduction = ['ISSUE', 'SCRAP', 'WIP_TRANSFER_DISPATCH'].includes(voucherType);
+  const isDeduction = ['ISSUE', 'SCRAP', 'WIP_TRANSFER_DISPATCH', 'CUSTOMER_DELIVERY'].includes(voucherType);
   const isExceedingStock = isDeduction && numQty > availableUsableQty;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,21 +260,26 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
       const selectedDie = dies.find(d => d.id === dieMoldId);
       const selectedOp = operators.find(o => o.id === operatorId);
 
+      const enrichedNotes =
+        voucherType === 'CUSTOMER_DELIVERY'
+          ? `تحویل بار به مشتری: ${customerName}${contractNumber ? ` | قرارداد: ${contractNumber}` : ''}${notes ? ` | ${notes}` : ''}`
+          : notes;
+
       const payload = {
         voucherType,
         partId: selectedPartId,
-        stageId: selectedStageId,
+        stageId: voucherType === 'CUSTOMER_DELIVERY' ? 'STAGE_FINISHED_STORE' : selectedStageId,
         targetStageId: voucherType === 'WIP_TRANSFER_DISPATCH' || voucherType === 'ISSUE' ? targetStageId : undefined,
         quantity: numQty,
-        referenceDoc,
+        referenceDoc: referenceDoc || (voucherType === 'CUSTOMER_DELIVERY' && contractNumber ? contractNumber : undefined),
         operatorName: selectedOp ? selectedOp.fullName : operatorName || undefined,
         machineId: machineId || undefined,
         dieMoldId: dieMoldId || undefined,
         dieMoldName: selectedDie ? selectedDie.name : undefined,
         shift,
         scrapReason: voucherType === 'SCRAP' ? scrapReason : undefined,
-        notes,
-        isDemo: false, // New manual transactions entered by user are marked as real factory records
+        notes: enrichedNotes,
+        isDemo: false,
       };
 
       const result = await onSubmitVoucher(payload);
@@ -309,6 +341,12 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
       icon: <Calendar className="w-4 h-4 text-blue-400" />,
       desc: 'سند انبارگردانی و تعیین موجودی ابتدای دوره یا کالیبراسیون',
     },
+    {
+      id: 'CUSTOMER_DELIVERY',
+      label: '۸. تحویل بار به مشتری',
+      icon: <Truck className="w-4 h-4 text-indigo-400" />,
+      desc: 'حواله خروج و تحویل محصول نهایی به ساپکو، سایپا و سایر مشتریان با کسر از انبار نهایی',
+    },
   ];
 
   return (
@@ -321,12 +359,12 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
             مرکز صدور و ثبت اسناد انبار و سالن‌های تولید
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            فرم‌های تفکیک‌شده و هوشمند بر اساس نوع سند با فیلتر خودکار ورق‌ها، قطعات نیمه‌ساخته WIP و قالب‌های متصل
+            فرم‌های تفکیک‌شده و هوشمند بر اساس نوع سند با فیلتر خودکار ورق‌ها، قطعات نیمه‌ساخته WIP، قالب‌های متصل و تحویل بار به مشتری
           </p>
         </div>
 
         {/* Voucher Type Buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {voucherTypesList.map(item => {
             const isSelected = voucherType === item.id;
             return (
@@ -334,7 +372,7 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
                 key={item.id}
                 type="button"
                 onClick={() => setVoucherType(item.id)}
-                className={`flex flex-col text-right p-3 rounded-xl border transition-all ${
+                className={`flex flex-col text-right p-3 rounded-xl border transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-amber-500/15 border-amber-500 text-white shadow-md'
                     : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:bg-slate-800/60'
@@ -390,56 +428,66 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
         {/* SECTION 1: SMART PART SELECTOR WITH CATEGORY TABS & SEARCH */}
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
-            <label className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-amber-400" />
-              <span>انتخاب قطعه یا ماده اولیه هدف سند *</span>
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-amber-400" />
+                <span>انتخاب قطعه یا ماده اولیه هدف سند *</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setActiveQuickModal('PART')}
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ تعریف سریع کالا / ورق جدید</span>
+              </button>
+            </div>
 
             {/* Category Filter Tabs */}
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
               <button
                 type="button"
                 onClick={() => setCategoryFilter('RAW_MATERIAL')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                   categoryFilter === 'RAW_MATERIAL'
                     ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                فقط ورق و مواد اولیه ساپکو ({parts.filter(p => p.category === 'RAW_MATERIAL').length})
+                ورق و مواد اولیه ({localParts.filter(p => p.category === 'RAW_MATERIAL').length})
               </button>
               <button
                 type="button"
                 onClick={() => setCategoryFilter('WIP_PART')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                   categoryFilter === 'WIP_PART'
                     ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                قطعات نیمه‌ساخته WIP ({parts.filter(p => p.category === 'WIP_PART').length})
+                نیمه‌ساخته WIP ({localParts.filter(p => p.category === 'WIP_PART').length})
               </button>
               <button
                 type="button"
                 onClick={() => setCategoryFilter('FINISHED_GOOD')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                   categoryFilter === 'FINISHED_GOOD'
                     ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                محصولات نهایی ({parts.filter(p => p.category === 'FINISHED_GOOD').length})
+                محصولات نهایی ({localParts.filter(p => p.category === 'FINISHED_GOOD').length})
               </button>
               <button
                 type="button"
                 onClick={() => setCategoryFilter('ALL')}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                   categoryFilter === 'ALL'
                     ? 'bg-slate-700 text-white font-bold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                همه ({parts.length})
+                همه ({localParts.length})
               </button>
             </div>
           </div>
@@ -511,12 +559,95 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
           )}
         </div>
 
+        {/* CUSTOMER DELIVERY DEDICATED BANNER & FIELDS */}
+        {voucherType === 'CUSTOMER_DELIVERY' && (
+          <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/40 space-y-4">
+            <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+                <Truck className="w-4 h-4 text-indigo-400" />
+                <span>اطلاعات تحویل بار و خروج محصول نهایی به مشتری (ساپکو، سایپا و...)</span>
+              </div>
+              <span className="text-[11px] text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-md">
+                کسر مستقیم از انبار قطعات و محصولات نهایی
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-200">مشتری تحویل‌گیرنده بار *</label>
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuickModal('CUSTOMER')}
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ مشتری جدید</span>
+                  </button>
+                </div>
+                {localCustomers.length > 0 ? (
+                  <select
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value={customerName}>{customerName}</option>
+                    {localCustomers.map(c => (
+                      <option key={c.id} value={c.name}>
+                        {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    placeholder="شرکت ساپکو / سازه‌گستر سایپا..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-200">شماره قرارداد تحویل (اختیاری)</label>
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuickModal('CONTRACT')}
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ قرارداد جدید</span>
+                  </button>
+                </div>
+                <select
+                  value={contractNumber}
+                  onChange={e => setContractNumber(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">-- بدون الصاق به قرارداد مشخص --</option>
+                  {localContracts.map(cnt => (
+                    <option key={cnt.id} value={cnt.contractNumber}>
+                      {cnt.contractNumber} — {cnt.customerName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SECTION 2: TRANSACTION PARAMETERS & STAGES */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {/* Source Stage / Store */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-300">
-              {voucherType === 'WIP_TRANSFER_DISPATCH' ? 'ایستگاه مبدا (ارسال‌کننده) *' : 'ایستگاه / انبار مرجع *'}
+              {voucherType === 'WIP_TRANSFER_DISPATCH'
+                ? 'ایستگاه مبدا (ارسال‌کننده) *'
+                : voucherType === 'CUSTOMER_DELIVERY'
+                ? 'انبار خروجی تحویل به مشتری *'
+                : 'ایستگاه / انبار مرجع *'}
             </label>
             <select
               value={selectedStageId}
@@ -711,12 +842,14 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
 
           {/* Reference Document */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">سند عطف / شماره بارنامه / کانبان</label>
+            <label className="text-xs font-medium text-slate-300">
+              {voucherType === 'CUSTOMER_DELIVERY' ? 'شماره بارنامه / حواله خروج / پلاک خودرو' : 'سند عطف / شماره بارنامه / کانبان'}
+            </label>
             <input
               type="text"
               value={referenceDoc}
               onChange={e => setReferenceDoc(e.target.value)}
-              placeholder="مثلاً: بارنامه ۹۸۲۴۱۵ ساپکو یا دستور کار WO-401"
+              placeholder={voucherType === 'CUSTOMER_DELIVERY' ? 'مثلاً: بارنامه ۹۸۲۴۱۵ ساپکو - پلاک ۴۴ع۷۸۱' : 'مثلاً: بارنامه ۹۸۲۴۱۵ ساپکو یا دستور کار WO-401'}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -746,13 +879,33 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
           <button
             type="submit"
             disabled={loading || isExceedingStock}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Send className="w-4 h-4" />
             <span>{loading ? 'در حال ثبت در سرور و دفاتر...' : 'تأیید و صدور نهایی سند'}</span>
           </button>
         </div>
       </form>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        defaultPartCategory={voucherType === 'CUSTOMER_DELIVERY' ? 'FINISHED_GOOD' : categoryFilter === 'ALL' ? 'RAW_MATERIAL' : categoryFilter}
+        defaultCustomerName={customerName}
+        onCreated={(type, item) => {
+          if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+            setSelectedPartId(item.id);
+          } else if (type === 'CUSTOMER') {
+            setLocalCustomers(prev => [item, ...prev]);
+            setCustomerName(item.name);
+          } else if (type === 'CONTRACT') {
+            setLocalContracts(prev => [item, ...prev]);
+            setContractNumber(item.contractNumber);
+            if (item.customerName) setCustomerName(item.customerName);
+          }
+        }}
+      />
     </div>
   );
 };

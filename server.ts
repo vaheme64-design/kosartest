@@ -1,9 +1,14 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './src/server/apiRouter';
+import { resolveDatabaseUrl } from './src/server/db/prisma';
+
+// Ensure DATABASE_URL is set with an absolute path and database directory exists
+resolveDatabaseUrl();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +20,8 @@ const portFromArgs = portArgIndex !== -1 && args[portArgIndex + 1] ? Number(args
 const hostArgIndex = args.indexOf('--host');
 const hostFromArgs = hostArgIndex !== -1 && args[hostArgIndex + 1] ? args[hostArgIndex + 1] : undefined;
 
-const PORT = portFromArgs || Number(process.env.PORT) || 3000;
-const HOST = hostFromArgs || process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.PORT) || portFromArgs || 3000;
+const HOST = process.env.HOST || hostFromArgs || '0.0.0.0';
 
 async function startServer() {
   const app = express();
@@ -32,12 +37,10 @@ async function startServer() {
   app.use('/api', apiRouter);
 
   // In development, mount Vite dev server middlewares
-  if (process.env.NODE_ENV !== 'production' && !fs.existsSync(path.join(__dirname, 'dist'))) {
+  if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        host: '0.0.0.0',
-        port: PORT,
       },
       appType: 'spa',
     });
@@ -57,8 +60,12 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`KPIMS Server successfully started and listening on http://${HOST}:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    console.error('Server listen error:', err);
   });
 }
 

@@ -476,6 +476,7 @@ export default function App() {
         if (invSubTab) setActiveInventorySubTab(invSubTab);
       }}
       onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
+      onOpenAiAssistant={() => setIsAiModalOpen(true)}
       currentRole={currentUser.role}
       partsCount={parts.length}
       txCount={transactions.length}

@@ -66,6 +66,8 @@ export function getVoucherTypeLabel(type: string): { label: string; color: strin
       return { label: 'رسید ورود به انبار', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' };
     case 'ISSUE':
       return { label: 'حواله مصرف مواد', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' };
+    case 'CUSTOMER_DELIVERY':
+      return { label: 'حواله تحویل محصول به مشتری', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' };
     case 'PRODUCTION_OUTPUT':
       return { label: 'ثبت تولید سالم', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' };
     case 'SCRAP':

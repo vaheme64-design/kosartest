@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileSignature,
@@ -19,8 +19,10 @@ import {
   Part,
   PhysicalCoil,
   StockOwnership,
+  CustomerDefinition,
 } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
 
 interface ContractCreateModalProps {
   isOpen: boolean;
@@ -35,10 +37,32 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  parts,
+  parts: initialParts,
   coils,
   currentUser,
 }) => {
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [localCustomers, setLocalCustomers] = useState<CustomerDefinition[]>([]);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+  const [quickPartDefaultCat, setQuickPartDefaultCat] = useState<'RAW_MATERIAL' | 'FINISHED_GOOD'>('RAW_MATERIAL');
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/customers')
+        .then(r => r.json())
+        .then(res => {
+          if (res?.success && Array.isArray(res.data)) {
+            setLocalCustomers(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   const [contractNumber, setContractNumber] = useState('');
   const [title, setTitle] = useState('');
   const [customerName, setCustomerName] = useState('شرکت ساپکو');
@@ -89,8 +113,8 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
 
   // Add a customer material line (sheet metal, fastener, rubber)
   const handleAddMaterialLine = () => {
-    const rawParts = parts.filter(p => p.category === 'RAW_MATERIAL');
-    const defaultPart = rawParts[0] || parts[0];
+    const rawParts = localParts.filter(p => p.category === 'RAW_MATERIAL');
+    const defaultPart = rawParts[0] || localParts[0];
     setCommercialLines(prev => [
       ...prev,
       {
@@ -109,8 +133,8 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
 
   // Add a product delivery commitment line (bracket, bumper support, fan plate)
   const handleAddProductLine = () => {
-    const finishedParts = parts.filter(p => p.category === 'FINISHED_GOOD');
-    const defaultPart = finishedParts[0] || parts[0];
+    const finishedParts = localParts.filter(p => p.category === 'FINISHED_GOOD');
+    const defaultPart = finishedParts[0] || localParts[0];
     setCommercialLines(prev => [
       ...prev,
       {
@@ -138,7 +162,7 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
           const updated = { ...l, ...updates };
           // If part changed, update name, code, and default unit
           if (updates.partId && updates.partId !== l.partId) {
-            const p = parts.find(part => part.id === updates.partId);
+            const p = localParts.find(part => part.id === updates.partId);
             if (p) {
               updated.partCode = p.code;
               updated.partName = p.name;
@@ -384,17 +408,43 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  طرف حساب / مشتری / کارفرما <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. شرکت ساپکو، سازه‌گستر سایپا، ایران‌خودرو، مگاموتور"
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-slate-300">
+                    طرف حساب / مشتری / کارفرما <span className="text-rose-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuickModal('CUSTOMER')}
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ مشتری جدید</span>
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  {localCustomers.length > 0 && (
+                    <select
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      className="w-1/2 px-2.5 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value={customerName}>{customerName}</option>
+                      {localCustomers.map(c => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. شرکت ساپکو، سازه‌گستر سایپا، ایران‌خودرو"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
@@ -509,14 +559,27 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
                     ورق‌های کلاف، پیچ و مهره‌های جوشی، ضربه‌گیرهای لاستیکی و سایر اقلامی که ساپکو یا مشتری مستقیماً ارسال می‌کند
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddMaterialLine}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  افزودن ردیف ماده/قطعه
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickPartDefaultCat('RAW_MATERIAL');
+                      setActiveQuickModal('PART');
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-medium rounded transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ تعریف ماده/ورق جدید</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddMaterialLine}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    افزودن ردیف ماده/قطعه
+                  </button>
+                </div>
               </div>
 
               {incomingMaterials.length === 0 ? (
@@ -540,7 +603,7 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
                           onChange={e => handleUpdateLine(line.id, { partId: e.target.value })}
                           className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500"
                         >
-                          {parts.map(p => (
+                          {localParts.map(p => (
                             <option key={p.id} value={p.id}>
                               [{p.code}] {p.name} ({p.unit === 'KG' ? 'کیلوگرم' : 'عدد'})
                             </option>
@@ -607,14 +670,27 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
                     قطعات نهایی پرسی و مجموعه‌های مونتاژی که کارخانه طبق این قرارداد متعهد به تولید و تحویل است
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddProductLine}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  افزودن تعهد محصول
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickPartDefaultCat('FINISHED_GOOD');
+                      setActiveQuickModal('PART');
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-medium rounded transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ تعریف محصول جدید</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddProductLine}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    افزودن تعهد محصول
+                  </button>
+                </div>
               </div>
 
               {productDeliveries.length === 0 ? (
@@ -638,7 +714,7 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
                           onChange={e => handleUpdateLine(line.id, { partId: e.target.value })}
                           className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500"
                         >
-                          {parts
+                          {localParts
                             .filter(p => p.category === 'FINISHED_GOOD' || p.category === 'WIP_PART')
                             .map(p => (
                               <option key={p.id} value={p.id}>
@@ -795,6 +871,20 @@ export const ContractCreateModal: React.FC<ContractCreateModalProps> = ({
           </div>
         </form>
       </div>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        defaultPartCategory={quickPartDefaultCat}
+        onCreated={(type, item) => {
+          if (type === 'CUSTOMER') {
+            setLocalCustomers(prev => [item, ...prev]);
+            setCustomerName(item.name);
+          } else if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+          }
+        }}
+      />
     </div>
   );
 };

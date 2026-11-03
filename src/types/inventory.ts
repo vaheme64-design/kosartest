@@ -49,6 +49,36 @@ export interface Operator {
   isDemo?: boolean;
 }
 
+export interface CustomerDefinition {
+  id: string;
+  code: string;
+  name: string;
+  contractType: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  isDefault?: boolean;
+}
+
+export interface UnitDefinition {
+  id: string;
+  symbol: string;
+  title: string;
+  description: string;
+  conversionFactorToKg?: number;
+  isBaseUnit?: boolean;
+}
+
+export interface ShiftDefinition {
+  id: string;
+  code: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  netWorkMinutes: number;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
 export interface DieMold {
   id: string;
   code: string;               // e.g. DIE-206-BRK01
@@ -136,6 +166,7 @@ export type VoucherType =
   | 'OPENING_BALANCE'         // موجودی اول دوره
   | 'RECEIPT'                 // رسید مواد اولیه یا ورودی محصول
   | 'ISSUE'                   // حواله مصرف مواد اولیه به سالن
+  | 'CUSTOMER_DELIVERY'       // حواله خروج و تحویل محصول نهایی به مشتری (ساپکو / سایپا و...)
   | 'PRODUCTION_OUTPUT'       // ثبت تولید سالم قطعه در مرحله
   | 'SCRAP'                   // ثبت ضایعات تولیدی
   | 'WIP_TRANSFER_DISPATCH'   // خروج قطعه نیمه‌ساخته به مرحله بعد
@@ -306,6 +337,9 @@ export type InventoryDocType =
   | 'RECEIPT_RAW_MATERIAL'
   | 'RECEIPT_FINISHED_GOODS'
   | 'ISSUE_RAW_MATERIAL'
+  | 'ISSUE_FINISHED_GOODS'
+  | 'DELIVERY_CUSTOMER'
+  | 'SHIPMENT_CUSTOMER'
   | 'TRANSFER'
   | 'ADJUSTMENT'
   | 'REVERSAL';
@@ -320,7 +354,7 @@ export interface WarehouseDefinition {
 }
 
 export const WAREHOUSES_LIST: WarehouseDefinition[] = [
-  { id: 'WH-RAW', code: 'WH-RAW', name: 'انبار مرکزی رول و ورق ساپکو', type: 'RAW_MATERIALS', managerName: 'مرادی', locations: ['LOC-RAW-A1', 'LOC-RAW-A2', 'LOC-RAW-B1', 'LOC-RAW-B2'] },
+  { id: 'WH-RAW', code: 'WH-RAW', name: 'انبار مرکزی رول و ورق مواد اولیه', type: 'RAW_MATERIALS', managerName: 'مرادی', locations: ['LOC-RAW-A1', 'LOC-RAW-A2', 'LOC-RAW-B1', 'LOC-RAW-B2'] },
   { id: 'WH-WIP-STAMP', code: 'WH-WIP-STAMP', name: 'انبار پای کار سالن پرس (WIP)', type: 'WIP', managerName: 'قنبری', locations: ['LOC-WIP-BLANK', 'LOC-WIP-DRAWN', 'LOC-WIP-TRIM'] },
   { id: 'WH-WIP-WELD', code: 'WH-WIP-WELD', name: 'انبار پای کار جوشکاری و مونتاژ', type: 'WIP', managerName: 'اکبری', locations: ['LOC-WELD-IN', 'LOC-WELD-OUT'] },
   { id: 'WH-FINISHED', code: 'WH-FINISHED', name: 'انبار محصولات نهایی آماده تحویل', type: 'FINISHED_GOODS', managerName: 'محمدی', locations: ['LOC-FIN-P1', 'LOC-FIN-P2', 'LOC-FIN-P3'] },

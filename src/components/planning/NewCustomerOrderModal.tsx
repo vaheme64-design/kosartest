@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FilePlus,
   X,
   AlertCircle,
   Building2,
   Calendar,
+  Plus,
 } from 'lucide-react';
-import { Part } from '../../types/inventory';
+import { Part, CustomerDefinition, SapcoContract } from '../../types/inventory';
+import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
 
 interface NewCustomerOrderModalProps {
   isOpen: boolean;
@@ -18,11 +20,32 @@ interface NewCustomerOrderModalProps {
 export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
   isOpen,
   onClose,
-  parts,
+  parts: initialParts,
   onSubmit,
 }) => {
-  const [customerName, setCustomerName] = useState('شرکت ساپکو (تأمین قطعات ایران‌خودرو)');
-  const [contractNumber, setContractNumber] = useState('CNT-SAP-2026-001');
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [localCustomers, setLocalCustomers] = useState<CustomerDefinition[]>([]);
+  const [localContracts, setLocalContracts] = useState<SapcoContract[]>([]);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+
+  useEffect(() => {
+    if (isOpen) {
+      Promise.all([
+        fetch('/api/customers').then(r => r.json()).catch(() => null),
+        fetch('/api/inventory/contracts').then(r => r.json()).catch(() => null),
+      ]).then(([custRes, cntRes]) => {
+        if (custRes?.success && Array.isArray(custRes.data)) setLocalCustomers(custRes.data);
+        if (cntRes?.success && Array.isArray(cntRes.data)) setLocalContracts(cntRes.data);
+      });
+    }
+  }, [isOpen]);
+
+  const [customerName, setCustomerName] = useState('شرکت ساپکو');
+  const [contractNumber, setContractNumber] = useState('CNT-SAPCO-1403-Q4');
   const [selectedPartId, setSelectedPartId] = useState('');
   const [quantity, setQuantity] = useState('1000');
   const [dueDate, setDueDate] = useState(
@@ -48,7 +71,7 @@ export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
       return;
     }
 
-    const part = parts.find(p => p.id === selectedPartId);
+    const part = localParts.find(p => p.id === selectedPartId);
     if (!part) return;
 
     setIsSubmitting(true);
@@ -115,39 +138,99 @@ export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-200">مشتری خودروساز</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200">مشتری خودروساز</label>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickModal('CUSTOMER')}
+                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ مشتری جدید</span>
+                </button>
+              </div>
+              {localCustomers.length > 0 ? (
+                <select
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={customerName}>{customerName}</option>
+                  {localCustomers.map(c => (
+                    <option key={c.id} value={c.name}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              )}
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-200">شماره قرارداد / تفاهم‌نامه</label>
-              <input
-                type="text"
-                value={contractNumber}
-                onChange={e => setContractNumber(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200">شماره قرارداد</label>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickModal('CONTRACT')}
+                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ قرارداد جدید</span>
+                </button>
+              </div>
+              {localContracts.length > 0 ? (
+                <select
+                  value={contractNumber}
+                  onChange={e => setContractNumber(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={contractNumber}>{contractNumber}</option>
+                  {localContracts.map(cnt => (
+                    <option key={cnt.id} value={cnt.contractNumber}>
+                      {cnt.contractNumber} ({cnt.customerName})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={contractNumber}
+                  onChange={e => setContractNumber(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              )}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-200">
-              قطعه خودرویی مورد سفارش <span className="text-rose-400">*</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-200">
+                قطعه خودرویی مورد سفارش <span className="text-rose-400">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setActiveQuickModal('PART')}
+                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ تعریف سریع قطعه جدید</span>
+              </button>
+            </div>
             <select
               value={selectedPartId}
               onChange={e => setSelectedPartId(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
             >
               <option value="">-- انتخاب قطعه از فهرست قطعات فعال --</option>
-              {parts.map(p => (
+              {localParts.map(p => (
                 <option key={p.id} value={p.id}>
                   {p.code} - {p.name} ({p.carModel || 'بدنه'})
                 </option>
@@ -226,6 +309,26 @@ export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
           </div>
         </form>
       </div>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        defaultPartCategory="FINISHED_GOOD"
+        defaultCustomerName={customerName}
+        onCreated={(type, item) => {
+          if (type === 'CUSTOMER') {
+            setLocalCustomers(prev => [item, ...prev]);
+            setCustomerName(item.name);
+          } else if (type === 'CONTRACT') {
+            setLocalContracts(prev => [item, ...prev]);
+            setContractNumber(item.contractNumber);
+            if (item.customerName) setCustomerName(item.customerName);
+          } else if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+            setSelectedPartId(item.id);
+          }
+        }}
+      />
     </div>
   );
 };

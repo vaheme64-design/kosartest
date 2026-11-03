@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FilePlus,
   X,
@@ -7,9 +7,11 @@ import {
   AlertCircle,
   CheckCircle2,
   Boxes,
+  Plus,
 } from 'lucide-react';
 import { Part, Routing } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
 
 interface CreateMoModalProps {
   isOpen: boolean;
@@ -22,10 +24,17 @@ interface CreateMoModalProps {
 export const CreateMoModal: React.FC<CreateMoModalProps> = ({
   isOpen,
   onClose,
-  parts,
+  parts: initialParts,
   routings,
   onSubmit,
 }) => {
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+
   const [selectedPartId, setSelectedPartId] = useState('');
   const [targetQuantity, setTargetQuantity] = useState('500');
   const [initialInputQuantity, setInitialInputQuantity] = useState('500');
@@ -39,7 +48,7 @@ export const CreateMoModal: React.FC<CreateMoModalProps> = ({
 
   if (!isOpen) return null;
 
-  const selectedPart = parts.find(p => p.id === selectedPartId);
+  const selectedPart = localParts.find(p => p.id === selectedPartId);
   const matchingRouting = selectedPart
     ? routings.find(r => r.partId === selectedPart.id || r.partCode === selectedPart.code)
     : undefined;
@@ -119,16 +128,26 @@ export const CreateMoModal: React.FC<CreateMoModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-200">
-              انتخاب قطعه خودرویی <span className="text-rose-400">*</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-200">
+                انتخاب قطعه خودرویی <span className="text-rose-400">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setActiveQuickModal('PART')}
+                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ تعریف سریع قطعه جدید</span>
+              </button>
+            </div>
             <select
               value={selectedPartId}
               onChange={e => setSelectedPartId(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
             >
-              <option value="">-- انتخاب قطعه از فهرست ۵۲ قطعه فعال --</option>
-              {parts.map(p => (
+              <option value="">-- انتخاب قطعه از فهرست قطعات فعال --</option>
+              {localParts.map(p => (
                 <option key={p.id} value={p.id}>
                   {p.code} - {p.name} ({p.carModel || 'سازه بدنه'})
                 </option>
@@ -235,6 +254,18 @@ export const CreateMoModal: React.FC<CreateMoModalProps> = ({
           </div>
         </form>
       </div>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        defaultPartCategory="FINISHED_GOOD"
+        onCreated={(type, item) => {
+          if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+            setSelectedPartId(item.id);
+          }
+        }}
+      />
     </div>
   );
 };

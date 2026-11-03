@@ -20,6 +20,12 @@ import {
   Search,
   CheckCircle2,
   X,
+  Trash2,
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
+  Check,
 } from 'lucide-react';
 import {
   Part,
@@ -29,6 +35,10 @@ import {
   Operator,
   FactoryHall,
   SapcoCoilReceipt,
+  WarehouseDefinition,
+  UnitDefinition,
+  CustomerDefinition,
+  ShiftDefinition,
 } from '../types/inventory';
 import { ErpColorTheme, ErpLayoutTemplate, COLOR_THEMES } from '../types/theme';
 import { PartsView } from './PartsView';
@@ -249,6 +259,221 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
     contractsCount: 1,
     active: true,
   });
+
+  // Dynamic Master Data CRUD States
+  const [warehousesList, setWarehousesList] = useState<WarehouseDefinition[]>([]);
+  const [unitsList, setUnitsList] = useState<UnitDefinition[]>([]);
+  const [customersList, setCustomersList] = useState<CustomerDefinition[]>([]);
+  const [shiftsList, setShiftsList] = useState<ShiftDefinition[]>([]);
+
+  // Sub-modals for Master Data CRUD
+  const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState<WarehouseDefinition | null>(null);
+  const [warehouseForm, setWarehouseForm] = useState<Partial<WarehouseDefinition>>({
+    code: '',
+    name: '',
+    type: 'RAW_MATERIALS',
+    managerName: '',
+    locations: ['LOC-RAW-01'],
+  });
+
+  const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<UnitDefinition | null>(null);
+  const [unitForm, setUnitForm] = useState<Partial<UnitDefinition>>({
+    symbol: '',
+    title: '',
+    description: '',
+    conversionFactorToKg: 1,
+    isBaseUnit: false,
+  });
+
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<CustomerDefinition | null>(null);
+  const [customerForm, setCustomerForm] = useState<Partial<CustomerDefinition>>({
+    code: '',
+    name: '',
+    contractType: 'تامین قطعات پرسی بدنه',
+    phone: '',
+    email: '',
+    address: '',
+    isDefault: false,
+  });
+
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [editingShift, setEditingShift] = useState<ShiftDefinition | null>(null);
+  const [shiftForm, setShiftForm] = useState<Partial<ShiftDefinition>>({
+    code: '',
+    name: '',
+    startTime: '06:00',
+    endTime: '14:00',
+    netWorkMinutes: 450,
+    status: 'ACTIVE',
+  });
+
+  const loadDynamicMasterData = async () => {
+    try {
+      const [wRes, uRes, cRes, sRes] = await Promise.all([
+        fetch('/api/warehouses').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/units').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/customers').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/shifts').then(r => r.json()).catch(() => ({ success: false })),
+      ]);
+      if (wRes.success && wRes.data) setWarehousesList(wRes.data);
+      if (uRes.success && uRes.data) setUnitsList(uRes.data);
+      if (cRes.success && cRes.data) setCustomersList(cRes.data);
+      if (sRes.success && sRes.data) setShiftsList(sRes.data);
+    } catch (e) {
+      console.error('Error loading dynamic master data:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadDynamicMasterData();
+  }, []);
+
+  const handleSaveWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/warehouses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(warehouseForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsWarehouseModalOpen(false);
+        setEditingWarehouse(null);
+      } else {
+        alert(data.error || 'خطا در ثبت انبار');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteWarehouse = async (id: string) => {
+    if (!confirm('آیا از حذف این انبار اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/warehouses/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف انبار');
+      }
+    } catch {
+      alert('خطا در حذف انبار');
+    }
+  };
+
+  const handleSaveUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(unitForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsUnitModalOpen(false);
+        setEditingUnit(null);
+      } else {
+        alert(data.error || 'خطا در ثبت واحد');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteUnit = async (id: string) => {
+    if (!confirm('آیا از حذف این واحد اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/units/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف واحد');
+      }
+    } catch {
+      alert('خطا در حذف واحد');
+    }
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customerForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsCustomerModalOpen(false);
+        setEditingCustomer(null);
+      } else {
+        alert(data.error || 'خطا در ثبت مشتری');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (!confirm('آیا از حذف این مشتری اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف مشتری');
+      }
+    } catch {
+      alert('خطا در حذف مشتری');
+    }
+  };
+
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shiftForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsShiftModalOpen(false);
+        setEditingShift(null);
+      } else {
+        alert(data.error || 'خطا در ثبت شیفت');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteShift = async (id: string) => {
+    if (!confirm('آیا از حذف این شیفت اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/shifts/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف شیفت');
+      }
+    } catch {
+      alert('خطا در حذف شیفت');
+    }
+  };
 
   // Hub Cards exactly matching Uploaded Image 1 (1_1da4846f.jpg)
   const hubCards: {
@@ -861,86 +1086,258 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
           className={`bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs ${themeMeta.borderAccentClass}`}
         >
           {activeSection === 'WAREHOUSES' && (
-            <>
-              <h3 className="text-sm font-bold text-slate-900">انبارها و موقعیت‌های قفسه‌بندی کارخانه کوثر</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                {[
-                  { code: 'WH-RAW-01', name: 'انبار مرکزی ورق، کویل و پیچ و مهره', type: 'مواد اولیه و امانی ساپکو', cap: '۱,۲۰۰ تن ظرفیت کف' },
-                  { code: 'WH-WIP-02', name: 'انبار پای خط و قطعات نیمه‌ساخته (WIP)', type: 'ایستگاه‌های میانی پرس و جوش', cap: '۸۵ پالت فلزی' },
-                  { code: 'WH-FIN-03', name: 'انبار محصول نهایی آماده ارسال', type: 'محصول سالم تاییدشده QC', cap: '۲۵۰ باکس پالت ساپکو' },
-                  { code: 'WH-SCR-04', name: 'انبار ضایعات ورق، کناره و ته‌کلاف', type: 'ضایعات قابل بازیافت / برگشتی', cap: 'تفکیک بر اساس گرید ST12/ST13' },
-                  { code: 'WH-QRN-05', name: 'انبار قرنطینه و بازرسی کیفیت', type: 'موقت تا تعیین تکلیف مهندسی کیفیت', cap: '۳۰ پالت قرنطینه' },
-                ].map(w => (
-                  <div key={w.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-1.5">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">انبارها و موقعیت‌های استقرار مواد و قطعات</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">مدیریت انبارهای مواد اولیه، پای خط (WIP)، محصول نهایی و ضایعات</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingWarehouse(null);
+                    setWarehouseForm({
+                      code: `WH-${Date.now().toString().slice(-4)}`,
+                      name: '',
+                      type: 'RAW_MATERIALS',
+                      managerName: '',
+                      locations: ['LOC-01'],
+                    });
+                    setIsWarehouseModalOpen(true);
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>تعریف انبار جدید</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                {warehousesList.map(w => (
+                  <div key={w.id || w.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2 relative group hover:border-slate-300 transition-colors">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{w.name}</span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">فعال</span>
+                      <span className="font-bold text-slate-900 text-sm">{w.name}</span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        {w.type === 'RAW_MATERIALS' ? 'مواد اولیه' : w.type === 'WIP' ? 'پای کار (WIP)' : w.type === 'FINISHED_GOODS' ? 'محصول نهایی' : w.type === 'SCRAP' ? 'ضایعات' : 'ابزار/قالب'}
+                      </span>
                     </div>
-                    <div className="text-slate-500">کد انبار: {w.code} — {w.type}</div>
-                    <div className="text-slate-700 font-medium">{w.cap}</div>
+                    <div className="text-slate-600">
+                      کد انبار: <span className="font-mono font-bold text-slate-800">{w.code}</span>
+                      {w.managerName && <span> — مسوول: {w.managerName}</span>}
+                    </div>
+                    {w.locations && w.locations.length > 0 && (
+                      <div className="text-slate-500 text-[11px] flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>موقعیت‌ها: {w.locations.join(' ، ')}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingWarehouse(w);
+                          setWarehouseForm({ ...w });
+                          setIsWarehouseModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                      >
+                        ویرایش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWarehouse(w.id || w.code)}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </div>
                 ))}
+                {warehousesList.length === 0 && (
+                  <div className="col-span-full py-8 text-center text-slate-400">
+                    هیچ انباری تعریف نشده است. جهت ایجاد انبار دکمه «تعریف انبار جدید» را بزنید.
+                  </div>
+                )}
               </div>
-            </>
+            </div>
           )}
 
           {activeSection === 'UNITS' && (
-            <>
-              <h3 className="text-sm font-bold text-slate-900">واحدهای شمارش و ضرایب تبدیل مهندسی</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-                {[
-                  { symbol: 'KG', title: 'کیلوگرم (وزن ورق و کویل)', desc: 'واحد پایه رول ورق و ضایعات' },
-                  { symbol: 'PCS', title: 'عدد (قطعه شمارشی)', desc: 'واحد پایه قطعات پرسی، پیچ، مهره و لاستیک' },
-                  { symbol: 'SHEET', title: 'برگ ورق (Sheet)', desc: 'قابل تبدیل خودکار به کیلوگرم بر اساس ابعاد و ضخامت' },
-                  { symbol: 'COIL', title: 'رول / کلاف (Coil Pack)', desc: 'رهگیری فیزیکی کلاف با شماره کویل‌پک یکتا' },
-                  { symbol: 'PALLET', title: 'باکس پالت ساپکو', desc: 'واحد بسته‌بندی و ارسال محصول نهایی' },
-                ].map(u => (
-                  <div key={u.symbol} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1">
-                    <div className="text-sm font-bold text-emerald-700">{u.symbol}</div>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">واحدهای شمارش و ضرایب تبدیل مهندسی</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">واحدهای پایه شمارش قطعات، وزن کلاف و تبدیل برگه به کیلوگرم</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingUnit(null);
+                    setUnitForm({ symbol: '', title: '', description: '', conversionFactorToKg: 1, isBaseUnit: false });
+                    setIsUnitModalOpen(true);
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>تعریف واحد جدید</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {unitsList.map(u => (
+                  <div key={u.id || u.symbol} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5 hover:border-slate-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-mono font-bold text-emerald-700">{u.symbol}</div>
+                      {u.isBaseUnit && (
+                        <span className="px-2 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">پایه</span>
+                      )}
+                    </div>
                     <div className="font-bold text-slate-900">{u.title}</div>
-                    <div className="text-slate-500 text-[11px]">{u.desc}</div>
+                    <div className="text-slate-500 text-[11px] leading-relaxed">{u.description}</div>
+                    {u.conversionFactorToKg && u.conversionFactorToKg !== 1 && (
+                      <div className="text-[11px] text-slate-600 font-mono">ضریب به کیلوگرم: {u.conversionFactorToKg}</div>
+                    )}
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingUnit(u);
+                          setUnitForm({ ...u });
+                          setIsUnitModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                      >
+                        ویرایش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUnit(u.id || u.symbol)}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {activeSection === 'SHIFTS' && (
-            <>
-              <h3 className="text-sm font-bold text-slate-900">شیفت‌های کاری و تقویم ظرفیت تولید</h3>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">شیفت‌های کاری و تقویم ظرفیت تولید</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">تعریف ساعات کاری شیفت‌ها، زمان خالص کارکرد و برنامه‌ریزی MRP</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingShift(null);
+                    setShiftForm({ code: `SHIFT-${Date.now().toString().slice(-3)}`, name: '', startTime: '08:00', endTime: '16:00', netWorkMinutes: 450, status: 'ACTIVE' });
+                    setIsShiftModalOpen(true);
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>تعریف شیفت جدید</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                {[
-                  { code: 'SHIFT-A', name: 'شیفت صبح (A)', time: '۰۶:۰۰ الی ۱۴:۰۰ (۴۵۰ دقیقه مفید)', status: 'فعال در تقویم MRP' },
-                  { code: 'SHIFT-B', name: 'شیفت عصر (B)', time: '۱۴:۰۰ الی ۲۲:۰۰ (۴۵۰ دقیقه مفید)', status: 'فعال در تقویم MRP' },
-                  { code: 'SHIFT-C', name: 'شیفت شب (C)', time: '۲۲:۰۰ الی ۰۶:۰۰ (۴۲۰ دقیقه مفید)', status: 'پشتیبان / اضافه‌کاری' },
-                ].map(sh => (
-                  <div key={sh.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1">
-                    <div className="font-bold text-slate-900">{sh.name}</div>
-                    <div className="text-slate-600">{sh.time}</div>
-                    <div className="text-emerald-700 font-semibold text-[11px]">{sh.status}</div>
+                {shiftsList.map(sh => (
+                  <div key={sh.id || sh.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 text-sm">{sh.name}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sh.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {sh.status === 'ACTIVE' ? 'فعال' : 'غیرفعال'}
+                      </span>
+                    </div>
+                    <div className="text-slate-600 font-mono">ساعات: {sh.startTime} الی {sh.endTime}</div>
+                    <div className="text-slate-700 font-semibold text-[11px]">{toPersianDigits(sh.netWorkMinutes)} دقیقه کار مفید</div>
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingShift(sh);
+                          setShiftForm({ ...sh });
+                          setIsShiftModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                      >
+                        ویرایش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteShift(sh.id || sh.code)}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {activeSection === 'CUSTOMERS' && (
-            <>
-              <h3 className="text-sm font-bold text-slate-900">مشتریان و شرکت‌های خودروساز طرف قرارداد</h3>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">مشتریان و شرکت‌های خودروساز طرف قرارداد</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">فهرست مشتریان، قراردادهای ورق امانی و تحویل قطعات</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCustomer(null);
+                    setCustomerForm({ code: `CUST-${Date.now().toString().slice(-4)}`, name: '', contractType: 'تامین قطعات پرسی بدنه', phone: '', email: '', isDefault: false });
+                    setIsCustomerModalOpen(true);
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>تعریف مشتری جدید</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                {[
-                  { code: 'CUST-SAPCO', name: 'شرکت طراحی مهندسی و تامین قطعات ایران‌خودرو (ساپکو)', contract: 'قراردادهای ورق امانی و خرید قطعه', phone: '۰۲۱-۴۸۹۰۱۰۰۰' },
-                  { code: 'CUST-SAZEH', name: 'شرکت سازه‌گستر سایپا', contract: 'تامین قطعات پرسی بدنه و شاسی', phone: '۰۲۱-۴۴۱۹۶۰۰۰' },
-                  { code: 'CUST-BAHMAN', name: 'گروه بهمن (بهمن موتور)', contract: 'تامین براکت‌ها و رام زیر موتور', phone: '۰۲۱-۴۸۰۲۷۰۰۰' },
-                ].map(c => (
-                  <div key={c.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-                    <div className="font-bold text-slate-900">{c.name}</div>
-                    <div className="text-slate-600">{c.contract}</div>
-                    <div className="text-slate-400 text-[11px]">تلفن: {c.phone}</div>
+                {customersList.map(c => (
+                  <div key={c.id || c.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 text-sm">{c.name}</span>
+                      {c.isDefault && (
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">پیش‌فرض سیستم</span>
+                      )}
+                    </div>
+                    <div className="text-slate-600">{c.contractType}</div>
+                    {c.phone && <div className="text-slate-500 text-[11px] flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /><span>تلفن: {c.phone}</span></div>}
+                    {c.email && <div className="text-slate-500 text-[11px] flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /><span>ایمیل: {c.email}</span></div>}
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCustomer(c);
+                          setCustomerForm({ ...c });
+                          setIsCustomerModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                      >
+                        ویرایش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomer(c.id || c.code)}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {activeSection === 'ORDERS' && (
@@ -1074,6 +1471,384 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                   className={`px-5 py-2 rounded-xl font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
                 >
                   ذخیره مشخصات ورق
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Warehouse Modal */}
+      {isWarehouseModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingWarehouse ? 'ویرایش مشخصات انبار' : 'تعریف انبار جدید'}
+              </h3>
+              <button onClick={() => setIsWarehouseModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveWarehouse} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کد انبار *</label>
+                  <input
+                    type="text"
+                    required
+                    value={warehouseForm.code || ''}
+                    onChange={e => setWarehouseForm({ ...warehouseForm, code: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نوع انبار *</label>
+                  <select
+                    value={warehouseForm.type || 'RAW_MATERIALS'}
+                    onChange={e => setWarehouseForm({ ...warehouseForm, type: e.target.value as any })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  >
+                    <option value="RAW_MATERIALS">انبار مواد اولیه و رول</option>
+                    <option value="WIP">انبار پای خط (WIP)</option>
+                    <option value="FINISHED_GOODS">انبار محصول نهایی</option>
+                    <option value="SCRAP">انبار ضایعات آهن و پرت</option>
+                    <option value="TOOLING">انبار قالب و ابزار</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">نام انبار *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثلاً: انبار مرکزی رول و ورق مواد اولیه"
+                  value={warehouseForm.name || ''}
+                  onChange={e => setWarehouseForm({ ...warehouseForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نام مسوول انبار</label>
+                  <input
+                    type="text"
+                    value={warehouseForm.managerName || ''}
+                    onChange={e => setWarehouseForm({ ...warehouseForm, managerName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">موقعیت‌ها (با کاما جدا کنید)</label>
+                  <input
+                    type="text"
+                    value={warehouseForm.locations?.join(', ') || ''}
+                    onChange={e =>
+                      setWarehouseForm({
+                        ...warehouseForm,
+                        locations: e.target.value.split(/[,،]/).map(s => s.trim()).filter(Boolean),
+                      })
+                    }
+                    placeholder="LOC-A1, LOC-A2, LOC-B1"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsWarehouseModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingWarehouse ? 'ثبت تغییرات انبار' : 'ایجاد انبار'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Unit Modal */}
+      {isUnitModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingUnit ? 'ویرایش واحد سنجش' : 'تعریف واحد سنجش جدید'}
+              </h3>
+              <button onClick={() => setIsUnitModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveUnit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نماد واحد (لاتین) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="KG, PCS, SHEET, ROLL"
+                    value={unitForm.symbol || ''}
+                    onChange={e => setUnitForm({ ...unitForm, symbol: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">عنوان واحد (فارسی) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="کیلوگرم، عدد، برگ، رول"
+                    value={unitForm.title || ''}
+                    onChange={e => setUnitForm({ ...unitForm, title: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">توضیحات و کاربرد</label>
+                <input
+                  type="text"
+                  placeholder="واحد پایه کلاف، شمارش قطعه و..."
+                  value={unitForm.description || ''}
+                  onChange={e => setUnitForm({ ...unitForm, description: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">ضریب تبدیل به کیلوگرم</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={unitForm.conversionFactorToKg ?? 1}
+                    onChange={e => setUnitForm({ ...unitForm, conversionFactorToKg: parseFloat(e.target.value) || 1 })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="isBaseUnitCheck"
+                    checked={unitForm.isBaseUnit || false}
+                    onChange={e => setUnitForm({ ...unitForm, isBaseUnit: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <label htmlFor="isBaseUnitCheck" className="text-slate-800 font-medium">واحد مبنای سیستم</label>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsUnitModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingUnit ? 'ثبت تغییرات واحد' : 'ایجاد واحد'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Customer Modal */}
+      {isCustomerModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingCustomer ? 'ویرایش مشتری' : 'تعریف مشتری جدید'}
+              </h3>
+              <button onClick={() => setIsCustomerModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCustomer} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کد مشتری *</label>
+                  <input
+                    type="text"
+                    required
+                    value={customerForm.code || ''}
+                    onChange={e => setCustomerForm({ ...customerForm, code: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نوع رابطه / قرارداد</label>
+                  <input
+                    type="text"
+                    value={customerForm.contractType || ''}
+                    onChange={e => setCustomerForm({ ...customerForm, contractType: e.target.value })}
+                    placeholder="امانی / خرید قطعه"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">نام مشتری / شرکت خودروساز *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثلاً شرکت ساپکو، سازه‌گستر، بهمن موتور"
+                  value={customerForm.name || ''}
+                  onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">تلفن تماس</label>
+                  <input
+                    type="text"
+                    value={customerForm.phone || ''}
+                    onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">ایمیل یا وب‌سایت</label>
+                  <input
+                    type="text"
+                    value={customerForm.email || ''}
+                    onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isDefaultCustCheck"
+                  checked={customerForm.isDefault || false}
+                  onChange={e => setCustomerForm({ ...customerForm, isDefault: e.target.checked })}
+                  className="w-4 h-4 text-emerald-600 rounded"
+                />
+                <label htmlFor="isDefaultCustCheck" className="text-slate-800 font-medium">مشتری پیش‌فرض در فرم‌های ثبت رسید و قرارداد</label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingCustomer ? 'ثبت تغییرات مشتری' : 'ایجاد مشتری'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 11. Shift Modal */}
+      {isShiftModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingShift ? 'ویرایش شیفت کاری' : 'تعریف شیفت کاری جدید'}
+              </h3>
+              <button onClick={() => setIsShiftModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveShift} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کد شیفت *</label>
+                  <input
+                    type="text"
+                    required
+                    value={shiftForm.code || ''}
+                    onChange={e => setShiftForm({ ...shiftForm, code: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نام شیفت *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="شیفت صبح (A)"
+                    value={shiftForm.name || ''}
+                    onChange={e => setShiftForm({ ...shiftForm, name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">شروع</label>
+                  <input
+                    type="time"
+                    value={shiftForm.startTime || '06:00'}
+                    onChange={e => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">پایان</label>
+                  <input
+                    type="time"
+                    value={shiftForm.endTime || '14:00'}
+                    onChange={e => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کار مفید (دقیقه)</label>
+                  <input
+                    type="number"
+                    value={shiftForm.netWorkMinutes ?? 450}
+                    onChange={e => setShiftForm({ ...shiftForm, netWorkMinutes: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsShiftModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingShift ? 'ثبت تغییرات شیفت' : 'ایجاد شیفت'}
                 </button>
               </div>
             </form>

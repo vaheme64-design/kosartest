@@ -18,6 +18,7 @@ import {
   ArrowDownRight,
   ArrowUpLeft,
   Scale,
+  Truck,
 } from 'lucide-react';
 import {
   InventoryDocument,
@@ -70,6 +71,9 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
     RECEIPT_RAW_MATERIAL: { label: 'رسید ورود مواد اولیه', color: 'bg-emerald-50 text-emerald-800 border-emerald-200', icon: ArrowDownRight },
     ISSUE_RAW_MATERIAL: { label: 'حواله خروج و مصرف', color: 'bg-amber-50 text-amber-800 border-amber-200', icon: ArrowUpLeft },
     RECEIPT_FINISHED_GOODS: { label: 'رسید محصول نهایی', color: 'bg-blue-50 text-blue-800 border-blue-200', icon: CheckCircle2 },
+    ISSUE_FINISHED_GOODS: { label: 'حواله خروج محصول نهایی', color: 'bg-indigo-50 text-indigo-800 border-indigo-200', icon: ArrowUpLeft },
+    DELIVERY_CUSTOMER: { label: 'تحویل و خروج به مشتری', color: 'bg-blue-50 text-blue-800 border-blue-200', icon: Truck },
+    SHIPMENT_CUSTOMER: { label: 'حواله بارنامه و تحویل به خودروساز', color: 'bg-cyan-50 text-cyan-800 border-cyan-200', icon: Truck },
     TRANSFER: { label: 'انتقال بین‌انباری', color: 'bg-purple-50 text-purple-800 border-purple-200', icon: ArrowRightLeft },
     ADJUSTMENT: { label: 'تعدیل انبارگردانی', color: 'bg-orange-50 text-orange-800 border-orange-200', icon: Scale },
     REVERSAL: { label: 'سند اصلاحی / ابطال', color: 'bg-rose-50 text-rose-800 border-rose-200', icon: RotateCcw },
@@ -291,8 +295,11 @@ export const MovementHistoryView: React.FC<MovementHistoryViewProps> = ({
           >
             <option value="ALL">همه انواع اسناد</option>
             <option value="RECEIPT_RAW_MATERIAL">رسید مواد اولیه (ورق و کویل)</option>
-            <option value="ISSUE_RAW_MATERIAL">حواله خروج / مصرف</option>
+            <option value="ISSUE_RAW_MATERIAL">حواله خروج و مصرف مواد/قطعات</option>
             <option value="RECEIPT_FINISHED_GOODS">رسید محصول نهایی</option>
+            <option value="ISSUE_FINISHED_GOODS">حواله خروج محصول نهایی</option>
+            <option value="DELIVERY_CUSTOMER">تحویل و خروج به مشتری</option>
+            <option value="SHIPMENT_CUSTOMER">حواله بارنامه و تحویل به خودروساز</option>
             <option value="TRANSFER">انتقال بین‌انباری</option>
             <option value="ADJUSTMENT">تعدیل انبارگردانی</option>
             <option value="REVERSAL">سند معکوس / اصلاحی</option>

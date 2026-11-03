@@ -23,6 +23,7 @@ import {
   X,
   Truck,
   Palette,
+  Sparkles,
 } from 'lucide-react';
 import { UserRoleProfile } from '../types/inventory';
 import {
@@ -52,6 +53,7 @@ interface SidebarProps {
   colorTheme: ErpColorTheme;
   onTabChange: (tab: TabKey, inventorySubTab?: InventorySubTab) => void;
   onOpenTemplateModal?: () => void;
+  onOpenAiAssistant?: () => void;
   currentRole: UserRoleProfile['role'];
   partsCount: number;
   txCount: number;
@@ -98,6 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   colorTheme,
   onTabChange,
   onOpenTemplateModal,
+  onOpenAiAssistant,
   currentRole,
   partsCount,
   txCount,
@@ -429,6 +432,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             )}
           </div>
+        )}
+
+        {/* AI Assistant Button in Sidebar */}
+        {onOpenAiAssistant && (
+          <button
+            type="button"
+            onClick={onOpenAiAssistant}
+            title="دستیار صوتی و متنی هوش مصنوعی کارخانه (کلید میانبر Ctrl + Space)"
+            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              isDarkSidebar
+                ? 'bg-gradient-to-r from-indigo-900/50 via-purple-900/40 to-emerald-900/50 hover:from-indigo-800/80 hover:to-emerald-800/80 text-white border border-indigo-500/30 shadow-xs'
+                : 'bg-gradient-to-r from-indigo-50 via-purple-50/50 to-emerald-50 hover:from-indigo-100 hover:to-emerald-100 text-indigo-950 border border-indigo-200/80 shadow-xs'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+              {!collapsed && <span>دستیار هوش مصنوعی</span>}
+            </span>
+            {!collapsed && (
+              <span className="px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-[9px] font-mono text-slate-500">
+                Ctrl+Space
+              </span>
+            )}
+          </button>
         )}
 
         {/* =================================================================

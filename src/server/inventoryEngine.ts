@@ -194,7 +194,10 @@ export function calculateDetailedStockBalances(
           break;
         }
 
-        case 'ISSUE_RAW_MATERIAL': {
+        case 'ISSUE_RAW_MATERIAL':
+        case 'ISSUE_FINISHED_GOODS':
+        case 'DELIVERY_CUSTOMER':
+        case 'SHIPMENT_CUSTOMER': {
           const entry = getOrCreateBalance(
             part,
             doc.warehouseId,
@@ -360,6 +363,33 @@ export function calculateDetailedStockBalances(
     }
   }
 
+  // 2.1. Ensure every defined catalog part exists in balanceMap so stock inquiry finds it
+  for (const part of partsMap.values()) {
+    const hasEntry = Array.from(balanceMap.values()).some(b => b.partId === part.id);
+    if (!hasEntry) {
+      const defaultWhId =
+        part.category === 'FINISHED_GOOD'
+          ? 'WH-FINISHED'
+          : part.category === 'WIP_PART'
+          ? 'WH-WIP-STAMP'
+          : 'WH-RAW';
+      const defaultWh = WAREHOUSES_LIST.find(w => w.id === defaultWhId) || WAREHOUSES_LIST[0];
+      getOrCreateBalance(
+        part,
+        defaultWh.id,
+        defaultWh.name,
+        'LOC-01',
+        'COMPANY_OWNED',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'AVAILABLE'
+      );
+    }
+  }
+
   // 3. Compute available stock = physical - reserved - qualityBlocked
   const balances: DetailedStockBalance[] = [];
   let totalPhysicalKg = 0;
@@ -478,6 +508,9 @@ export function atomicPostDocument(
     'RECEIPT_RAW_MATERIAL',
     'RECEIPT_FINISHED_GOODS',
     'ISSUE_RAW_MATERIAL',
+    'ISSUE_FINISHED_GOODS',
+    'DELIVERY_CUSTOMER',
+    'SHIPMENT_CUSTOMER',
     'TRANSFER',
   ];
   if (standardDocTypes.includes(document.documentType)) {
@@ -500,7 +533,7 @@ export function atomicPostDocument(
   }
 
   // Negative Stock Protection & CUMULATIVE validation across all lines
-  const isStockDeduction = ['ISSUE_RAW_MATERIAL', 'TRANSFER'].includes(document.documentType);
+  const isStockDeduction = ['ISSUE_RAW_MATERIAL', 'ISSUE_FINISHED_GOODS', 'DELIVERY_CUSTOMER', 'SHIPMENT_CUSTOMER', 'TRANSFER'].includes(document.documentType);
   if (isStockDeduction) {
     const { balances } = calculateDetailedStockBalances(allDocuments, reservations, parts);
 
@@ -643,7 +676,12 @@ export function createReversalDocument(
 
   const now = new Date().toISOString();
   const reversalDocNumber = `REV-${targetDocument.documentNumber}`;
-  const isOriginalIssue = targetDocument.documentType === 'ISSUE_RAW_MATERIAL';
+  const isOriginalIssue = [
+    'ISSUE_RAW_MATERIAL',
+    'ISSUE_FINISHED_GOODS',
+    'DELIVERY_CUSTOMER',
+    'SHIPMENT_CUSTOMER',
+  ].includes(targetDocument.documentType);
 
   // For a transfer: origin was A, destination was B.
   // The reversal must decrease B and restore A.
@@ -1221,7 +1259,6 @@ export function validateImportBatchRows(
     if (typeUpper === 'ITEM_MASTER' || typeUpper === 'PARTS') {
       const code = row['کد قطعه'] || row['code'] || row['partCode'];
       const name = row['نام قطعه'] || row['name'] || row['partName'];
-      const unit = (row['واحد'] || row['unit'] || '').toUpperCase();
 
       let hasRowError = false;
       if (!code) {
@@ -1232,15 +1269,11 @@ export function validateImportBatchRows(
         errors.push({ rowNumber: rowNum, fieldName: 'name', errorMessage: `نام قطعه در ردیف ${rowNum} الزامی است.` });
         hasRowError = true;
       }
-      if (code && seenIds.has(code)) {
+      if (code && seenIds.has(String(code).toUpperCase())) {
         errors.push({ rowNumber: rowNum, fieldName: 'code', errorMessage: `کد قطعه «${code}» در ردیف ${rowNum} تکراری است.` });
         hasRowError = true;
       }
-      if (code) seenIds.add(code);
-      if (unit && !['KG', 'PCS'].includes(unit)) {
-        errors.push({ rowNumber: rowNum, fieldName: 'unit', errorMessage: `واحد سنجش در ردیف ${rowNum} نامعتبر است (فقط KG یا PCS).` });
-        hasRowError = true;
-      }
+      if (code) seenIds.add(String(code).toUpperCase());
 
       if (!hasRowError && code && name) {
         validRows.push(row);

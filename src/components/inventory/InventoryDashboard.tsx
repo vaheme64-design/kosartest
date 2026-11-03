@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Search,
   ExternalLink,
+  Truck,
 } from 'lucide-react';
 import {
   InventoryDashboardMetrics,
@@ -34,6 +35,7 @@ interface InventoryDashboardProps {
   onRefresh: () => Promise<void>;
   onOpenReceipt: () => void;
   onOpenIssue: () => void;
+  onOpenCustomerDelivery?: () => void;
   onOpenTransfer: () => void;
   onOpenAdjustment: () => void;
   onNavigateToInquiry: () => void;
@@ -50,6 +52,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   onRefresh,
   onOpenReceipt,
   onOpenIssue,
+  onOpenCustomerDelivery,
   onOpenTransfer,
   onOpenAdjustment,
   onNavigateToInquiry,
@@ -98,8 +101,17 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-all shadow-2xs cursor-pointer"
           >
             <ArrowUpRight className="w-4 h-4 text-slate-500" />
-            <span>حواله مصرف</span>
+            <span>حواله مصرف به خط</span>
           </button>
+          {onOpenCustomerDelivery && (
+            <button
+              onClick={onOpenCustomerDelivery}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+            >
+              <Truck className="w-4 h-4" />
+              <span>تحویل محصول به مشتری</span>
+            </button>
+          )}
           <button
             onClick={onOpenTransfer}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-all shadow-2xs cursor-pointer"

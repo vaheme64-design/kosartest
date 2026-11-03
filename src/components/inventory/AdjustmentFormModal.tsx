@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileEdit,
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ShieldAlert,
+  Plus,
 } from 'lucide-react';
 import {
   Part,
@@ -14,6 +15,7 @@ import {
   DetailedStockBalance,
 } from '../../types/inventory';
 import { formatNumber, formatWeightKg } from '../../utils/formatters';
+import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
 
 interface AdjustmentFormModalProps {
   isOpen: boolean;
@@ -22,16 +24,29 @@ interface AdjustmentFormModalProps {
   warehouses: WarehouseDefinition[];
   balances: DetailedStockBalance[];
   onSubmit: (payload: any) => Promise<{ success: boolean; message?: string; error?: string }>;
+  onItemCreated?: () => void;
 }
 
 export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
   isOpen,
   onClose,
-  parts,
-  warehouses,
+  parts: initialParts,
+  warehouses: initialWarehouses,
   balances,
   onSubmit,
+  onItemCreated,
 }) => {
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [localWarehouses, setLocalWarehouses] = useState<WarehouseDefinition[]>(initialWarehouses);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+  useEffect(() => {
+    setLocalWarehouses(initialWarehouses);
+  }, [initialWarehouses]);
+
   const [warehouseId, setWarehouseId] = useState<string>('WH-RAW');
   const [locationCode, setLocationCode] = useState<string>('LOC-RAW-A1');
   const [selectedPartId, setSelectedPartId] = useState<string>('');
@@ -45,13 +60,13 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (parts.length > 0 && !selectedPartId) {
-      setSelectedPartId(parts[0].id);
+    if (localParts.length > 0 && !selectedPartId) {
+      setSelectedPartId(localParts[0].id);
     }
-  }, [parts, selectedPartId]);
+  }, [localParts, selectedPartId]);
 
-  const currentWh = warehouses.find(w => w.id === warehouseId);
-  const selectedPart = parts.find(p => p.id === selectedPartId);
+  const currentWh = localWarehouses.find(w => w.id === warehouseId);
+  const selectedPart = localParts.find(p => p.id === selectedPartId);
 
   // Available stock in that warehouse
   const currentBalance = balances.find(
@@ -190,15 +205,25 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           {/* Part Selection & Warehouse */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                کالا / ماده اولیه <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-700 font-medium">
+                  کالا / ماده اولیه <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickModal('PART')}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ کالا جدید</span>
+                </button>
+              </div>
               <select
                 value={selectedPartId}
                 onChange={e => setSelectedPartId(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               >
-                {parts.map(p => (
+                {localParts.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.code})
                   </option>
@@ -207,19 +232,29 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-700 font-medium mb-1">
-                انبار مورد تعدیل <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-700 font-medium">
+                  انبار مورد تعدیل <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickModal('WAREHOUSE')}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ انبار جدید</span>
+                </button>
+              </div>
               <select
                 value={warehouseId}
                 onChange={e => {
                   setWarehouseId(e.target.value);
-                  const wh = warehouses.find(w => w.id === e.target.value);
+                  const wh = localWarehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setLocationCode(wh.locations[0]);
                 }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 transition-colors"
               >
-                {warehouses.map(w => (
+                {localWarehouses.map(w => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
@@ -326,6 +361,22 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        onCreated={(type, item) => {
+          if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+            setSelectedPartId(item.id);
+          } else if (type === 'WAREHOUSE') {
+            setLocalWarehouses(prev => [...prev, item]);
+            setWarehouseId(item.id);
+            if (item.locations?.[0]) setLocationCode(item.locations[0]);
+          }
+          if (onItemCreated) onItemCreated();
+        }}
+      />
     </div>
   );
 };

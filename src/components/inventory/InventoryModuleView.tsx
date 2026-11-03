@@ -20,6 +20,7 @@ import {
   FileSignature,
   CalendarDays,
   MoreHorizontal,
+  Truck,
 } from 'lucide-react';
 import {
   Part,
@@ -32,6 +33,7 @@ import {
   InventoryDashboardMetrics,
   StageInventorySummary,
   PhysicalCoil,
+  CustomerDefinition,
   WAREHOUSES_LIST,
 } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
@@ -124,25 +126,30 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
   const [balances, setBalances] = useState<DetailedStockBalance[]>([]);
   const [documents, setDocuments] = useState<InventoryDocument[]>([]);
   const [contracts, setContracts] = useState<SapcoContract[]>([]);
+  const [customers, setCustomers] = useState<CustomerDefinition[]>([]);
   const [coils, setCoils] = useState<PhysicalCoil[]>([]);
   const [sapcoLedger, setSapcoLedger] = useState<SapcoContractLedgerEntry[]>([]);
 
   // Modal States
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isIssueOpen, setIsIssueOpen] = useState(false);
+  const [issueModalPreset, setIssueModalPreset] = useState<any>(null);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
 
   useEffect(() => {
     if (initialActionModal === 'RECEIPT') setIsReceiptOpen(true);
-    else if (initialActionModal === 'ISSUE') setIsIssueOpen(true);
+    else if (initialActionModal === 'ISSUE') {
+      setIssueModalPreset(initialIssueDraft || null);
+      setIsIssueOpen(true);
+    }
     else if (initialActionModal === 'RETURN') setIsReturnOpen(true);
     else if (initialActionModal === 'TRANSFER') setIsTransferOpen(true);
     if (initialActionModal && onClearInitialAction) {
       onClearInitialAction();
     }
-  }, [initialActionModal, onClearInitialAction]);
+  }, [initialActionModal, initialIssueDraft, onClearInitialAction]);
 
   // Auto-clear notifications after 4 seconds
   useEffect(() => {
@@ -156,7 +163,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
   const loadInventoryData = useCallback(async () => {
     setLoading(true);
     try {
-      const [metricsRes, whRes, inquiryRes, docsRes, sapcoRes, coilsRes, contractsRes] = await Promise.all([
+      const [metricsRes, whRes, inquiryRes, docsRes, sapcoRes, coilsRes, contractsRes, custRes] = await Promise.all([
         fetch('/api/inventory/dashboard-metrics').then(r => r.json()),
         fetch('/api/inventory/warehouses').then(r => r.json()),
         fetch('/api/inventory/stock-inquiry').then(r => r.json()),
@@ -164,6 +171,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         fetch('/api/inventory/sapco-account').then(r => r.json()),
         fetch('/api/inventory/coils').then(r => r.json()),
         fetch('/api/inventory/contracts').then(r => r.json()),
+        fetch('/api/customers').then(r => r.json()),
       ]);
 
       if (metricsRes?.success && metricsRes.data) setMetrics(metricsRes.data);
@@ -171,6 +179,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
       if (inquiryRes?.success && Array.isArray(inquiryRes.data)) setBalances(inquiryRes.data);
       if (docsRes?.success && Array.isArray(docsRes.data)) setDocuments(docsRes.data);
       if (coilsRes?.success && Array.isArray(coilsRes.data)) setCoils(coilsRes.data);
+      if (custRes?.success && Array.isArray(custRes.data)) setCustomers(custRes.data);
       
       if (contractsRes?.success && Array.isArray(contractsRes.data) && contractsRes.data.length > 0) {
         setContracts(contractsRes.data);
@@ -439,11 +448,25 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setIsIssueOpen(true)}
+              onClick={() => {
+                setIssueModalPreset({ subType: 'PRODUCTION_LINE', warehouseId: 'WH-RAW' });
+                setIsIssueOpen(true);
+              }}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
               <ArrowUpRight className="w-4 h-4 text-amber-400" />
               <span>صدور حواله خروج به خط</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIssueModalPreset({ subType: 'CUSTOMER_DELIVERY', warehouseId: 'WH-FINISHED' });
+                setIsIssueOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+            >
+              <Truck className="w-4 h-4" />
+              <span>تحویل محصول به مشتری (خروج بار)</span>
             </button>
             <button
               type="button"
@@ -807,7 +830,14 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
           loading={loading}
           onRefresh={loadInventoryData}
           onOpenReceipt={() => setIsReceiptOpen(true)}
-          onOpenIssue={() => setIsIssueOpen(true)}
+          onOpenIssue={() => {
+            setIssueModalPreset({ subType: 'PRODUCTION_LINE', warehouseId: 'WH-RAW' });
+            setIsIssueOpen(true);
+          }}
+          onOpenCustomerDelivery={() => {
+            setIssueModalPreset({ subType: 'CUSTOMER_DELIVERY', warehouseId: 'WH-FINISHED' });
+            setIsIssueOpen(true);
+          }}
           onOpenTransfer={() => setIsTransferOpen(true)}
           onOpenAdjustment={() => setIsAdjustmentOpen(true)}
           onNavigateToInquiry={() => setActiveSubTab('INQUIRY')}
@@ -859,7 +889,12 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
       {activeSubTab === 'IMPORT_EXPORT' && (
         <DataImportExportView
           currentUser={currentUser}
-          onSuccess={loadInventoryData}
+          onSuccess={async () => {
+            await loadInventoryData();
+            if (onGlobalRefresh) {
+              await onGlobalRefresh();
+            }
+          }}
         />
       )}
 
@@ -902,16 +937,23 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         contracts={contracts}
         initialDraft={initialReceiptDraft}
         onSubmit={handleCreateDocument}
+        onItemCreated={loadInventoryData}
       />
 
       <IssueFormModal
         isOpen={isIssueOpen}
-        onClose={() => setIsIssueOpen(false)}
+        onClose={() => {
+          setIsIssueOpen(false);
+          setIssueModalPreset(null);
+        }}
         parts={parts}
         warehouses={warehouses}
+        customers={customers}
+        contracts={contracts}
         balances={balances}
-        initialDraft={initialIssueDraft}
+        initialDraft={issueModalPreset || initialIssueDraft}
         onSubmit={handleCreateDocument}
+        onItemCreated={loadInventoryData}
       />
 
       <ReturnFromProductionModal
@@ -937,6 +979,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         warehouses={warehouses}
         balances={balances}
         onSubmit={handleCreateDocument}
+        onItemCreated={loadInventoryData}
       />
 
       <AdjustmentFormModal
@@ -946,6 +989,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         warehouses={warehouses}
         balances={balances}
         onSubmit={handleCreateDocument}
+        onItemCreated={loadInventoryData}
       />
     </div>
   );

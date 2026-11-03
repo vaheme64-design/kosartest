@@ -65,6 +65,10 @@ import {
   SavedReportConfig,
   ImportBatchSummary,
   InventoryDocType,
+  WarehouseDefinition,
+  CustomerDefinition,
+  UnitDefinition,
+  ShiftDefinition,
 } from '../types/inventory';
 import {
   getManufacturingOrdersList,
@@ -148,7 +152,7 @@ export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
     originalWeightKg: 14200,
     remainingWeightKg: 14200,
     warehouseId: 'WH-RAW',
-    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseName: 'انبار مرکزی رول و ورق مواد اولیه',
     warehouseLocationCode: 'LOC-RAW-A1',
     ownership: 'SAPCO_SUPPLIER_OWNED',
     qualityStatus: 'AVAILABLE',
@@ -179,7 +183,7 @@ export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
     originalWeightKg: 12500,
     remainingWeightKg: 12500,
     warehouseId: 'WH-RAW',
-    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseName: 'انبار مرکزی رول و ورق مواد اولیه',
     warehouseLocationCode: 'LOC-RAW-A2',
     ownership: 'SAPCO_SUPPLIER_OWNED',
     qualityStatus: 'AVAILABLE',
@@ -210,7 +214,7 @@ export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
     originalWeightKg: 13800,
     remainingWeightKg: 13800,
     warehouseId: 'WH-RAW',
-    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseName: 'انبار مرکزی رول و ورق مواد اولیه',
     warehouseLocationCode: 'LOC-RAW-A1',
     ownership: 'SAPCO_SUPPLIER_OWNED',
     qualityStatus: 'AVAILABLE',
@@ -241,7 +245,7 @@ export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
     originalWeightKg: 2000,
     remainingWeightKg: 2000,
     warehouseId: 'WH-RAW',
-    warehouseName: 'انبار مرکزی رول و ورق ساپکو',
+    warehouseName: 'انبار مرکزی رول و ورق مواد اولیه',
     warehouseLocationCode: 'LOC-RAW-A3',
     ownership: 'SAPCO_SUPPLIER_OWNED',
     qualityStatus: 'AVAILABLE',
@@ -269,6 +273,29 @@ export const INITIAL_PHYSICAL_COILS: PhysicalCoil[] = [
 
 let physicalCoilsStore: PhysicalCoil[] = [...INITIAL_PHYSICAL_COILS];
 let coilIssueRecordsStore: CoilIssueReturnRecord[] = [];
+
+// Dynamic Master Data Stores (CRUD Supported)
+let warehousesStore: WarehouseDefinition[] = [...WAREHOUSES_LIST];
+
+let unitsStore: UnitDefinition[] = [
+  { id: 'UNIT-KG', symbol: 'KG', title: 'کیلوگرم (وزن ورق و کویل)', description: 'واحد پایه رول ورق، کویل‌پک و پرت ضایعات', conversionFactorToKg: 1, isBaseUnit: true },
+  { id: 'UNIT-PCS', symbol: 'PCS', title: 'عدد (قطعه شمارشی)', description: 'واحد پایه قطعات پرسی، پرچ، پیچ، مهره و لاستیک', isBaseUnit: true },
+  { id: 'UNIT-SHEET', symbol: 'SHEET', title: 'برگ ورق (Sheet)', description: 'ورق شیت برش‌خورده قابل تبدیل به کیلوگرم' },
+  { id: 'UNIT-COIL', symbol: 'COIL', title: 'رول / کلاف (Coil Pack)', description: 'رهگیری فیزیکی کلاف با شماره کویل‌پک یکتا' },
+  { id: 'UNIT-PALLET', symbol: 'PALLET', title: 'باکس پالت ساپکو', description: 'واحد بسته‌بندی و ارسال محصول نهایی' },
+];
+
+let customersStore: CustomerDefinition[] = [
+  { id: 'CUST-SAPCO', code: 'CUST-SAPCO', name: 'شرکت طراحی مهندسی و تامین قطعات ایران‌خودرو (ساپکو)', contractType: 'قراردادهای ورق امانی و خرید قطعه', phone: '۰۲۱-۴۸۹۰۱۰۰۰', isDefault: true },
+  { id: 'CUST-SAZEH', code: 'CUST-SAZEH', name: 'شرکت سازه‌گستر سایپا', contractType: 'تامین قطعات پرسی بدنه و شاسی', phone: '۰۲۱-۴۴۱۹۶۰۰۰', isDefault: false },
+  { id: 'CUST-BAHMAN', code: 'CUST-BAHMAN', name: 'گروه بهمن (بهمن موتور)', contractType: 'تامین براکت‌ها و رام زیر موتور', phone: '۰۲۱-۴۸۰۲۷۰۰۰', isDefault: false },
+];
+
+let shiftsStore: ShiftDefinition[] = [
+  { id: 'SHIFT-A', code: 'SHIFT-A', name: 'شیفت صبح (A)', startTime: '06:00', endTime: '14:00', netWorkMinutes: 450, status: 'ACTIVE' },
+  { id: 'SHIFT-B', code: 'SHIFT-B', name: 'شیفت عصر (B)', startTime: '14:00', endTime: '22:00', netWorkMinutes: 450, status: 'ACTIVE' },
+  { id: 'SHIFT-C', code: 'SHIFT-C', name: 'شیفت شب (C)', startTime: '22:00', endTime: '06:00', netWorkMinutes: 420, status: 'ACTIVE' },
+];
 let savedReportsStore: SavedReportConfig[] = [
   {
     id: 'REP-CFG-01',
@@ -834,6 +861,185 @@ apiRouter.post('/processes', (req: Request, res: Response) => {
 });
 
 /**
+ * 11.1. Warehouses Master Data (انبارها و موقعیت‌ها)
+ */
+apiRouter.get('/warehouses', (_req: Request, res: Response) => {
+  res.json({ success: true, count: warehousesStore.length, data: warehousesStore });
+});
+
+apiRouter.post('/warehouses', (req: Request, res: Response) => {
+  const payload: Partial<WarehouseDefinition> = req.body;
+  if (!payload.name) {
+    return res.status(400).json({ success: false, error: 'نام انبار الزامی است.' });
+  }
+
+  const code = payload.code || `WH-${Date.now().toString().slice(-4)}`;
+  const existingIndex = warehousesStore.findIndex(w => w.id === payload.id || w.code === payload.code);
+
+  if (existingIndex >= 0) {
+    warehousesStore[existingIndex] = {
+      ...warehousesStore[existingIndex],
+      ...payload,
+      locations: Array.isArray(payload.locations) && payload.locations.length > 0
+        ? payload.locations
+        : warehousesStore[existingIndex].locations,
+    };
+    return res.json({ success: true, message: 'مشخصات انبار با موفقیت به‌روزرسانی شد.', data: warehousesStore[existingIndex] });
+  } else {
+    const newWarehouse: WarehouseDefinition = {
+      id: payload.id || `WH-${Date.now()}`,
+      code,
+      name: payload.name,
+      type: payload.type || 'RAW_MATERIALS',
+      managerName: payload.managerName || '',
+      locations: Array.isArray(payload.locations) && payload.locations.length > 0 ? payload.locations : [`LOC-${code}-01`],
+    };
+    warehousesStore.push(newWarehouse);
+    return res.status(201).json({ success: true, message: 'انبار جدید با موفقیت ثبت شد.', data: newWarehouse });
+  }
+});
+
+apiRouter.delete('/warehouses/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = warehousesStore.length;
+  warehousesStore = warehousesStore.filter(w => w.id !== id && w.code !== id);
+  if (warehousesStore.length < initialCount) {
+    res.json({ success: true, message: 'انبار با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'انبار مورد نظر یافت نشد.' });
+  }
+});
+
+/**
+ * 11.2. Units of Measure Master Data (واحدهای سنجش و تبدیل)
+ */
+apiRouter.get('/units', (_req: Request, res: Response) => {
+  res.json({ success: true, count: unitsStore.length, data: unitsStore });
+});
+
+apiRouter.post('/units', (req: Request, res: Response) => {
+  const payload: Partial<UnitDefinition> = req.body;
+  if (!payload.symbol || !payload.title) {
+    return res.status(400).json({ success: false, error: 'نماد و عنوان واحد الزامی هستند.' });
+  }
+
+  const existingIndex = unitsStore.findIndex(u => u.id === payload.id || u.symbol.toUpperCase() === payload.symbol?.toUpperCase());
+  if (existingIndex >= 0) {
+    unitsStore[existingIndex] = { ...unitsStore[existingIndex], ...payload };
+    return res.json({ success: true, message: 'مشخصات واحد سنجش به‌روزرسانی شد.', data: unitsStore[existingIndex] });
+  } else {
+    const newUnit: UnitDefinition = {
+      id: payload.id || `UNIT-${Date.now()}`,
+      symbol: payload.symbol.toUpperCase(),
+      title: payload.title,
+      description: payload.description || '',
+      conversionFactorToKg: payload.conversionFactorToKg ? Number(payload.conversionFactorToKg) : undefined,
+      isBaseUnit: payload.isBaseUnit || false,
+    };
+    unitsStore.push(newUnit);
+    return res.status(201).json({ success: true, message: 'واحد سنجش جدید با موفقیت تعریف گردید.', data: newUnit });
+  }
+});
+
+apiRouter.delete('/units/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = unitsStore.length;
+  unitsStore = unitsStore.filter(u => u.id !== id && u.symbol !== id);
+  if (unitsStore.length < initialCount) {
+    res.json({ success: true, message: 'واحد سنجش حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'واحد سنجش یافت نشد.' });
+  }
+});
+
+/**
+ * 11.3. Customers & Automakers Master Data (مشتریان و خودروسازان)
+ */
+apiRouter.get('/customers', (_req: Request, res: Response) => {
+  res.json({ success: true, count: customersStore.length, data: customersStore });
+});
+
+apiRouter.post('/customers', (req: Request, res: Response) => {
+  const payload: Partial<CustomerDefinition> = req.body;
+  if (!payload.name) {
+    return res.status(400).json({ success: false, error: 'نام مشتری / شرکت طرف قرارداد الزامی است.' });
+  }
+
+  const existingIndex = customersStore.findIndex(c => c.id === payload.id || (payload.code && c.code === payload.code));
+  if (existingIndex >= 0) {
+    customersStore[existingIndex] = { ...customersStore[existingIndex], ...payload };
+    return res.json({ success: true, message: 'مشخصات مشتری به‌روزرسانی شد.', data: customersStore[existingIndex] });
+  } else {
+    const newCustomer: CustomerDefinition = {
+      id: payload.id || `CUST-${Date.now()}`,
+      code: payload.code || `CUST-${Date.now().toString().slice(-4)}`,
+      name: payload.name,
+      contractType: payload.contractType || 'تامین قطعات پرسی بدنه',
+      phone: payload.phone || '',
+      email: payload.email || '',
+      address: payload.address || '',
+      isDefault: payload.isDefault || false,
+    };
+    customersStore.push(newCustomer);
+    return res.status(201).json({ success: true, message: 'مشتری جدید با موفقیت ثبت گردید.', data: newCustomer });
+  }
+});
+
+apiRouter.delete('/customers/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = customersStore.length;
+  customersStore = customersStore.filter(c => c.id !== id && c.code !== id);
+  if (customersStore.length < initialCount) {
+    res.json({ success: true, message: 'مشتری با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'مشتری یافت نشد.' });
+  }
+});
+
+/**
+ * 11.4. Work Shifts Master Data (شیفت‌های کاری)
+ */
+apiRouter.get('/shifts', (_req: Request, res: Response) => {
+  res.json({ success: true, count: shiftsStore.length, data: shiftsStore });
+});
+
+apiRouter.post('/shifts', (req: Request, res: Response) => {
+  const payload: Partial<ShiftDefinition> = req.body;
+  if (!payload.name) {
+    return res.status(400).json({ success: false, error: 'نام شیفت کاری الزامی است.' });
+  }
+
+  const existingIndex = shiftsStore.findIndex(s => s.id === payload.id || s.code === payload.code);
+  if (existingIndex >= 0) {
+    shiftsStore[existingIndex] = { ...shiftsStore[existingIndex], ...payload };
+    return res.json({ success: true, message: 'مشخصات شیفت به‌روزرسانی شد.', data: shiftsStore[existingIndex] });
+  } else {
+    const newShift: ShiftDefinition = {
+      id: payload.id || `SHIFT-${Date.now()}`,
+      code: payload.code || `SHIFT-${Date.now().toString().slice(-3)}`,
+      name: payload.name,
+      startTime: payload.startTime || '08:00',
+      endTime: payload.endTime || '16:00',
+      netWorkMinutes: Number(payload.netWorkMinutes) || 450,
+      status: payload.status || 'ACTIVE',
+    };
+    shiftsStore.push(newShift);
+    return res.status(201).json({ success: true, message: 'شیفت کاری جدید ثبت گردید.', data: newShift });
+  }
+});
+
+apiRouter.delete('/shifts/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = shiftsStore.length;
+  shiftsStore = shiftsStore.filter(s => s.id !== id && s.code !== id);
+  if (shiftsStore.length < initialCount) {
+    res.json({ success: true, message: 'شیفت کاری با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'شیفت کاری یافت نشد.' });
+  }
+});
+
+/**
  * 12. Safe Sample Data Reset & Clean
  */
 apiRouter.post('/demo-data/seed', async (_req: Request, res: Response) => {
@@ -1208,8 +1414,8 @@ apiRouter.post('/inventory/documents', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'حداقل یک ردیف کالا در سند الزامی است.' });
     }
 
-    const warehouse = WAREHOUSES_LIST.find(w => w.id === payload.warehouseId);
-    const targetWarehouse = payload.targetWarehouseId ? WAREHOUSES_LIST.find(w => w.id === payload.targetWarehouseId) : undefined;
+    const warehouse = warehousesStore.find(w => w.id === payload.warehouseId);
+    const targetWarehouse = payload.targetWarehouseId ? warehousesStore.find(w => w.id === payload.targetWarehouseId) : undefined;
 
     // Generate Document Number if not supplied
     const prefixMap: Record<string, string> = {
@@ -1217,6 +1423,9 @@ apiRouter.post('/inventory/documents', (req: Request, res: Response) => {
       RECEIPT_RAW_MATERIAL: 'REC-MAT',
       RECEIPT_FINISHED_GOODS: 'REC-FIN',
       ISSUE_RAW_MATERIAL: 'ISS-MAT',
+      ISSUE_FINISHED_GOODS: 'OUT-FIN',
+      DELIVERY_CUSTOMER: 'SHP-CUS',
+      SHIPMENT_CUSTOMER: 'SHP-OEM',
       TRANSFER: 'TRF',
       ADJUSTMENT: 'ADJ',
       REVERSAL: 'REV',
@@ -1271,9 +1480,9 @@ apiRouter.post('/inventory/documents', (req: Request, res: Response) => {
       documentStatus: 'DRAFT',
       postingStatus: 'UNPOSTED',
       warehouseId: payload.warehouseId,
-      warehouseName: warehouse ? warehouse.name : payload.warehouseId,
+      warehouseName: warehouse ? warehouse.name : payload.warehouseName || payload.warehouseId,
       targetWarehouseId: payload.targetWarehouseId,
-      targetWarehouseName: targetWarehouse ? targetWarehouse.name : undefined,
+      targetWarehouseName: targetWarehouse ? targetWarehouse.name : payload.targetWarehouseName,
       ownership: payload.ownership || 'COMPANY_OWNED',
       contractId: payload.contractId,
       contractNumber: payload.contractNumber,
@@ -1476,8 +1685,13 @@ apiRouter.get('/inventory/stock-inquiry', (req: Request, res: Response) => {
       );
     }
 
-    // Only non-zero by default unless explicitly asked
-    filtered = filtered.filter(b => b.physicalQty > 0 || b.reservedQty > 0 || b.qualityBlockedQty > 0);
+    // Keep zero-stock catalog parts when searching, when explicitly asked, or by default unless onlyAvailable is true
+    const isSearching = !!(search && typeof search === 'string' && search.trim()) || (partId && partId !== 'ALL');
+    const filterOutZero = req.query.onlyAvailable === 'true' || req.query.onlyNonZero === 'true';
+    
+    if (filterOutZero && !isSearching) {
+      filtered = filtered.filter(b => b.physicalQty > 0 || b.reservedQty > 0 || b.qualityBlockedQty > 0);
+    }
 
     res.json({
       success: true,
@@ -1574,7 +1788,7 @@ apiRouter.post('/inventory/reservations', (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'قطعه مورد نظر یافت نشد.' });
     }
 
-    const warehouse = WAREHOUSES_LIST.find(w => w.id === payload.warehouseId);
+    const warehouse = warehousesStore.find(w => w.id === payload.warehouseId);
     const qty = Number(payload.quantity);
     const weightPerUnit = part.weightPerUnitKg || 1;
     const weightKg = part.unit === 'KG' ? qty : Number((qty * weightPerUnit).toFixed(3));
@@ -2009,7 +2223,7 @@ apiRouter.post('/inventory/coils', (req: Request, res: Response) => {
     }
 
     const part = partsStore.find(p => p.id === payload.partId);
-    const warehouse = WAREHOUSES_LIST.find(w => w.id === payload.warehouseId);
+    const warehouse = warehousesStore.find(w => w.id === payload.warehouseId);
 
     const newCoil: PhysicalCoil = {
       id: payload.id || `COIL-PHYS-${Date.now()}`,
@@ -2053,7 +2267,7 @@ apiRouter.post('/inventory/coils', (req: Request, res: Response) => {
 apiRouter.post('/inventory/coils/:id/issue', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { issuedWeightKg, moId, moOperationId, scrappedKg, user } = req.body;
+    const { issuedWeightKg, moId, moOperationId, scrappedKg, user, multiParts } = req.body;
 
     const coil = physicalCoilsStore.find(c => c.id === id || c.coilId === id);
     if (!coil) {
@@ -2064,6 +2278,55 @@ apiRouter.post('/inventory/coils/:id/issue', (req: Request, res: Response) => {
       uid: user?.uid || 'USR-OP',
       displayName: user?.displayName || 'اپراتور خط پرس',
     };
+
+    // Support Multi-Part issuance scenario (e.g., 1 coil issued for 2 distinct parts/MOs)
+    if (Array.isArray(multiParts) && multiParts.length > 0) {
+      const totalMultiKg = multiParts.reduce((sum: number, p: any) => sum + (Number(p.issuedWeightKg) || 0), 0);
+      if (totalMultiKg <= 0 || totalMultiKg > coil.remainingWeightKg) {
+        return res.status(400).json({
+          success: false,
+          error: `خطای وزن: مجموع وزن‌های تخصیص چندقطعه‌ای (${totalMultiKg} kg) نامعتبر است یا از مانده کلاف (${coil.remainingWeightKg} kg) بیشتر است.`,
+        });
+      }
+
+      const createdRecords: CoilIssueReturnRecord[] = [];
+      for (const p of multiParts) {
+        const partWeight = Number(p.issuedWeightKg) || 0;
+        if (partWeight <= 0) continue;
+        const partObj = partsStore.find(pt => pt.id === p.partId || pt.code === p.partCode);
+        const partLabel = partObj ? `${partObj.name} (${partObj.code})` : (p.partName || p.partCode || 'قطعه نامشخص');
+        const opLabel = p.moOperationId || 'ایستگاه ۱: برش و کشش';
+
+        const rec: CoilIssueReturnRecord = {
+          id: `CIR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          coilId: coil.id,
+          manufacturingOrderId: p.moId || 'MO-DEMO',
+          documentNumber: `ISS-${coil.coilId}-${p.moId || 'P'}`,
+          issuedWeightKg: partWeight,
+          consumedWeightKg: 0,
+          returnedWeightKg: 0,
+          outstandingWeightKg: partWeight,
+          varianceWeightKg: Number(p.scrappedKg) || 0,
+          scrappedKg: Number(p.scrappedKg) || 0,
+          status: 'ISSUED',
+          issuedAt: new Date().toISOString(),
+          notes: `صدور ${partWeight} kg جهت قطعه «${partLabel}» در سفارش «${p.moId || 'MO'}» (${opLabel})`,
+        };
+        coilIssueRecordsStore.unshift(rec);
+        createdRecords.push(rec);
+      }
+
+      coil.remainingWeightKg = Math.round((coil.remainingWeightKg - totalMultiKg) * 1000) / 1000;
+      coil.physicalStatus = coil.remainingWeightKg === 0 ? 'CONSUMED' : 'PARTIALLY_ISSUED';
+      coil.updatedAt = new Date().toISOString();
+
+      return res.json({
+        success: true,
+        message: `تعداد ${createdRecords.length} ردیف خروج کلاف برای قطعات مختلف با مجموع وزن ${totalMultiKg} کیلوگرم صادر شد. مانده کلاف: ${coil.remainingWeightKg} کیلوگرم.`,
+        coil,
+        issueRecords: createdRecords,
+      });
+    }
 
     const result = issuePhysicalCoilPartial(
       coil,
@@ -2092,6 +2355,65 @@ apiRouter.post('/inventory/coils/:id/issue', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'خطا در صدور جزئی کلاف',
+    });
+  }
+});
+
+/**
+ * 16.13.1. Coil Lifecycle & Genealogy Traceability Report
+ */
+apiRouter.get('/inventory/coils/:id/genealogy', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const coil = physicalCoilsStore.find(c => c.id === id || c.coilId === id || c.coilPackNumber === id);
+    if (!coil) {
+      return res.status(404).json({ success: false, error: 'کلاف فیزیکی مورد نظر یافت نشد.' });
+    }
+
+    // Find all issue and return records
+    const records = coilIssueRecordsStore.filter(r => r.coilId === coil.id || r.coilId === coil.coilId);
+
+    // Find related inventory documents mentioning this coil or heat
+    const relatedDocs = inventoryDocsStore.filter(doc =>
+      doc.lines.some(l => l.lotNumber === coil.coilPackNumber || l.lotNumber === coil.coilId || l.heatNumber === coil.heatNumber)
+    );
+
+    // Calculate consumption statistics
+    const totalIssuedKg = records.reduce((sum, r) => sum + (r.issuedWeightKg || 0), 0);
+    const totalReturnedKg = records.reduce((sum, r) => sum + (r.returnedWeightKg || 0), 0);
+    const totalScrappedKg = records.reduce((sum, r) => sum + (r.scrappedKg || 0), 0);
+    const netConsumedKg = Math.max(0, totalIssuedKg - totalReturnedKg);
+
+    let lifecycleStatus: 'FULL' | 'PARTIAL' | 'CONSUMED' = 'FULL';
+    if (coil.remainingWeightKg <= 0) {
+      lifecycleStatus = 'CONSUMED';
+    } else if (coil.remainingWeightKg < coil.originalWeightKg) {
+      lifecycleStatus = 'PARTIAL';
+    }
+
+    res.json({
+      success: true,
+      data: {
+        coil,
+        lifecycleStatus,
+        metrics: {
+          originalWeightKg: coil.originalWeightKg,
+          remainingWeightKg: coil.remainingWeightKg,
+          totalIssuedKg,
+          totalReturnedKg,
+          totalScrappedKg,
+          netConsumedKg,
+          utilizationPercent: coil.originalWeightKg > 0 ? Math.round((netConsumedKg / coil.originalWeightKg) * 100) : 0,
+        },
+        records,
+        relatedDocs,
+        allocations: coil.allocations || [],
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در استخراج شناسنامه و ردگیری کلاف',
     });
   }
 });
@@ -2352,6 +2674,216 @@ apiRouter.get('/inventory/import/templates/:type', (req: Request, res: Response)
   res.json({ success: true, data: tmpl });
 });
 
+apiRouter.get('/inventory/units', (_req: Request, res: Response) => {
+  res.json({ success: true, count: unitsStore.length, data: unitsStore });
+});
+
+apiRouter.post('/inventory/units', (req: Request, res: Response) => {
+  const { symbol, title, description, conversionFactorToKg } = req.body;
+  if (!symbol || !title) {
+    return res.status(400).json({ success: false, error: 'نماد و عنوان واحد الزامی هستند.' });
+  }
+  const upperSymbol = symbol.trim().toUpperCase();
+  const existing = unitsStore.find(u => u.symbol.toUpperCase() === upperSymbol);
+  if (existing) {
+    return res.json({ success: true, message: 'واحد قبلاً وجود داشت.', data: existing });
+  }
+  const newUnit: UnitDefinition = {
+    id: `UNIT-${upperSymbol}`,
+    symbol: upperSymbol,
+    title: title.trim(),
+    description: description || '',
+    conversionFactorToKg: Number(conversionFactorToKg) || 1,
+  };
+  unitsStore.push(newUnit);
+  res.status(201).json({ success: true, message: `واحد «${upperSymbol}» با موفقیت اضافه شد.`, data: newUnit });
+});
+
+apiRouter.get('/inventory/customers', (_req: Request, res: Response) => {
+  res.json({ success: true, count: customersStore.length, data: customersStore });
+});
+
+apiRouter.post('/inventory/customers', (req: Request, res: Response) => {
+  const { code, name, contractType, phone, email } = req.body;
+  if (!name) {
+    return res.status(400).json({ success: false, error: 'نام مشتری الزامی است.' });
+  }
+  const custName = name.trim();
+  const existing = customersStore.find(c => c.name.toLowerCase() === custName.toLowerCase());
+  if (existing) {
+    return res.json({ success: true, message: 'مشتری قبلاً وجود داشت.', data: existing });
+  }
+  const custCode = code || `CUST-${custName.replace(/\s+/g, '-').toUpperCase().slice(0, 15)}`;
+  const newCust: CustomerDefinition = {
+    id: custCode,
+    code: custCode,
+    name: custName,
+    contractType: contractType || 'خرید قطعات و ورق',
+    phone: phone || '',
+    email: email || '',
+  };
+  customersStore.push(newCust);
+  res.status(201).json({ success: true, message: `مشتری «${custName}» با موفقیت ثبت شد.`, data: newCust });
+});
+
+apiRouter.post('/inventory/import/create-missing-master-data', (req: Request, res: Response) => {
+  try {
+    const { units = [], categories = [], parts = [], warehouses = [], customers = [] } = req.body;
+    let addedCount = 0;
+
+    // 1. Add missing units
+    for (const u of units) {
+      const sym = (u.symbol || u.title || '').toString().trim().toUpperCase();
+      if (!sym) continue;
+      if (!unitsStore.some(existing => existing.symbol.toUpperCase() === sym)) {
+        unitsStore.push({
+          id: `UNIT-${sym}`,
+          symbol: sym,
+          title: u.title || `واحد ${sym}`,
+          description: 'تعریف‌شده به طور خودکار در زمان آپلود اکسل',
+          conversionFactorToKg: 1,
+        });
+        addedCount++;
+      }
+    }
+
+    // 2. Add missing warehouses
+    for (const w of warehouses) {
+      const code = (w.code || w.id || '').toString().trim();
+      const name = (w.name || w.title || code).toString().trim();
+      if (!code) continue;
+      if (!warehousesStore.some(existing => existing.id.toUpperCase() === code.toUpperCase() || existing.code.toUpperCase() === code.toUpperCase())) {
+        warehousesStore.push({
+          id: code,
+          code,
+          name: name || `انبار ${code}`,
+          type: 'RAW_MATERIALS',
+          managerName: 'سرپرست انبار',
+          locations: ['LOC-01', 'LOC-A1'],
+        });
+        addedCount++;
+      }
+    }
+
+    // 3. Add missing customers
+    for (const c of customers) {
+      const name = (c.name || c.title || '').toString().trim();
+      if (!name) continue;
+      if (!customersStore.some(existing => existing.name.toLowerCase() === name.toLowerCase())) {
+        const custCode = c.code || `CUST-${name.replace(/\s+/g, '-').toUpperCase().slice(0, 15)}`;
+        customersStore.push({
+          id: custCode,
+          code: custCode,
+          name,
+          contractType: 'تامین قطعات و مواد',
+          phone: '',
+        });
+        addedCount++;
+      }
+    }
+
+    // 4. Add missing parts
+    let postedOpeningDocsCount = 0;
+    for (const p of parts) {
+      const code = (p.code || p.partCode || '').toString().trim();
+      const name = (p.name || p.partName || code).toString().trim();
+      if (!code) continue;
+      
+      let partObj = partsStore.find(existing => existing.code.toUpperCase() === code.toUpperCase());
+      if (!partObj) {
+        partObj = {
+          id: `PRT-IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          code,
+          name: name || `قطعه کد ${code}`,
+          category: (p.category as any) || 'RAW_MATERIAL',
+          unit: (p.unit || 'PCS').toUpperCase(),
+          weightPerUnitKg: Number(p.weightPerUnitKg) || 1,
+          materialGrade: p.materialGrade || 'DC04',
+          thicknessMm: Number(p.thicknessMm) || 0.8,
+          isDemo: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        partsStore.push(partObj);
+        addedCount++;
+      }
+
+      // Check if quantity / stock was supplied for this missing part row
+      const initQty = Number(
+        p.quantity ||
+          p.openingBalance ||
+          p.stock ||
+          p.physicalQty ||
+          p['موجودی'] ||
+          p['موجودی اول دوره'] ||
+          p['مقدار'] ||
+          0
+      );
+      if (initQty > 0) {
+        const whId = p.warehouseId || p.warehouseCode || (partObj.category === 'FINISHED_GOOD' ? 'WH-FINISHED' : 'WH-RAW');
+        const wh = warehousesStore.find(w => w.id === whId || w.code === whId) || warehousesStore[0];
+        const openDoc: InventoryDocument = {
+          id: `DOC-OPEN-AUTO-${Date.now()}-${postedOpeningDocsCount}`,
+          documentNumber: `OB-${Math.floor(10000 + Math.random() * 90000)}`,
+          documentType: 'OPENING_BALANCE',
+          documentDate: new Date().toISOString(),
+          documentStatus: 'CONFIRMED',
+          postingStatus: 'POSTED',
+          warehouseId: wh.id,
+          warehouseName: wh.name,
+          ownership: p.ownership || 'COMPANY_OWNED',
+          lines: [
+            {
+              id: `LINE-OPEN-${Date.now()}-${postedOpeningDocsCount}`,
+              documentId: `DOC-OPEN-AUTO-${Date.now()}-${postedOpeningDocsCount}`,
+              lineNumber: 1,
+              partId: partObj.id,
+              partCode: partObj.code,
+              partName: partObj.name,
+              lotNumber: p.lotNumber || 'OPENING',
+              ownership: p.ownership || 'COMPANY_OWNED',
+              locationCode: 'LOC-01',
+              quantity: initQty,
+              unit: partObj.unit,
+              quantityKg: partObj.unit === 'KG' ? initQty : initQty * (partObj.weightPerUnitKg || 1),
+              qualityStatus: 'AVAILABLE',
+            },
+          ],
+          totalQuantity: initQty,
+          totalWeightKg: partObj.unit === 'KG' ? initQty : initQty * (partObj.weightPerUnitKg || 1),
+          createdByUid: 'USR-AUTO-IMPORT',
+          createdByName: 'ورود خودکار اکسل',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        atomicPostDocument(openDoc, inventoryDocsStore, reservationsStore, partsStore, {
+          uid: 'USR-AUTO-IMPORT',
+          displayName: 'ورود خودکار اکسل',
+        });
+        postedOpeningDocsCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `تعداد ${addedCount} عنوان با موفقیت به اطلاعات پایه سیستم (واحدها، انبارها، کالاها و مشتریان) افزوده شد.${
+        postedOpeningDocsCount > 0 ? ` همچنین سند موجودی اول دوره برای ${postedOpeningDocsCount} کالا در انبار صادر شد.` : ''
+      }`,
+      addedCount,
+      postedOpeningDocsCount,
+      units: unitsStore,
+      warehouses: warehousesStore,
+      customers: customersStore,
+      partsCount: partsStore.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت خودکار اطلاعات پایه',
+    });
+  }
+});
+
 apiRouter.post('/inventory/import/validate', (req: Request, res: Response) => {
   try {
     const { batchType, rows } = req.body;
@@ -2364,8 +2896,91 @@ apiRouter.post('/inventory/import/validate', (req: Request, res: Response) => {
       rows,
       partsStore,
       contractsStore,
-      WAREHOUSES_LIST
+      warehousesStore
     );
+
+    // Detect missing master data elements
+    const missingUnitsMap = new Map<string, { symbol: string; title: string; count: number }>();
+    const missingCategoriesMap = new Map<string, { name: string; count: number }>();
+    const missingPartsMap = new Map<string, { code: string; name: string; category?: string; unit?: string; count: number }>();
+    const missingWarehousesMap = new Map<string, { code: string; name: string; count: number }>();
+    const missingCustomersMap = new Map<string, { name: string; code?: string; count: number }>();
+
+    const knownUnits = new Set(unitsStore.map(u => u.symbol.toUpperCase()));
+    const knownParts = new Set(partsStore.map(p => p.code.toUpperCase()));
+    const knownWhs = new Set(warehousesStore.map(w => w.id.toUpperCase()).concat(warehousesStore.map(w => w.code.toUpperCase())));
+    const knownCusts = new Set(customersStore.map(c => c.name.toUpperCase()).concat(customersStore.map(c => c.code.toUpperCase())));
+
+    rows.forEach(row => {
+      // Check unit
+      const unitVal = (row['واحد'] || row['unit'] || row['واحد سنجش'] || '').toString().trim().toUpperCase();
+      if (unitVal && !knownUnits.has(unitVal)) {
+        const existing = missingUnitsMap.get(unitVal) || { symbol: unitVal, title: `واحد ${unitVal}`, count: 0 };
+        existing.count++;
+        missingUnitsMap.set(unitVal, existing);
+      }
+
+      // Check category if batch is PARTS or ITEMS
+      const catVal = (row['دسته کالا'] || row['category'] || row['گروه کالا'] || '').toString().trim();
+      if (catVal && !['RAW_MATERIAL', 'FINISHED_GOOD', 'WIP', 'SPARE_PART', 'CONSUMABLE'].includes(catVal.toUpperCase())) {
+        const existing = missingCategoriesMap.get(catVal) || { name: catVal, count: 0 };
+        existing.count++;
+        missingCategoriesMap.set(catVal, existing);
+      }
+
+      // Check partCode for COILS, OPENING_BALANCES, INVENTORY_RECEIPTS, INVENTORY_ISSUES
+      const partCodeVal = (row['کد قطعه'] || row['کد کالا'] || row['partCode'] || row['code'] || '').toString().trim();
+      const partNameVal = (row['نام قطعه'] || row['نام کالا'] || row['partName'] || row['name'] || '').toString().trim();
+      if (partCodeVal && !knownParts.has(partCodeVal.toUpperCase())) {
+        const existing = missingPartsMap.get(partCodeVal.toUpperCase()) || {
+          code: partCodeVal,
+          name: partNameVal || `کالا / ورق کد ${partCodeVal}`,
+          category: catVal || 'RAW_MATERIAL',
+          unit: unitVal || 'PCS',
+          count: 0,
+        };
+        existing.count++;
+        missingPartsMap.set(partCodeVal.toUpperCase(), existing);
+      }
+
+      // Check warehouseId
+      const whVal = (row['کد انبار'] || row['warehouseId'] || row['warehouseCode'] || '').toString().trim();
+      const whNameVal = (row['نام انبار'] || row['warehouseName'] || '').toString().trim();
+      if (whVal && !knownWhs.has(whVal.toUpperCase())) {
+        const existing = missingWarehousesMap.get(whVal.toUpperCase()) || {
+          code: whVal,
+          name: whNameVal || `انبار ${whVal}`,
+          count: 0,
+        };
+        existing.count++;
+        missingWarehousesMap.set(whVal.toUpperCase(), existing);
+      }
+
+      // Check customerName for CONTRACTS or CUSTOMERS
+      const custVal = (row['نام مشتری'] || row['customerName'] || row['طرف حساب'] || '').toString().trim();
+      if (custVal && !knownCusts.has(custVal.toUpperCase())) {
+        const existing = missingCustomersMap.get(custVal.toUpperCase()) || {
+          name: custVal,
+          code: `CUST-${custVal.replace(/\s+/g, '-').toUpperCase().slice(0, 15)}`,
+          count: 0,
+        };
+        existing.count++;
+        missingCustomersMap.set(custVal.toUpperCase(), existing);
+      }
+    });
+
+    const missingUnits = Array.from(missingUnitsMap.values());
+    const missingCategories = Array.from(missingCategoriesMap.values());
+    const missingParts = Array.from(missingPartsMap.values());
+    const missingWarehouses = Array.from(missingWarehousesMap.values());
+    const missingCustomers = Array.from(missingCustomersMap.values());
+
+    const hasMissingMasterData =
+      missingUnits.length > 0 ||
+      missingCategories.length > 0 ||
+      missingParts.length > 0 ||
+      missingWarehouses.length > 0 ||
+      missingCustomers.length > 0;
 
     res.json({
       success: true,
@@ -2375,6 +2990,14 @@ apiRouter.post('/inventory/import/validate', (req: Request, res: Response) => {
       invalidRowsCount: validation.invalidRows.length,
       errors: validation.invalidRows,
       preview: validation.validRows.slice(0, 5),
+      missingMasterData: {
+        units: missingUnits,
+        categories: missingCategories,
+        parts: missingParts,
+        warehouses: missingWarehouses,
+        customers: missingCustomers,
+        hasMissingMasterData,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -2386,10 +3009,9 @@ apiRouter.post('/inventory/import/validate', (req: Request, res: Response) => {
 
 apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
   try {
-    const { idempotencyKey, batchType, rows, user } = req.body;
-    if (!idempotencyKey) {
-      return res.status(400).json({ success: false, error: 'کلید یکتایی دسته واردات (Idempotency Key) الزامی است.' });
-    }
+    const idempotencyKey = req.body.idempotencyKey || req.body.batchId || `BATCH-${Date.now()}`;
+    const { batchType, user } = req.body;
+    const rows = req.body.rows || req.body.validRows || [];
 
     // Check idempotency
     const existingBatch = importBatchesStore.find(b => b.idempotencyKey === idempotencyKey);
@@ -2406,60 +3028,135 @@ apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
       rows,
       partsStore,
       contractsStore,
-      WAREHOUSES_LIST
+      warehousesStore
     );
 
-    if (validation.validRows.length === 0) {
+    const validRowsToImport = validation.validRows.length > 0 ? validation.validRows : rows;
+
+    if (validRowsToImport.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'هیچ ردیف معتبری برای ورود یافت نشد. لطفاً خطاهای گزارش‌شده را برطرف نمایید.',
+        error: 'هیچ ردیف معتبری برای ورود یافت نشد. لطفاً فایل اکسل را بررسی کنید.',
         errors: validation.invalidRows,
       });
     }
 
-    // Import valid rows
+    // Import valid rows into corresponding stores
     let importedCount = 0;
-    if (batchType === 'PARTS') {
-      for (const row of validation.validRows) {
-        const existingIdx = partsStore.findIndex(p => p.code === row.code);
+    const bTypeUpper = (batchType || '').toUpperCase();
+
+    if (bTypeUpper === 'PARTS' || bTypeUpper === 'ITEMS' || bTypeUpper === 'ITEM_MASTER') {
+      for (const row of validRowsToImport) {
+        const code = String(row.code || row['کد قطعه'] || row['کد کالا'] || '').trim();
+        const name = String(row.name || row['نام قطعه'] || row['نام کالا'] || row['شرح قطعه'] || '').trim();
+        if (!code || !name) continue;
+
+        const category = row.category || row['دسته کالا'] || row['گروه'] || 'RAW_MATERIAL';
+        const unit = (row.unit || row['واحد'] || row['واحد سنجش'] || 'KG').toUpperCase();
+        const existingIdx = partsStore.findIndex(p => p.code.toLowerCase() === code.toLowerCase());
+
         const newPart: Part = {
           id: row.id || `PRT-IMP-${Date.now()}-${importedCount}`,
-          code: row.code,
-          name: row.name,
-          category: row.category,
-          unit: row.unit,
-          weightPerUnitKg: Number(row.weightPerUnitKg) || 1,
-          materialGrade: row.materialGrade,
+          code,
+          name,
+          category: category as any,
+          unit,
+          weightPerUnitKg: Number(row.weightPerUnitKg || row['وزن واحد (kg)']) || 1,
+          materialGrade: String(row.materialGrade || row['گرید متریال'] || '').trim(),
           thicknessMm: row.thicknessMm ? Number(row.thicknessMm) : undefined,
           isDemo: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+
         if (existingIdx >= 0) {
           partsStore[existingIdx] = { ...partsStore[existingIdx], ...newPart };
         } else {
           partsStore.push(newPart);
         }
+
+        // Check if opening balance quantity was specified in Excel row
+        const initQty = Number(
+          row.quantity ||
+            row.openingBalance ||
+            row.stock ||
+            row.physicalQty ||
+            row['موجودی'] ||
+            row['موجودی اول دوره'] ||
+            row['مقدار'] ||
+            row['وزن'] ||
+            0
+        );
+        if (initQty > 0) {
+          const whId = row.warehouseId || row['کد انبار'] || (newPart.category === 'FINISHED_GOOD' ? 'WH-FINISHED' : 'WH-RAW');
+          const wh = warehousesStore.find(w => w.id === whId || w.code === whId) || warehousesStore[0];
+          const openDoc: InventoryDocument = {
+            id: `DOC-OPEN-CONF-${Date.now()}-${importedCount}`,
+            documentNumber: `OB-${Math.floor(10000 + Math.random() * 90000)}`,
+            documentType: 'OPENING_BALANCE',
+            documentDate: new Date().toISOString(),
+            documentStatus: 'CONFIRMED',
+            postingStatus: 'POSTED',
+            warehouseId: wh.id,
+            warehouseName: wh.name,
+            ownership: row.ownership || 'COMPANY_OWNED',
+            lines: [
+              {
+                id: `LINE-CONF-${Date.now()}-${importedCount}`,
+                documentId: `DOC-OPEN-CONF-${Date.now()}-${importedCount}`,
+                lineNumber: 1,
+                partId: newPart.id,
+                partCode: newPart.code,
+                partName: newPart.name,
+                lotNumber: row.lotNumber || row['شماره بچ / پکینگ'] || 'OPENING',
+                ownership: row.ownership || 'COMPANY_OWNED',
+                locationCode: 'LOC-01',
+                quantity: initQty,
+                unit: newPart.unit,
+                quantityKg: newPart.unit === 'KG' ? initQty : initQty * (newPart.weightPerUnitKg || 1),
+                qualityStatus: 'AVAILABLE',
+              },
+            ],
+            totalQuantity: initQty,
+            totalWeightKg: newPart.unit === 'KG' ? initQty : initQty * (newPart.weightPerUnitKg || 1),
+            createdByUid: user?.uid || 'USR-OP',
+            createdByName: user?.displayName || 'مدیر انبار',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          atomicPostDocument(openDoc, inventoryDocsStore, reservationsStore, partsStore, {
+            uid: user?.uid || 'USR-OP',
+            displayName: user?.displayName || 'مدیر انبار',
+          });
+        }
         importedCount++;
       }
-    } else if (batchType === 'PHYSICAL_COILS') {
-      for (const row of validation.validRows) {
-        const part = partsStore.find(p => p.code === row.partCode);
+    } else if (bTypeUpper === 'PHYSICAL_COILS' || bTypeUpper === 'COILS') {
+      for (const row of validRowsToImport) {
+        const coilPackNumber = String(row.coilPackNumber || row['شماره پکینگ'] || row['شماره پکینگ ساپکو'] || '').trim();
+        const partCode = String(row.partCode || row['کد قطعه'] || row['کد کالا'] || '').trim();
+        const weightKg = Number(row.weightKg || row['originalWeightKg'] || row['وزن فیزیکی (kg)'] || row['وزن باسکول (kg)']) || 0;
+        if (!coilPackNumber || weightKg <= 0) continue;
+
+        const part = partsStore.find(p => p.code.toLowerCase() === partCode.toLowerCase());
+        const whId = row.warehouseId || row['کد انبار'] || 'WH-RAW';
+        const wh = warehousesStore.find(w => w.id === whId || w.code === whId);
+
         const newCoil: PhysicalCoil = {
           id: `COIL-IMP-${Date.now()}-${importedCount}`,
-          coilId: row.coilId,
-          coilPackNumber: row.coilPackNumber,
-          partId: part?.id || row.partCode,
-          partCode: row.partCode,
-          partName: part?.name || row.partCode,
+          coilId: String(row.coilId || row['شناسه کویل'] || `COIL-${Date.now().toString().slice(-5)}`).trim(),
+          coilPackNumber,
+          partId: part?.id || partCode,
+          partCode: partCode || part?.code || 'RAW-SHEET',
+          partName: part?.name || row.partName || 'ورق فولادی کلاف',
           materialGrade: row.materialGrade || part?.materialGrade || 'DC04',
-          thicknessMm: Number(row.thicknessMm) || 0.8,
+          thicknessMm: Number(row.thicknessMm) || part?.thicknessMm || 0.8,
           widthMm: Number(row.widthMm) || 1250,
-          originalWeightKg: Number(row.weightKg),
-          remainingWeightKg: Number(row.weightKg),
-          warehouseId: row.warehouseId,
-          warehouseName: 'انبار مرکزی رول و ورق ساپکو',
-          warehouseLocationCode: 'LOC-RAW-A1',
+          originalWeightKg: weightKg,
+          remainingWeightKg: weightKg,
+          warehouseId: wh ? wh.id : 'WH-RAW',
+          warehouseName: wh ? wh.name : 'انبار مرکزی رول و ورق مواد اولیه',
+          warehouseLocationCode: row.warehouseLocationCode || 'LOC-RAW-A1',
           ownership: row.ownership || 'SAPCO_SUPPLIER_OWNED',
           qualityStatus: 'AVAILABLE',
           physicalStatus: 'AVAILABLE',
@@ -2470,7 +3167,7 @@ apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
                   contractId: row.contractNumber,
                   contractNumber: row.contractNumber,
                   coilId: `COIL-IMP-${Date.now()}-${importedCount}`,
-                  allocatedWeightKg: Number(row.weightKg),
+                  allocatedWeightKg: weightKg,
                   ownership: row.ownership || 'SAPCO_SUPPLIER_OWNED',
                 },
               ]
@@ -2479,9 +3176,11 @@ apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
         physicalCoilsStore.push(newCoil);
         importedCount++;
       }
-    } else if (batchType === 'CONTRACTS') {
-      for (const row of validation.validRows) {
+    } else if (bTypeUpper === 'CONTRACTS') {
+      for (const row of validRowsToImport) {
         const contractNum = String(row.contractNumber || row['شماره قرارداد'] || '').trim();
+        if (!contractNum) continue;
+
         const existingIdx = contractsStore.findIndex(c => c.contractNumber.toLowerCase() === contractNum.toLowerCase());
         const newContract: SapcoContract = {
           id: `CNT-${Date.now()}-${importedCount}`,
@@ -2505,6 +3204,123 @@ apiRouter.post('/inventory/import/confirm', (req: Request, res: Response) => {
         } else {
           contractsStore.push(newContract);
         }
+        importedCount++;
+      }
+    } else if (bTypeUpper === 'WAREHOUSES') {
+      for (const row of validRowsToImport) {
+        const code = String(row.code || row['کد انبار'] || '').trim();
+        const name = String(row.name || row['نام انبار'] || '').trim();
+        if (!code || !name) continue;
+
+        const existingIdx = warehousesStore.findIndex(w => w.code.toLowerCase() === code.toLowerCase());
+        const newWh: WarehouseDefinition = {
+          id: code,
+          code,
+          name,
+          type: row.type || row['نوع انبار'] || 'RAW_MATERIALS',
+          managerName: row.managerName || row['مسوول انبار'] || '',
+          locations: row.locations ? String(row.locations).split(',').map(s => s.trim()) : ['LOC-01'],
+        };
+        if (existingIdx >= 0) {
+          warehousesStore[existingIdx] = newWh;
+        } else {
+          warehousesStore.push(newWh);
+        }
+        importedCount++;
+      }
+    } else if (bTypeUpper === 'CUSTOMERS') {
+      for (const row of validRowsToImport) {
+        const code = String(row.code || row['کد مشتری'] || '').trim();
+        const name = String(row.name || row['نام مشتری'] || '').trim();
+        if (!code || !name) continue;
+
+        const existingIdx = customersStore.findIndex(c => c.code.toLowerCase() === code.toLowerCase());
+        const newCust: CustomerDefinition = {
+          id: code,
+          code,
+          name,
+          contractType: row.contractType || row['نوع قرارداد'] || 'خرید قطعات پرسکاری',
+          phone: row.phone || '',
+          email: row.email || '',
+        };
+        if (existingIdx >= 0) {
+          customersStore[existingIdx] = newCust;
+        } else {
+          customersStore.push(newCust);
+        }
+        importedCount++;
+      }
+    } else if (bTypeUpper === 'UNITS') {
+      for (const row of validRowsToImport) {
+        const symbol = String(row.symbol || row['رمز/نماد واحد'] || '').trim();
+        const title = String(row.title || row['عنوان واحد'] || '').trim();
+        if (!symbol || !title) continue;
+
+        const existingIdx = unitsStore.findIndex(u => u.symbol.toLowerCase() === symbol.toLowerCase());
+        const newUnit: UnitDefinition = {
+          id: symbol,
+          symbol,
+          title,
+          description: row.description || '',
+          conversionFactorToKg: Number(row.conversionFactorToKg) || 1,
+        };
+        if (existingIdx >= 0) {
+          unitsStore[existingIdx] = newUnit;
+        } else {
+          unitsStore.push(newUnit);
+        }
+        importedCount++;
+      }
+    } else if (bTypeUpper === 'OPENING_BALANCES' || bTypeUpper === 'STOCK_COUNT') {
+      for (const row of validRowsToImport) {
+        const partCode = String(row.partCode || row['کد کالا'] || row['کد قطعه'] || '').trim();
+        const qty = Number(row.quantity || row['مقدار اول دوره'] || row['مقدار']) || 0;
+        const whId = row.warehouseId || row['کد انبار'] || 'WH-RAW';
+        if (!partCode || qty <= 0) continue;
+
+        const part = partsStore.find(p => p.code.toLowerCase() === partCode.toLowerCase());
+        const wh = warehousesStore.find(w => w.id === whId || w.code === whId);
+
+        const openDoc: InventoryDocument = {
+          id: `DOC-OPEN-${Date.now()}-${importedCount}`,
+          documentNumber: `REC-OPEN-${Math.floor(1000 + Math.random() * 9000)}`,
+          documentType: 'OPENING_BALANCE',
+          documentDate: new Date().toISOString(),
+          documentStatus: 'CONFIRMED',
+          postingStatus: 'POSTED',
+          warehouseId: wh ? wh.id : 'WH-RAW',
+          warehouseName: wh ? wh.name : 'انبار مرکزی مواد اولیه',
+          ownership: row.ownership || 'COMPANY_OWNED',
+          lines: [
+            {
+              id: `LINE-${Date.now()}`,
+              documentId: `DOC-OPEN-${Date.now()}`,
+              lineNumber: 1,
+              partId: part ? part.id : partCode,
+              partCode,
+              partName: part ? part.name : partCode,
+              lotNumber: row.lotNumber || row['شماره بچ / پکینگ'] || 'OPENING',
+              ownership: row.ownership || 'COMPANY_OWNED',
+              locationCode: 'LOC-01',
+              quantity: qty,
+              unit: part ? part.unit : 'PCS',
+              quantityKg: part ? (part.unit === 'KG' ? qty : qty * (part.weightPerUnitKg || 1)) : qty,
+              qualityStatus: 'AVAILABLE',
+            },
+          ],
+          totalQuantity: qty,
+          totalWeightKg: part ? (part.unit === 'KG' ? qty : qty * (part.weightPerUnitKg || 1)) : qty,
+          createdByUid: user?.uid || 'USR-OP',
+          createdByName: user?.displayName || 'مدیر انبار',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        atomicPostDocument(openDoc, inventoryDocsStore, reservationsStore, partsStore, {
+          uid: user?.uid || 'USR-OP',
+          displayName: user?.displayName || 'مدیر انبار',
+        });
+        inventoryDocsStore.unshift(openDoc);
         importedCount++;
       }
     }

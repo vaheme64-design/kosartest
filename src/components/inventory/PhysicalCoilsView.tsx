@@ -2,21 +2,25 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Layers,
   Search,
-  Filter,
   ArrowUpRight,
   ArrowDownLeft,
   RotateCcw,
   Plus,
   Scale,
-  Building2,
-  FileText,
   CheckCircle2,
   AlertTriangle,
   Tag,
   Info,
+  Clock,
+  Printer,
+  X,
+  FileText,
+  Boxes,
+  Split,
+  Calendar,
 } from 'lucide-react';
 import { PhysicalCoil, StockOwnership } from '../../types/inventory';
-import { formatNumber, formatWeightKg } from '../../utils/formatters';
+import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
 
 interface PhysicalCoilsViewProps {
   onRefresh?: () => Promise<void>;
@@ -32,22 +36,35 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
   const [searchTerm, setSearchTerm] = useState('');
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [ownershipFilter, setOwnershipFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'FULL' | 'PARTIAL' | 'CONSUMED'>('ALL');
 
   // Modals
   const [selectedCoil, setSelectedCoil] = useState<PhysicalCoil | null>(null);
   const [issueModalOpen, setIssueModalOpen] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [allocateModalOpen, setAllocateModalOpen] = useState(false);
+  const [genealogyModalOpen, setGenealogyModalOpen] = useState(false);
 
-  // Form states
+  // Issue Form states (Single vs Multi-Part issue)
+  const [issueMode, setIssueMode] = useState<'SINGLE' | 'MULTI'>('SINGLE');
   const [issueWeight, setIssueWeight] = useState('');
   const [issueMoId, setIssueMoId] = useState('');
   const [issueScrap, setIssueScrap] = useState('0');
+  const [multiPartsList, setMultiPartsList] = useState<Array<{ partName: string; moId: string; issuedWeightKg: string }>>([
+    { partName: 'قطعه شماره ۱ (براکت چپ)', moId: 'MO-1403-101', issuedWeightKg: '800' },
+    { partName: 'قطعه شماره ۲ (براکت راست)', moId: 'MO-1403-102', issuedWeightKg: '700' },
+  ]);
+
+  // Return Form states
   const [returnWeight, setReturnWeight] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
 
   // Multi-contract allocation form
   const [allocationsList, setAllocationsList] = useState<{ contractId: string; allocatedWeightKg: number }[]>([]);
+
+  // Genealogy data state
+  const [genealogyData, setGenealogyData] = useState<any>(null);
+  const [genealogyLoading, setGenealogyLoading] = useState(false);
 
   // Feedback notification
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -76,6 +93,18 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
     return coils.filter(c => {
       if (gradeFilter !== 'ALL' && c.materialGrade !== gradeFilter) return false;
       if (ownershipFilter !== 'ALL' && c.ownership !== ownershipFilter) return false;
+
+      // Status filter
+      if (statusFilter === 'FULL' && (c.remainingWeightKg < c.originalWeightKg || c.remainingWeightKg <= 0)) {
+        return false;
+      }
+      if (statusFilter === 'PARTIAL' && (c.remainingWeightKg >= c.originalWeightKg || c.remainingWeightKg <= 0)) {
+        return false;
+      }
+      if (statusFilter === 'CONSUMED' && c.remainingWeightKg > 0) {
+        return false;
+      }
+
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         return (
@@ -88,48 +117,90 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
       }
       return true;
     });
-  }, [coils, gradeFilter, ownershipFilter, searchTerm]);
+  }, [coils, gradeFilter, ownershipFilter, statusFilter, searchTerm]);
 
-  // Aggregate stats
-  const totalCoilsCount = filteredCoils.length;
+  // Aggregate stats across all coils
+  const fullCoilsCount = coils.filter(c => c.remainingWeightKg === c.originalWeightKg && c.remainingWeightKg > 0).length;
+  const partialCoilsCount = coils.filter(c => c.remainingWeightKg < c.originalWeightKg && c.remainingWeightKg > 0).length;
+  const consumedCoilsCount = coils.filter(c => c.remainingWeightKg <= 0).length;
   const totalPhysicalWeight = filteredCoils.reduce((sum, c) => sum + c.remainingWeightKg, 0);
-  const multiContractCoilsCount = filteredCoils.filter(c => c.allocations && c.allocations.length > 1).length;
 
   const handleIssueSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCoil) return;
 
-    const issuedKg = Number(issueWeight);
-    if (!issuedKg || issuedKg <= 0 || issuedKg > selectedCoil.remainingWeightKg) {
-      setNotification({
-        type: 'error',
-        message: `مقدار صادر شده باید بین 1 تا ${selectedCoil.remainingWeightKg} کیلوگرم باشد.`,
-      });
-      return;
-    }
+    if (issueMode === 'MULTI') {
+      const validParts = multiPartsList.filter(p => Number(p.issuedWeightKg) > 0);
+      const totalMultiKg = validParts.reduce((sum, p) => sum + Number(p.issuedWeightKg), 0);
+      const scrap = Number(issueScrap) || 0;
+      const totalRequired = totalMultiKg + scrap;
 
-    try {
-      const res = await fetch(`/api/inventory/coils/${selectedCoil.id}/issue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          issuedWeightKg: issuedKg,
-          moId: issueMoId || 'MO-PROD-LINE-01',
-          scrappedKg: Number(issueScrap) || 0,
-          user: currentUser,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setNotification({ type: 'error', message: data.error || 'خطا در صدور جزئی کلاف' });
-      } else {
-        setNotification({ type: 'success', message: data.message });
-        setIssueModalOpen(false);
-        setIssueWeight('');
-        fetchCoils();
+      if (totalRequired <= 0 || totalRequired > selectedCoil.remainingWeightKg) {
+        setNotification({
+          type: 'error',
+          message: `مجموع وزن تخصیص به قطعات (${totalRequired} kg) باید بین ۱ تا ${selectedCoil.remainingWeightKg} کیلوگرم باشد.`,
+        });
+        return;
       }
-    } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'خطای شبکه' });
+
+      try {
+        const res = await fetch(`/api/inventory/coils/${selectedCoil.id}/issue`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            multiParts: validParts.map(p => ({
+              partName: p.partName,
+              moId: p.moId,
+              issuedWeightKg: Number(p.issuedWeightKg),
+            })),
+            scrappedKg: scrap,
+            user: currentUser,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setNotification({ type: 'error', message: data.error || 'خطا در صدور چندقطعه‌ای کلاف' });
+        } else {
+          setNotification({ type: 'success', message: data.message });
+          setIssueModalOpen(false);
+          fetchCoils();
+        }
+      } catch (err: any) {
+        setNotification({ type: 'error', message: err.message || 'خطای شبکه' });
+      }
+    } else {
+      const issuedKg = Number(issueWeight);
+      if (!issuedKg || issuedKg <= 0 || issuedKg > selectedCoil.remainingWeightKg) {
+        setNotification({
+          type: 'error',
+          message: `مقدار صادر شده باید بین ۱ تا ${selectedCoil.remainingWeightKg} کیلوگرم باشد.`,
+        });
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/inventory/coils/${selectedCoil.id}/issue`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            issuedWeightKg: issuedKg,
+            moId: issueMoId || 'MO-PROD-LINE-01',
+            scrappedKg: Number(issueScrap) || 0,
+            user: currentUser,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setNotification({ type: 'error', message: data.error || 'خطا در صدور جزئی کلاف' });
+        } else {
+          setNotification({ type: 'success', message: data.message });
+          setIssueModalOpen(false);
+          setIssueWeight('');
+          fetchCoils();
+        }
+      } catch (err: any) {
+        setNotification({ type: 'error', message: err.message || 'خطای شبکه' });
+      }
     }
   };
 
@@ -149,7 +220,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           returnedRemnantWeightKg: returnedKg,
-          notes: returnNotes || 'برگشت مازاد یا ته کلاف از خط تولید به انبار',
+          notes: returnNotes || 'برگشت مازاد یا ته‌کلاف از خط تولید به انبار',
           user: currentUser,
         }),
       });
@@ -211,6 +282,23 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
     }
   };
 
+  const openGenealogyModal = async (coil: PhysicalCoil) => {
+    setSelectedCoil(coil);
+    setGenealogyModalOpen(true);
+    setGenealogyLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/coils/${coil.id}/genealogy`);
+      const data = await res.json();
+      if (data.success) {
+        setGenealogyData(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGenealogyLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4 text-right" dir="rtl">
       {/* Toast Notification */}
@@ -230,37 +318,89 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             )}
             <span>{notification.message}</span>
           </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white">
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white cursor-pointer">
             ✕
           </button>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-            <span className="font-medium">تعداد کلاف‌های فیزیکی موجود</span>
-            <Layers className="w-4 h-4 text-slate-400" />
+      {/* KPI Cards & Lifecycle Tabs */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <button
+          type="button"
+          onClick={() => setStatusFilter('ALL')}
+          className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
+            statusFilter === 'ALL'
+              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className={statusFilter === 'ALL' ? 'text-slate-300' : 'text-slate-500'}>کل کلاف‌های ثبت‌شده</span>
+            <Layers className="w-4 h-4 opacity-70" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{formatNumber(totalCoilsCount)} <span className="text-xs font-normal text-slate-400">حلقه</span></div>
-        </div>
+          <div className="text-2xl font-bold font-mono tracking-tight">
+            {formatNumber(coils.length)}{' '}
+            <span className="text-xs font-normal opacity-70">رول</span>
+          </div>
+        </button>
 
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-            <span className="font-medium">موجودی وزنی در گردش کلاف‌ها</span>
-            <Scale className="w-4 h-4 text-emerald-600" />
+        <button
+          type="button"
+          onClick={() => setStatusFilter('FULL')}
+          className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
+            statusFilter === 'FULL'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className={statusFilter === 'FULL' ? 'text-emerald-100' : 'text-slate-500'}>کلاف‌های دست‌نخورده (کامل)</span>
+            <Boxes className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-emerald-700 font-mono tracking-tight">{formatWeightKg(totalPhysicalWeight)}</div>
-        </div>
+          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'FULL' ? 'text-white' : 'text-emerald-700'}`}>
+            {formatNumber(fullCoilsCount)}{' '}
+            <span className="text-xs font-normal opacity-70">رول</span>
+          </div>
+        </button>
 
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-            <span className="font-medium">کلاف‌های چندقراردادی (تسهیم چندگانه)</span>
-            <Tag className="w-4 h-4 text-amber-600" />
+        <button
+          type="button"
+          onClick={() => setStatusFilter('PARTIAL')}
+          className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
+            statusFilter === 'PARTIAL'
+              ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className={statusFilter === 'PARTIAL' ? 'text-amber-100' : 'text-slate-500'}>کلاف‌های ناقص / در گردش (ته‌رول)</span>
+            <Split className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-amber-700 font-mono tracking-tight">{formatNumber(multiContractCoilsCount)} <span className="text-xs font-normal text-slate-400">کویل</span></div>
-        </div>
+          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'PARTIAL' ? 'text-white' : 'text-amber-700'}`}>
+            {formatNumber(partialCoilsCount)}{' '}
+            <span className="text-xs font-normal opacity-70">رول</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusFilter('CONSUMED')}
+          className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
+            statusFilter === 'CONSUMED'
+              ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className={statusFilter === 'CONSUMED' ? 'text-slate-200' : 'text-slate-500'}>کلاف‌های پایان‌یافته (مصرف‌شده)</span>
+            <CheckCircle2 className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="text-2xl font-bold font-mono tracking-tight">
+            {formatNumber(consumedCoilsCount)}{' '}
+            <span className="text-xs font-normal opacity-70">رول</span>
+          </div>
+        </button>
       </div>
 
       {/* Filters Bar */}
@@ -270,7 +410,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <Search className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="جستجوی شماره کویل، پکینگ، شماره ذوب..."
+              placeholder="جستجوی شماره کویل، پکینگ، شماره ذوب یا قطعه..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 focus:bg-white"
@@ -319,12 +459,13 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200 font-medium">
               <tr>
                 <th className="py-3 px-3.5">شناسه کویل</th>
-                <th className="py-3 px-3.5">شماره پکینگ</th>
+                <th className="py-3 px-3.5">شماره پکینگ (پلاک)</th>
+                <th className="py-3 px-3.5">وضعیت چرخه عمر</th>
                 <th className="py-3 px-3.5">شرح ورق و ابعاد</th>
-                <th className="py-3 px-3.5">گرید متریال</th>
+                <th className="py-3 px-3.5">گرید</th>
                 <th className="py-3 px-3.5">وزن اولیه</th>
-                <th className="py-3 px-3.5">وزن باقیمانده</th>
-                <th className="py-3 px-3.5">تخصیص قراردادها</th>
+                <th className="py-3 px-3.5">مانده در انبار</th>
+                <th className="py-3 px-3.5">سهمیه قراردادها</th>
                 <th className="py-3 px-3.5">محل استقرار</th>
                 <th className="py-3 px-3.5 text-center">عملیات کارگاهی</th>
               </tr>
@@ -332,13 +473,16 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredCoils.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">
-                    هیچ کلاف فیزیکی منطبق بر جستجو یافت نشد.
+                  <td colSpan={10} className="py-8 text-center text-slate-400">
+                    هیچ کلاف فیزیکی منطبق بر این فیلترها یافت نشد.
                   </td>
                 </tr>
               ) : (
                 filteredCoils.map(coil => {
-                  const isRemnant = coil.remainingWeightKg < coil.originalWeightKg;
+                  const isFull = coil.remainingWeightKg === coil.originalWeightKg && coil.remainingWeightKg > 0;
+                  const isPartial = coil.remainingWeightKg < coil.originalWeightKg && coil.remainingWeightKg > 0;
+                  const isConsumed = coil.remainingWeightKg <= 0;
+
                   return (
                     <tr key={coil.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="py-3 px-3.5 font-mono font-medium text-slate-900">
@@ -349,9 +493,23 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                       </td>
                       <td className="py-3 px-3.5 font-mono text-slate-800 font-medium">
                         {coil.coilPackNumber}
-                        {isRemnant && (
-                          <span className="mr-1 inline-block text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
-                            مازاد/ته‌کلاف
+                      </td>
+                      <td className="py-3 px-3.5">
+                        {isFull && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            کامل (دست‌نخورده)
+                          </span>
+                        )}
+                        {isPartial && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                            ناقص / ته‌رول
+                          </span>
+                        )}
+                        {isConsumed && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full font-medium">
+                            پایان‌یافته (صفر)
                           </span>
                         )}
                       </td>
@@ -396,14 +554,15 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                             onClick={() => {
                               setSelectedCoil(coil);
                               setIssueWeight(String(coil.remainingWeightKg));
+                              setIssueMode('SINGLE');
                               setIssueModalOpen(true);
                             }}
                             disabled={coil.remainingWeightKg <= 0}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
-                            title="صدور جزئی به خط تولید"
+                            title="صدور کلاف به خطوط پرس"
                           >
                             <ArrowUpRight className="w-3 h-3 text-slate-500" />
-                            <span>صدور جزئی</span>
+                            <span>خروج / صدور</span>
                           </button>
                           <button
                             onClick={() => {
@@ -412,14 +571,22 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                               setReturnModalOpen(true);
                             }}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
-                            title="برگشت ته‌کلاف یا مازاد"
+                            title="برگشت ته‌کلاف یا مازاد به انبار"
                           >
                             <ArrowDownLeft className="w-3 h-3 text-slate-500" />
-                            <span>برگشت ته‌کلاف</span>
+                            <span>برگشت ته‌رول</span>
+                          </button>
+                          <button
+                            onClick={() => openGenealogyModal(coil)}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            title="شناسنامه کامل و ردگیری مصرف این کلاف"
+                          >
+                            <FileText className="w-3 h-3 text-emerald-600" />
+                            <span>ردگیری / شناسنامه</span>
                           </button>
                           <button
                             onClick={() => openAllocateModal(coil)}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] transition-colors cursor-pointer"
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] transition-colors cursor-pointer"
                             title="مدیریت سهمیه‌ها و قراردادها"
                           >
                             تسهیم
@@ -435,44 +602,171 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
         </div>
       </div>
 
-      {/* Partial Issue Modal */}
+      {/* Multi-Part Issue Modal */}
       {issueModalOpen && selectedCoil && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 text-right shadow-xl">
-            <h3 className="text-sm font-bold text-slate-900 mb-1">
-              صدور جزئی کلاف به خط تولید / سفارش ساخت
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              کویل شماره {selectedCoil.coilId} (پکینگ {selectedCoil.coilPackNumber}) - مانده موجود: {formatWeightKg(selectedCoil.remainingWeightKg)}
-            </p>
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 text-right shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  خروج و صدور کلاف به خطوط تولید (امکان تخصیص همزمان به ۲ قطعه)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  کویل {selectedCoil.coilId} (پکینگ {selectedCoil.coilPackNumber}) — مانده موجود: {formatWeightKg(selectedCoil.remainingWeightKg)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIssueModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Toggle Issue Mode: Single Part vs Multi-Part */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setIssueMode('SINGLE')}
+                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  issueMode === 'SINGLE' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                صدور برای یک قطعه / سفارش ساخت
+              </button>
+              <button
+                type="button"
+                onClick={() => setIssueMode('MULTI')}
+                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  issueMode === 'MULTI' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                صدور همزمان برای ۲ قطعه (تسهیم بین دو خط)
+              </button>
+            </div>
 
             <form onSubmit={handleIssueSubmit} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-600 mb-1 font-medium">وزن مورد نیاز جهت صدور (کیلوگرم)</label>
-                <input
-                  type="number"
-                  value={issueWeight}
-                  onChange={e => setIssueWeight(e.target.value)}
-                  max={selectedCoil.remainingWeightKg}
-                  min={1}
-                  required
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-400 focus:outline-none"
-                />
-              </div>
+              {issueMode === 'SINGLE' ? (
+                <>
+                  <div>
+                    <label className="block text-slate-600 mb-1 font-medium">وزن مورد نیاز جهت صدور (کیلوگرم)</label>
+                    <input
+                      type="number"
+                      value={issueWeight}
+                      onChange={e => setIssueWeight(e.target.value)}
+                      max={selectedCoil.remainingWeightKg}
+                      min={1}
+                      required
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 mb-1 font-medium">شماره دستور ساخت (MO)</label>
+                    <input
+                      type="text"
+                      placeholder="مثال: MO-1403-1002"
+                      value={issueMoId}
+                      onChange={e => setIssueMoId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* Multi-Part Allocation (Scenario: 1 coil for 2 parts simultaneously) */
+                <div className="space-y-3 bg-blue-50/50 p-3.5 rounded-xl border border-blue-200">
+                  <span className="font-semibold text-slate-800 block text-xs">
+                    تسهیم وزن کلاف بین قطعات سالن تولید:
+                  </span>
+
+                  {multiPartsList.map((p, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                        <span>قطعه شماره {idx + 1}</span>
+                        {multiPartsList.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => setMultiPartsList(multiPartsList.filter((_, i) => i !== idx))}
+                            className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                          >
+                            حذف
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder="نام قطعه / شرح عملیات (مثلاً براکت چپ پراید)"
+                            value={p.partName}
+                            onChange={e => {
+                              const updated = [...multiPartsList];
+                              updated[idx].partName = e.target.value;
+                              setMultiPartsList(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="number"
+                            placeholder="وزن (kg)"
+                            value={p.issuedWeightKg}
+                            onChange={e => {
+                              const updated = [...multiPartsList];
+                              updated[idx].issuedWeightKg = e.target.value;
+                              setMultiPartsList(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-900 font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="دستور ساخت MO (مثلاً MO-1403-101)"
+                          value={p.moId}
+                          onChange={e => {
+                            const updated = [...multiPartsList];
+                            updated[idx].moId = e.target.value;
+                            setMultiPartsList(updated);
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1 text-[11px] text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-blue-200 text-xs">
+                    <span className="text-slate-600">
+                      مجموع صادر شده:{' '}
+                      <strong className="font-mono text-blue-700">
+                        {formatNumber(multiPartsList.reduce((s, p) => s + (Number(p.issuedWeightKg) || 0), 0))} kg
+                      </strong>
+                    </span>
+                    <span className="text-slate-600">
+                      مانده پس از صدور:{' '}
+                      <strong className="font-mono text-emerald-700">
+                        {formatNumber(
+                          Math.max(
+                            0,
+                            selectedCoil.remainingWeightKg -
+                              multiPartsList.reduce((s, p) => s + (Number(p.issuedWeightKg) || 0), 0) -
+                              (Number(issueScrap) || 0)
+                          )
+                        )}{' '}
+                        kg
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div>
-                <label className="block text-slate-600 mb-1 font-medium">شماره دستور ساخت (Manufacturing Order)</label>
-                <input
-                  type="text"
-                  placeholder="مثال: MO-1403-1002"
-                  value={issueMoId}
-                  onChange={e => setIssueMoId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 mb-1 font-medium">افت وزنی / ضایعات سر و ته کلاف (کیلوگرم - در صورت وجود)</label>
+                <label className="block text-slate-600 mb-1 font-medium">افت وزنی / ضایعات سر و ته کلاف (کیلوگرم)</label>
                 <input
                   type="number"
                   value={issueScrap}
@@ -494,7 +788,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                   type="submit"
                   className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
                 >
-                  ثبت صدور به خط تولید
+                  ثبت خروج و صدور به خط تولید
                 </button>
               </div>
             </form>
@@ -523,7 +817,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                   min={1}
                   required
                   placeholder="وزن دقیق ترازوی انبار"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-400 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold focus:border-slate-400 focus:outline-none"
                 />
               </div>
 
@@ -550,10 +844,228 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                   type="submit"
                   className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
                 >
-                  ثبت برگشت ته‌کلاف
+                  ثبت برگشت ته‌کلاف به انبار
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* COIL GENEALOGY & TRACEABILITY AUDIT MODAL */}
+      {genealogyModalOpen && selectedCoil && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 text-right shadow-2xl my-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    شناسنامه کامل و ردگیری مصرف کلاف {selectedCoil.coilId}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                    شماره پکینگ: {selectedCoil.coilPackNumber} | شماره ذوب: {selectedCoil.heatNumber || 'ثبت‌نشده'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+                  title="چاپ گزارش شناسنامه"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden sm:inline">چاپ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGenealogyModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {genealogyLoading ? (
+              <div className="py-12 text-center text-slate-500 text-xs">
+                در حال استخراج شناسنامه و ردیابی تاریخچه کلاف...
+              </div>
+            ) : genealogyData ? (
+              <div className="mt-4 space-y-4 text-xs">
+                {/* Status Bar & Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-slate-500 block text-[11px]">وزن اولیه ورود:</span>
+                    <strong className="text-slate-900 font-mono text-sm block mt-1">
+                      {formatWeightKg(genealogyData.metrics.originalWeightKg)}
+                    </strong>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+                    <span className="text-blue-700 block text-[11px]">مجموع خروجی به خط:</span>
+                    <strong className="text-blue-900 font-mono text-sm block mt-1">
+                      {formatWeightKg(genealogyData.metrics.totalIssuedKg)}
+                    </strong>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    <span className="text-amber-700 block text-[11px]">مجموع برگشت ته‌رول:</span>
+                    <strong className="text-amber-900 font-mono text-sm block mt-1">
+                      {formatWeightKg(genealogyData.metrics.totalReturnedKg)}
+                    </strong>
+                  </div>
+                  <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                    <span className="text-emerald-700 block text-[11px]">مانده موجود در انبار:</span>
+                    <strong className="text-emerald-900 font-mono text-sm block mt-1">
+                      {formatWeightKg(genealogyData.metrics.remainingWeightKg)}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Utilization Progress Bar */}
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-slate-700">راندمان و نسبت مصرف کلاف:</span>
+                    <span className="font-mono text-slate-900">{genealogyData.metrics.utilizationPercent}٪ مصرف شده</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-2.5 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, genealogyData.metrics.utilizationPercent)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Contract Allocation Info */}
+                {genealogyData.allocations && genealogyData.allocations.length > 0 && (
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                    <span className="font-bold text-slate-800 block text-xs">
+                      تسهیم قراردادهای متصل به این کلاف:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {genealogyData.allocations.map((a: any, i: number) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-lg text-slate-800 text-xs">
+                          <Tag className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{a.contractNumber}:</span>
+                          <strong className="font-mono">{formatNumber(a.allocatedWeightKg)} kg</strong>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Chronological Event Timeline */}
+                <div className="space-y-3">
+                  <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                    <Clock className="w-4 h-4 text-slate-600" />
+                    <span>تاریخچه وقایع و ردگیری مصرف (ورود، خروج‌ها و برگشت ته‌کلاف):</span>
+                  </h4>
+
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                    {/* Event 1: Receipt */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 mt-1 shrink-0"></span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-slate-900 font-semibold">ورود کلاف به انبار مرکزی مواد اولیه</strong>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(selectedCoil.receiptDate).toLocaleDateString('fa-IR')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          تامین‌کننده: {selectedCoil.supplierName || 'ساپکو'} | وزن اولیه: {formatWeightKg(selectedCoil.originalWeightKg)} | انبار: {selectedCoil.warehouseName} ({selectedCoil.warehouseLocationCode})
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Operational records */}
+                    {genealogyData.records && genealogyData.records.length > 0 ? (
+                      genealogyData.records.map((r: any) => (
+                        <div
+                          key={r.id}
+                          className={`p-3 rounded-xl border flex items-start gap-3 ${
+                            r.actionType === 'ISSUE_TO_PRODUCTION'
+                              ? 'bg-blue-50/60 border-blue-200'
+                              : 'bg-amber-50/60 border-amber-200'
+                          }`}
+                        >
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                              r.actionType === 'ISSUE_TO_PRODUCTION' ? 'bg-blue-600' : 'bg-amber-600'
+                            }`}
+                          ></span>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <strong className="text-slate-900 font-semibold">
+                                {r.actionType === 'ISSUE_TO_PRODUCTION'
+                                  ? 'خروج و صدور به خط تولید'
+                                  : 'برگشت مازاد یا ته‌کلاف به انبار'}
+                              </strong>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {new Date(r.timestamp).toLocaleDateString('fa-IR')}
+                              </span>
+                            </div>
+
+                            {r.actionType === 'ISSUE_TO_PRODUCTION' ? (
+                              <div className="text-[11px] text-slate-700 mt-0.5 space-y-1">
+                                {r.multiParts && r.multiParts.length > 0 ? (
+                                  <div>
+                                    <span className="font-semibold text-blue-900">تخصیص چندقطعه‌ای:</span>
+                                    <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-slate-600">
+                                      {r.multiParts.map((mp: any, i: number) => (
+                                        <li key={i}>
+                                          {mp.partName} ({mp.moId || 'MO'}): <strong className="font-mono">{formatNumber(mp.issuedWeightKg)} kg</strong>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    دستور ساخت: {r.moId || 'MO-PROD'} | وزن صادر شده: <strong className="font-mono">{formatNumber(r.issuedWeightKg)} kg</strong>
+                                  </div>
+                                )}
+                                {r.scrappedKg > 0 && (
+                                  <div className="text-amber-800">
+                                    افت وزنی / ضایعات سر و ته: {r.scrappedKg} kg
+                                  </div>
+                                )}
+                                <div className="text-[10px] text-slate-400">
+                                  ثبت توسط: {r.userName || 'اپراتور'}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-slate-700 mt-0.5">
+                                وزن ته‌کلاف برگشتی: <strong className="font-mono text-emerald-800">{formatNumber(r.returnedWeightKg)} kg</strong>
+                                {r.notes && <p className="text-slate-600 mt-0.5">{r.notes}</p>}
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  ثبت توسط: {r.userName || 'انباردار'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400">
+                        هنوز هیچ برگه صدور به خط تولید یا برگشت ته‌کلافی برای این رول ثبت نشده است (کلاف دست‌نخورده است).
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setGenealogyModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                بستن پنجره شناسنامه
+              </button>
+            </div>
           </div>
         </div>
       )}

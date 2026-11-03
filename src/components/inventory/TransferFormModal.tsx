@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   ArrowRightLeft,
@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Building2,
+  Plus,
 } from 'lucide-react';
 import {
   Part,
@@ -13,6 +14,7 @@ import {
   DetailedStockBalance,
 } from '../../types/inventory';
 import { formatNumber } from '../../utils/formatters';
+import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
 
 interface TransferFormModalProps {
   isOpen: boolean;
@@ -21,16 +23,30 @@ interface TransferFormModalProps {
   warehouses: WarehouseDefinition[];
   balances: DetailedStockBalance[];
   onSubmit: (payload: any) => Promise<{ success: boolean; message?: string; error?: string }>;
+  onItemCreated?: () => void;
 }
 
 export const TransferFormModal: React.FC<TransferFormModalProps> = ({
   isOpen,
   onClose,
-  parts,
-  warehouses,
+  parts: initialParts,
+  warehouses: initialWarehouses,
   balances,
   onSubmit,
+  onItemCreated,
 }) => {
+  const [localParts, setLocalParts] = useState<Part[]>(initialParts);
+  const [localWarehouses, setLocalWarehouses] = useState<WarehouseDefinition[]>(initialWarehouses);
+  const [activeQuickModal, setActiveQuickModal] = useState<QuickCreateEntityType | null>(null);
+  const [quickWarehouseTarget, setQuickWarehouseTarget] = useState<'SOURCE' | 'TARGET'>('TARGET');
+
+  useEffect(() => {
+    setLocalParts(initialParts);
+  }, [initialParts]);
+  useEffect(() => {
+    setLocalWarehouses(initialWarehouses);
+  }, [initialWarehouses]);
+
   const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('WH-RAW');
   const [targetWarehouseId, setTargetWarehouseId] = useState<string>('WH-WIP-STAMP');
   const [sourceLocationCode, setSourceLocationCode] = useState<string>('LOC-RAW-A1');
@@ -45,13 +61,13 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (parts.length > 0 && !selectedPartId) {
-      setSelectedPartId(parts[0].id);
+    if (localParts.length > 0 && !selectedPartId) {
+      setSelectedPartId(localParts[0].id);
     }
-  }, [parts, selectedPartId]);
+  }, [localParts, selectedPartId]);
 
-  const sourceWh = warehouses.find(w => w.id === sourceWarehouseId);
-  const targetWh = warehouses.find(w => w.id === targetWarehouseId);
+  const sourceWh = localWarehouses.find(w => w.id === sourceWarehouseId);
+  const targetWh = localWarehouses.find(w => w.id === targetWarehouseId);
 
   const sourceLots = useMemo(() => {
     return balances.filter(
@@ -72,7 +88,7 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
     return list.reduce((sum, b) => sum + b.availableQty, 0);
   }, [balances, selectedPartId, sourceWarehouseId]);
 
-  const selectedPart = parts.find(p => p.id === selectedPartId);
+  const selectedPart = localParts.find(p => p.id === selectedPartId);
   const requestedQty = Number(quantity) || 0;
   const isOverdraft = requestedQty > availableInSource;
 
@@ -176,20 +192,33 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
           {/* Visual Source -> Destination Flow */}
           <div className="grid grid-cols-1 md:grid-cols-11 gap-3 items-center">
             <div className="md:col-span-5 bg-amber-50/60 p-4 rounded-xl border border-amber-200 space-y-2.5">
-              <div className="flex items-center gap-1.5 font-bold text-amber-900">
-                <Building2 className="w-4 h-4 text-amber-700" />
-                <span>۱. انبار مبدا (خروج از)</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <Building2 className="w-4 h-4 text-amber-700" />
+                  <span>۱. انبار مبدا (خروج از)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickWarehouseTarget('SOURCE');
+                    setActiveQuickModal('WAREHOUSE');
+                  }}
+                  className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ انبار جدید</span>
+                </button>
               </div>
               <select
                 value={sourceWarehouseId}
                 onChange={e => {
                   setSourceWarehouseId(e.target.value);
-                  const wh = warehouses.find(w => w.id === e.target.value);
+                  const wh = localWarehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setSourceLocationCode(wh.locations[0]);
                 }}
                 className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
               >
-                {warehouses.map(w => (
+                {localWarehouses.map(w => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
@@ -218,20 +247,33 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
             </div>
 
             <div className="md:col-span-5 bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 space-y-2.5">
-              <div className="flex items-center gap-1.5 font-bold text-emerald-900">
-                <Building2 className="w-4 h-4 text-emerald-700" />
-                <span>۲. انبار مقصد (ورود به)</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                  <Building2 className="w-4 h-4 text-emerald-700" />
+                  <span>۲. انبار مقصد (ورود به)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickWarehouseTarget('TARGET');
+                    setActiveQuickModal('WAREHOUSE');
+                  }}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ انبار جدید</span>
+                </button>
               </div>
               <select
                 value={targetWarehouseId}
                 onChange={e => {
                   setTargetWarehouseId(e.target.value);
-                  const wh = warehouses.find(w => w.id === e.target.value);
+                  const wh = localWarehouses.find(w => w.id === e.target.value);
                   if (wh && wh.locations.length > 0) setTargetLocationCode(wh.locations[0]);
                 }}
                 className="w-full bg-white border border-emerald-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
               >
-                {warehouses.map(w => (
+                {localWarehouses.map(w => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
@@ -257,15 +299,25 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
           {/* Item & Lot Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">
-                انتخاب کالا / ورق جهت انتقال <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-700 font-semibold">
+                  انتخاب کالا / ورق جهت انتقال <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickModal('PART')}
+                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ تعریف سریع کالا</span>
+                </button>
+              </div>
               <select
                 value={selectedPartId}
                 onChange={e => setSelectedPartId(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-semibold"
               >
-                {parts.map(p => (
+                {localParts.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.code}) — {p.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
                   </option>
@@ -361,6 +413,27 @@ export const TransferFormModal: React.FC<TransferFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      <QuickEntryModals
+        activeModal={activeQuickModal}
+        onClose={() => setActiveQuickModal(null)}
+        onCreated={(type, item) => {
+          if (type === 'PART') {
+            setLocalParts(prev => [item, ...prev]);
+            setSelectedPartId(item.id);
+          } else if (type === 'WAREHOUSE') {
+            setLocalWarehouses(prev => [...prev, item]);
+            if (quickWarehouseTarget === 'SOURCE') {
+              setSourceWarehouseId(item.id);
+              if (item.locations?.[0]) setSourceLocationCode(item.locations[0]);
+            } else {
+              setTargetWarehouseId(item.id);
+              if (item.locations?.[0]) setTargetLocationCode(item.locations[0]);
+            }
+          }
+          if (onItemCreated) onItemCreated();
+        }}
+      />
     </div>
   );
 };
