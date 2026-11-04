@@ -118,9 +118,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
 
   const themeMeta = COLOR_THEMES[colorTheme];
-  const isDarkSidebar = layoutTemplate === 'HUB_WORKSPACE';
-  const isFlatListMode =
-    layoutTemplate === 'HUB_WORKSPACE' || layoutTemplate === 'TABBED_WORKBENCH';
+  const isDarkSidebar = false;
+  const isFlatListMode = true;
 
   const inventorySubModules: SubModuleLink[] = useMemo(
     () => [
@@ -478,35 +477,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => onTabChange(item.tab, item.inventorySubTab)}
                     title={collapsed ? item.label : undefined}
-                    style={
-                      isMainActive
-                        ? { backgroundColor: themeMeta.primaryHex }
-                        : undefined
-                    }
                     className={`w-full flex items-center ${
                       collapsed ? 'justify-center px-2' : 'justify-between px-3.5'
-                    } py-2.5 rounded-xl text-xs transition-all cursor-pointer text-right ${
+                    } py-2.5 rounded-lg text-xs transition-all cursor-pointer text-right ${
                       isMainActive
-                        ? 'text-white font-bold shadow-xs'
-                        : isDarkSidebar
-                        ? 'text-slate-300 hover:text-white hover:bg-white/8 font-medium'
-                        : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 font-medium'
+                        ? 'bg-orange-50/90 text-orange-950 font-bold border border-orange-200/70 shadow-2xs'
+                        : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 font-medium border border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon
                         className={`w-4 h-4 shrink-0 ${
-                          isMainActive
-                            ? 'text-white'
-                            : isDarkSidebar
-                            ? 'text-slate-400'
-                            : 'text-slate-500'
+                          isMainActive ? 'text-orange-600' : 'text-slate-500'
                         }`}
                       />
                       {!collapsed && <span className="truncate">{item.label}</span>}
                     </div>
                     {!collapsed && item.tab === 'inventory' && reorderAlertsCount > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 tabular-nums">
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 tabular-nums">
                         {toPersianDigits(reorderAlertsCount)}
                       </span>
                     )}

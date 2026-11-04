@@ -26,6 +26,7 @@ import {
   toPersianDigits,
   formatDateTime,
 } from '../../utils/formatters';
+import { TableSkeleton } from '../ui/Skeleton';
 
 interface ManufacturingOrdersViewProps {
   orders: ManufacturingOrder[];
@@ -51,6 +52,10 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [expandedMoId, setExpandedMoId] = useState<string | null>(orders.length > 0 ? orders[0].id : null);
+
+  if (loading && orders.length === 0) {
+    return <TableSkeleton rows={6} columns={6} theme="light" />;
+  }
 
   const filteredOrders = orders.filter(mo => {
     if (statusFilter !== 'ALL' && mo.status !== statusFilter) return false;

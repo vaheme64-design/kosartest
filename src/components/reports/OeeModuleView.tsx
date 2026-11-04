@@ -17,18 +17,26 @@ import {
   Wrench,
   Eye,
   X,
+  BarChart3,
+  ChevronRight,
+  ChevronLeft,
+  Filter,
 } from 'lucide-react';
 import {
   OeeDashboardSummary,
   OeeMachineRecord,
+  OeeMachineDowntimeLogItem,
   ShiftFilterKey,
 } from '../../types/oeeAndConsumables';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { ReportModuleSkeleton } from '../common/Skeleton';
 
 export interface OeeModuleViewProps {
   machines?: any[];
 }
+
+export type DrawerDowntimeCategoryFilter = 'ALL' | 'UNPLANNED_BREAKDOWN' | 'PLANNED_SETUP' | 'MINOR_STOP';
 
 export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
   const [data, setData] = useState<OeeDashboardSummary | null>(null);
@@ -36,6 +44,8 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
   const [shiftFilter, setShiftFilter] = useState<ShiftFilterKey>('ALL');
   const [hallFilter, setHallFilter] = useState<string>('ALL');
   const [selectedMachine, setSelectedMachine] = useState<OeeMachineRecord | null>(null);
+  const [drawerCategoryFilter, setDrawerCategoryFilter] = useState<DrawerDowntimeCategoryFilter>('ALL');
+  const [chartViewMode, setChartViewMode] = useState<'OEE_FACTORS' | 'DOWNTIME_STACK'>('OEE_FACTORS');
   const [notice, setNotice] = useState<string | null>(null);
 
   // Interactive OEE Simulator State (شبیه‌ساز ارتقای OEE)
@@ -53,6 +63,11 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
   const [logReason, setLogReason] = useState<string>('بهینه‌سازی زمان تعویض قالب کشش با کلمپ هیدرولیک (SMED)');
   const [submittingLog, setSubmittingLog] = useState(false);
 
+  const openMachineDrawer = (machine: OeeMachineRecord, initialCategory: DrawerDowntimeCategoryFilter = 'ALL') => {
+    setSelectedMachine(machine);
+    setDrawerCategoryFilter(initialCategory);
+  };
+
   const loadOeeData = useCallback(async () => {
     setLoading(true);
     try {
@@ -63,6 +78,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       const json = await res.json();
       if (json.success && json.data) {
         setData(json.data);
+        setSelectedMachine(prev => {
+          if (!prev) return null;
+          return json.data.machines.find((m: OeeMachineRecord) => m.machineId === prev.machineId) || prev;
+        });
       }
     } catch (err) {
       console.error('Failed to load OEE dashboard:', err);
@@ -131,6 +150,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       const json = await res.json();
       if (json.success && json.data) {
         setData(json.data);
+        setSelectedMachine(prev => {
+          if (!prev) return null;
+          return json.data.machines.find((m: OeeMachineRecord) => m.machineId === prev.machineId) || prev;
+        });
         setNotice(json.message || 'ثبت کارکرد شیفت انجام شد و شاخص OEE بازمحاسبه گردید.');
         setIsLogModalOpen(false);
       }
@@ -265,6 +288,11 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
         </div>
       </div>
 
+      {/* Skeleton Loading State during OEE Fetch */}
+      {loading && !data && (
+        <ReportModuleSkeleton kpiCount={6} showChart={true} tableRows={5} tableColumns={9} />
+      )}
+
       {/* Top Formula & 6 KPI Cards */}
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -323,6 +351,298 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
         </div>
       )}
 
+      {/* Interactive Clickable Charts Section (نمودارهای تعاملی قابل کلیک برای مشاهده پنل کشویی ریز توقفات) */}
+      {data && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+            <div>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white">
+                  نمودارهای تعاملی بهره‌وری OEE و تفکیک توقفات ماشین‌آلات (Interactive Drill-Down Charts)
+                </h3>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  قابل کلیک روی هر دستگاه
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                روی ستون یا نوار هر دستگاه در نمودار کلیک کنید تا <strong className="text-emerald-300">پنل کشویی جزئیات ریزِ توقفات (برنامه‌ریزی‌نشده، خرابی اضطراری، تعویض قالب SMED و افت سرعت)</strong> باز شود.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 self-start">
+              <button
+                type="button"
+                onClick={() => setChartViewMode('OEE_FACTORS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  chartViewMode === 'OEE_FACTORS'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                نمودار مقایسه OEE و ۳ شاخص (A×P×Q)
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartViewMode('DOWNTIME_STACK')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  chartViewMode === 'DOWNTIME_STACK'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                نمودار انباشته ریزِ توقفات (دقیقه)
+              </button>
+            </div>
+          </div>
+
+          {chartViewMode === 'OEE_FACTORS' ? (
+            <div className="space-y-4">
+              {/* Legend */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800/80">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-emerald-500 inline-block" />
+                    <strong>شاخص کل OEE</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-cyan-400 inline-block" />
+                    دسترس‌پذیری (Availability)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-amber-400 inline-block" />
+                    عملکرد سرعت (Performance)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-purple-400 inline-block" />
+                    کیفیت (Quality)
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-emerald-400">
+                  خط معیار کلاس جهانی (World-Class): ۸۵٪
+                </span>
+              </div>
+
+              {/* Interactive Vertical Bar Columns per Machine */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+                {data.machines.map(m => {
+                  const isSelected = selectedMachine?.machineId === m.machineId;
+                  const unplannedMin = m.unplannedDowntimeMinutes ?? m.sixBigLosses[0]?.lostTimeMinutes ?? 30;
+                  const plannedMin = m.plannedDowntimeMinutes ?? m.sixBigLosses[1]?.lostTimeMinutes ?? 45;
+
+                  return (
+                    <div
+                      key={m.machineId}
+                      onClick={() => openMachineDrawer(m, 'ALL')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') openMachineDrawer(m, 'ALL');
+                      }}
+                      className={`group relative rounded-xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-slate-800/90 border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg'
+                          : 'bg-slate-950 border-slate-800/90 hover:bg-slate-900 hover:border-emerald-500/50'
+                      }`}
+                    >
+                      {/* Machine Header */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                          <span className="text-[10px] font-mono text-slate-400 block">{m.machineCode}</span>
+                          <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-300 transition line-clamp-1">
+                            {m.machineName}
+                          </h4>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-xs font-mono font-black tabular-nums ${
+                            m.oeePercent >= 75
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : m.oeePercent >= 60
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          }`}
+                        >
+                          {toPersianDigits(m.oeePercent)}٪
+                        </span>
+                      </div>
+
+                      {/* Vertical Bars Visual */}
+                      <div className="relative h-36 bg-slate-900/90 rounded-lg border border-slate-800/80 px-3 pt-5 pb-2 flex items-end justify-around gap-2">
+                        {/* 85% World-Class Benchmark Dashed Line */}
+                        <div
+                          className="absolute inset-x-0 border-t border-dashed border-emerald-400/50 pointer-events-none flex justify-end px-1.5"
+                          style={{ bottom: '85%' }}
+                        >
+                          <span className="text-[9px] font-mono text-emerald-400/90 -mt-3.5 bg-slate-900/90 px-1 rounded">
+                            ۸۵٪
+                          </span>
+                        </div>
+
+                        {[
+                          { label: 'OEE', val: m.oeePercent, color: 'bg-emerald-500 group-hover:bg-emerald-400', text: 'text-emerald-300' },
+                          { label: 'A', val: m.availabilityPercent, color: 'bg-cyan-400 group-hover:bg-cyan-300', text: 'text-cyan-300' },
+                          { label: 'P', val: m.performancePercent, color: 'bg-amber-400 group-hover:bg-amber-300', text: 'text-amber-300' },
+                          { label: 'Q', val: m.qualityPercent, color: 'bg-purple-400 group-hover:bg-purple-300', text: 'text-purple-300' },
+                        ].map(bar => (
+                          <div key={bar.label} className="flex flex-col items-center flex-1 h-full justify-end">
+                            <span className={`text-[9px] font-mono font-bold mb-1 tabular-nums ${bar.text}`}>
+                              {toPersianDigits(Math.round(bar.val))}٪
+                            </span>
+                            <div className="w-full max-w-[22px] bg-slate-800 rounded-t-md h-24 flex items-end overflow-hidden">
+                              <div
+                                className={`w-full rounded-t-md transition-all duration-300 ${bar.color}`}
+                                style={{ height: `${Math.min(100, Math.max(8, bar.val))}%` }}
+                              />
+                            </div>
+                            <span className="text-[9px] font-mono text-slate-400 mt-1">{bar.label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Quick Downtime Summary Footer inside Chart Card */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 space-y-1.5 text-[10px]">
+                        <div className="flex items-center justify-between font-mono">
+                          <span className="text-rose-400">توقف اضطراری/خرابی:</span>
+                          <span className="font-bold text-rose-300">{formatNumber(unplannedMin)} دقیقه</span>
+                        </div>
+                        <div className="flex items-center justify-between font-mono">
+                          <span className="text-amber-400">تعویض قالب/برنامه‌ای:</span>
+                          <span className="font-bold text-amber-300">{formatNumber(plannedMin)} دقیقه</span>
+                        </div>
+                        <div className="pt-1 flex items-center justify-between text-emerald-400 font-bold group-hover:translate-x-[-2px] transition-transform">
+                          <span>مشاهده پنل ریز توقفات</span>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Chart Mode 2: Interactive Stacked Downtime Breakdown Bars per Machine */
+            <div className="space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800/80">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-rose-500 inline-block" />
+                    <strong>توقفات برنامه‌ریزی‌نشده و خرابی اضطراری</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-amber-500 inline-block" />
+                    <strong>تعویض قالب (SMED) و نت برنامه‌ریزی‌شده</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-cyan-500 inline-block" />
+                    <strong>توقفات جزئی فیدر و افت سرعت</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-xs bg-purple-500 inline-block" />
+                    <strong>اتلاف زمان ضایعات کیفی</strong>
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400">
+                  روی هر بخش رنگی نوار کلیک کنید تا مستقیماً همان دسته توقف در پنل کشویی فیلتر شود
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {data.machines.map(m => {
+                  const unplannedMin = m.unplannedDowntimeMinutes ?? m.sixBigLosses[0]?.lostTimeMinutes ?? 30;
+                  const plannedMin = m.plannedDowntimeMinutes ?? m.sixBigLosses[1]?.lostTimeMinutes ?? 45;
+                  const speedMin = m.speedLossMinutes || 25;
+                  const qualMin = m.qualityLossMinutes || 5;
+                  const totalLossMin = Math.max(1, unplannedMin + plannedMin + speedMin + qualMin);
+                  const isSelected = selectedMachine?.machineId === m.machineId;
+
+                  return (
+                    <div
+                      key={m.machineId}
+                      onClick={() => openMachineDrawer(m, 'ALL')}
+                      className={`p-3.5 rounded-xl border transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-slate-800/90 border-rose-500 ring-2 ring-rose-500/30'
+                          : 'bg-slate-950 border-slate-800/90 hover:bg-slate-900 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] font-bold">
+                            {m.machineCode}
+                          </span>
+                          <span className="text-xs font-bold text-white">{m.machineName}</span>
+                          <span className="text-[11px] text-slate-400 hidden md:inline">({m.activePartName})</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums">
+                          <span className="text-rose-400">
+                            خرابی اضطراری: <strong>{formatNumber(unplannedMin)}m</strong>
+                          </span>
+                          <span className="text-amber-400">
+                            تعویض قالب/PM: <strong>{formatNumber(plannedMin)}m</strong>
+                          </span>
+                          <span className="text-cyan-400">
+                            توقف جزئی/سرعت: <strong>{formatNumber(speedMin)}m</strong>
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold">
+                            کل اتلاف: {formatNumber(totalLossMin)} دقیقه
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Interactive Stacked Horizontal Bar */}
+                      <div className="w-full h-5 bg-slate-900 rounded-lg overflow-hidden flex border border-slate-800 p-0.5 gap-0.5">
+                        <div
+                          onClick={e => {
+                            e.stopPropagation();
+                            openMachineDrawer(m, 'UNPLANNED_BREAKDOWN');
+                          }}
+                          title={`توقفات برنامه‌ریزی‌نشده و خرابی: ${unplannedMin} دقیقه (کلیک جهت مشاهده ریز خرابی‌ها)`}
+                          className="bg-rose-500 hover:bg-rose-400 h-full first:rounded-r-md transition-all flex items-center justify-center text-[9px] font-mono font-bold text-white overflow-hidden"
+                          style={{ width: `${Math.round((unplannedMin / totalLossMin) * 100)}%` }}
+                        >
+                          {unplannedMin >= 15 && `${toPersianDigits(unplannedMin)}m`}
+                        </div>
+                        <div
+                          onClick={e => {
+                            e.stopPropagation();
+                            openMachineDrawer(m, 'PLANNED_SETUP');
+                          }}
+                          title={`توقفات برنامه‌ریزی‌شده و تعویض قالب: ${plannedMin} دقیقه (کلیک جهت مشاهده ریز توقفات برنامه‌ای)`}
+                          className="bg-amber-500 hover:bg-amber-400 h-full transition-all flex items-center justify-center text-[9px] font-mono font-bold text-slate-950 overflow-hidden"
+                          style={{ width: `${Math.round((plannedMin / totalLossMin) * 100)}%` }}
+                        >
+                          {plannedMin >= 15 && `${toPersianDigits(plannedMin)}m`}
+                        </div>
+                        <div
+                          onClick={e => {
+                            e.stopPropagation();
+                            openMachineDrawer(m, 'MINOR_STOP');
+                          }}
+                          title={`توقفات جزئی و افت سرعت: ${speedMin} دقیقه (کلیک جهت مشاهده ریز توقفات جزئی)`}
+                          className="bg-cyan-500 hover:bg-cyan-400 h-full transition-all flex items-center justify-center text-[9px] font-mono font-bold text-slate-950 overflow-hidden"
+                          style={{ width: `${Math.round((speedMin / totalLossMin) * 100)}%` }}
+                        >
+                          {speedMin >= 15 && `${toPersianDigits(speedMin)}m`}
+                        </div>
+                        <div
+                          onClick={e => {
+                            e.stopPropagation();
+                            openMachineDrawer(m, 'ALL');
+                          }}
+                          title={`اتلاف کیفیت و ضایعات: ${qualMin} دقیقه`}
+                          className="bg-purple-500 hover:bg-purple-400 h-full last:rounded-l-md transition-all flex items-center justify-center text-[9px] font-mono font-bold text-white overflow-hidden"
+                          style={{ width: `${Math.max(4, Math.round((qualMin / totalLossMin) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Six Big Losses Analysis (تحلیل شش ضایعه بزرگ استاندارد TPM) */}
       {data && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -333,7 +653,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                 تحلیل پارتو شش ضایعه بزرگ تجهیزات (Six Big Losses Breakdown - TPM)
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                شناسایی دقیق گلوگاه‌های اتلاف زمان پرس‌ها و معادل قطعات از دست رفته به تفکیک سه عامل OEE
+                شناسایی دقیق گلوگاه‌های اتلاف زمان پرس‌ها و معادل قطعات از دست رفته — روی هر کارت جهت باز شدن پنل کشویی بحرانی‌ترین دستگاه کلیک کنید
               </p>
             </div>
             <span className="text-[11px] font-mono text-slate-400 tabular-nums">
@@ -357,10 +677,27 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   ? 'bg-amber-500'
                   : 'bg-purple-500';
 
+              const targetCat: DrawerDowntimeCategoryFilter =
+                loss.lossNumber === 1
+                  ? 'UNPLANNED_BREAKDOWN'
+                  : loss.lossNumber === 2
+                  ? 'PLANNED_SETUP'
+                  : loss.lossNumber === 3 || loss.lossNumber === 4
+                  ? 'MINOR_STOP'
+                  : 'ALL';
+
               return (
                 <div
                   key={loss.lossNumber}
-                  className="bg-slate-950 border border-slate-800/90 rounded-xl p-3.5 flex flex-col justify-between space-y-2.5"
+                  onClick={() => {
+                    const topMachine = [...data.machines].sort((a, b) => {
+                      const aLoss = a.sixBigLosses.find(x => x.lossNumber === loss.lossNumber)?.lostTimeMinutes || 0;
+                      const bLoss = b.sixBigLosses.find(x => x.lossNumber === loss.lossNumber)?.lostTimeMinutes || 0;
+                      return bLoss - aLoss;
+                    })[0];
+                    if (topMachine) openMachineDrawer(topMachine, targetCat);
+                  }}
+                  className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-xl p-3.5 flex flex-col justify-between space-y-2.5 cursor-pointer transition group"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
@@ -371,7 +708,9 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         {toPersianDigits(loss.shareOfTotalLossPercent)}٪ از کل اتلاف
                       </span>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-100 mt-2">{loss.lossTitleFa}</h4>
+                    <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-300 transition mt-2">
+                      {loss.lossTitleFa}
+                    </h4>
                     <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                       <strong className="text-slate-300">مصداق کارگاهی:</strong> {loss.rootCauseExampleFa}
                     </p>
@@ -388,8 +727,8 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         style={{ width: `${Math.min(100, loss.shareOfTotalLossPercent)}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-emerald-400 pt-0.5">
-                      <strong>اقدام کایزن:</strong> {loss.kaizenActionFa}
+                    <div className="text-[10px] text-emerald-400 pt-0.5 flex items-center justify-between">
+                      <span><strong>اقدام کایزن:</strong> {loss.kaizenActionFa}</span>
                     </div>
                   </div>
                 </div>
@@ -407,7 +746,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               <Activity className="w-4 h-4 text-emerald-400" />
               جدول تحلیلی OEE به تفکیک دستگاه‌های پرس و خطوط جوشکاری ({toPersianDigits(data.machines.length)} دستگاه)
             </h3>
-            <span className="text-[11px] text-slate-400">برای مشاهده آبشار زمان و ۶ ضایعه هر دستگاه روی ردیف کلیک کنید</span>
+            <span className="text-[11px] text-emerald-400">برای باز شدن پنل کشویی ریزِ توقفات روی هر دستگاه کلیک کنید</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -424,15 +763,19 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   <th className="py-3 px-3 text-center">سیکل واقعی / ایده‌آل</th>
                   <th className="py-3 px-3 text-center">تولید سالم / ضایعات</th>
                   <th className="py-3 px-3 text-center">رتبه OEE</th>
-                  <th className="py-3 px-3 text-center">کالبدشکافی</th>
+                  <th className="py-3 px-3 text-center">پنل توقفات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono tabular-nums">
                 {data.machines.map(m => (
                   <tr
                     key={m.machineId}
-                    onClick={() => setSelectedMachine(m)}
-                    className="hover:bg-slate-800/50 transition cursor-pointer"
+                    onClick={() => openMachineDrawer(m, 'ALL')}
+                    className={`transition cursor-pointer ${
+                      selectedMachine?.machineId === m.machineId
+                        ? 'bg-emerald-950/30 hover:bg-emerald-950/40'
+                        : 'hover:bg-slate-800/50'
+                    }`}
                   >
                     <td className="py-3 px-3 font-sans">
                       <div className="font-bold text-slate-100">{m.machineName}</div>
@@ -490,7 +833,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       )}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <Eye className="w-4 h-4 text-emerald-400 mx-auto" />
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-sans font-bold">
+                        <Eye className="w-3.5 h-3.5" />
+                        ریز توقفات
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -621,61 +967,413 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
         </div>
       )}
 
-      {/* Machine Drill-Down Modal */}
+      {/* Slide-Over Drawer Panel for Machine Granular Downtimes (پنل کشویی جزئیات ریز توقفات و کالبدشکافی دستگاه) */}
       {selectedMachine && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white">
-                  کالبدشکافی OEE و آبشار زمان: {selectedMachine.machineName} ({selectedMachine.machineCode})
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  قطعه فعال: {selectedMachine.activePartName} • شاخص OEE فعلی: {toPersianDigits(selectedMachine.oeePercent)}٪
-                </p>
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex justify-end"
+          onClick={() => setSelectedMachine(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-slate-900 border-r border-slate-700 w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden"
+          >
+            {/* Sticky Drawer Header */}
+            <div className="p-5 bg-slate-950 border-b border-slate-800 space-y-3 shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold">
+                      {selectedMachine.machineCode}
+                    </span>
+                    <h3 className="text-base font-black text-white">
+                      پنل کشویی جزئیات ریزِ توقفات: {selectedMachine.machineName}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {selectedMachine.hallName} • قطعه فعال: <strong className="text-slate-200">{selectedMachine.activePartName}</strong> • ظرفیت: {toPersianDigits(selectedMachine.tonnage)} تن
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogMachineId(selectedMachine.machineId);
+                      setLogEventType('UNPLANNED_DOWNTIME');
+                      setIsLogModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>ثبت توقف جدید</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMachine(null)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition"
+                    title="بستن پنل کشویی"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <button onClick={() => setSelectedMachine(null)} className="text-slate-400 hover:text-white cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Quick Machine Switcher inside the Slide-Over Drawer */}
+              {data && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1">
+                  <span className="text-[10px] text-slate-400 shrink-0 ml-1">جابجایی سریع دستگاه:</span>
+                  {data.machines.map(m => (
+                    <button
+                      key={m.machineId}
+                      type="button"
+                      onClick={() => openMachineDrawer(m, drawerCategoryFilter)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition cursor-pointer shrink-0 ${
+                        m.machineId === selectedMachine.machineId
+                          ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      {m.machineCode} ({toPersianDigits(m.oeePercent)}٪)
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Time Waterfall Bars */}
-            <div className="space-y-2 text-xs">
-              <div className="text-slate-300 font-bold">آبشار تبدیل زمان برنامه‌ریزی‌شده به زمان خالص ارزش‌آفرین (دقیقه):</div>
-              {[
-                { label: '۱. زمان برنامه‌ریزی‌شده تولید (Planned Production Time)', val: selectedMachine.plannedProductionMinutes, color: 'bg-slate-600' },
-                { label: '۲. زمان کارکرد واقعی پس از کسر توقفات (Run Time)', val: selectedMachine.operatingRunMinutes, color: 'bg-cyan-500' },
-                { label: '۳. زمان کارکرد خالص پس از کسر افت سرعت (Net Operating Time)', val: selectedMachine.netOperatingMinutes, color: 'bg-amber-500' },
-                { label: '۴. زمان کاملاً اثربخش تولید قطعه سالم (Fully Productive Time)', val: selectedMachine.fullyProductiveMinutes, color: 'bg-emerald-500' },
-              ].map((row, idx) => {
-                const pct = Math.round((row.val / Math.max(1, selectedMachine.plannedProductionMinutes)) * 100);
+            {/* Scrollable Drawer Content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* 4 Compact OEE KPI Gauges for Selected Machine */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-right">
+                  <span className="text-[10px] text-emerald-400 font-bold block">شاخص کل OEE دستگاه</span>
+                  <div className="text-xl font-black text-emerald-400 font-mono tabular-nums mt-0.5">
+                    {toPersianDigits(selectedMachine.oeePercent)}٪
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    TEEP: {toPersianDigits(selectedMachine.teepPercent)}٪
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-3 text-right">
+                  <span className="text-[10px] text-cyan-400 font-bold block">۱. دسترس‌پذیری (A)</span>
+                  <div className="text-xl font-black text-cyan-400 font-mono tabular-nums mt-0.5">
+                    {toPersianDigits(selectedMachine.availabilityPercent)}٪
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    کارکرد: {formatNumber(selectedMachine.operatingRunMinutes)} دقیقه
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-right">
+                  <span className="text-[10px] text-amber-400 font-bold block">۲. عملکرد سرعت (P)</span>
+                  <div className="text-xl font-black text-amber-400 font-mono tabular-nums mt-0.5">
+                    {toPersianDigits(selectedMachine.performancePercent)}٪
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    سیکل: {toPersianDigits(selectedMachine.actualCycleTimeSeconds)}s
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 border border-purple-500/30 rounded-xl p-3 text-right">
+                  <span className="text-[10px] text-purple-400 font-bold block">۳. کیفیت تولید (Q)</span>
+                  <div className="text-xl font-black text-purple-400 font-mono tabular-nums mt-0.5">
+                    {toPersianDigits(selectedMachine.qualityPercent)}٪
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    ضایعات: {formatNumber(selectedMachine.scrapAndReworkPieces)} قطعه
+                  </span>
+                </div>
+              </div>
+
+              {/* Granular Downtime Breakdown Summary Cards (Clickable Filters) */}
+              {(() => {
+                const logs: OeeMachineDowntimeLogItem[] =
+                  selectedMachine.downtimeLogs && selectedMachine.downtimeLogs.length > 0
+                    ? selectedMachine.downtimeLogs
+                    : [
+                        {
+                          id: 'FALLBACK-1',
+                          reasonCode: 'DT-BREAKDOWN',
+                          reasonTitleFa: 'خرابی اضطراری مدار هیدرولیک و تعویض سنبه پیرسینگ',
+                          category: 'UNPLANNED_BREAKDOWN',
+                          categoryLabelFa: 'توقف برنامه‌ریزی‌نشده / خرابی اضطراری',
+                          durationMinutes: selectedMachine.unplannedDowntimeMinutes ?? selectedMachine.sixBigLosses[0]?.lostTimeMinutes ?? 36,
+                          occurrencesCount: 2,
+                          sharePercent: 38,
+                          timeRangeFa: '۰۸:۱۵ تا ۰۸:۵۱ (شیفت صبح)',
+                          shiftLabelFa: 'شیفت صبح (A)',
+                          operatorOrTechName: 'واحد نت اضطراری + اپراتور پرس',
+                          rootCauseFa: 'افت فشار شیر تناسبی کوشن و لب‌پر شدن سنبه پانچ',
+                          correctiveActionFa: 'تعویض سنبه HSS-M2 و هواگیری مدار هیدرولیک',
+                        },
+                        {
+                          id: 'FALLBACK-2',
+                          reasonCode: 'DT-SMED',
+                          reasonTitleFa: 'تعویض قالب، تنظیم ارتفاع ضرب (Shut Height) و بارگذاری کلاف',
+                          category: 'PLANNED_SETUP',
+                          categoryLabelFa: 'توقف برنامه‌ریزی‌شده / تعویض قالب (SMED)',
+                          durationMinutes: selectedMachine.plannedDowntimeMinutes ?? selectedMachine.sixBigLosses[1]?.lostTimeMinutes ?? 55,
+                          occurrencesCount: 2,
+                          sharePercent: 45,
+                          timeRangeFa: '۱۰:۳۰ تا ۱۱:۲۵ (شیفت صبح)',
+                          shiftLabelFa: 'شیفت صبح (A)',
+                          operatorOrTechName: 'تیم قالب‌بند SMED',
+                          rootCauseFa: 'بستن کلمپ‌های قالب و تایید قطعه اول QC',
+                          correctiveActionFa: 'اجرای چک‌لیست SMED و آماده‌سازی پیشاپیش قالب بعدی',
+                        },
+                        {
+                          id: 'FALLBACK-3',
+                          reasonCode: 'DT-MINOR',
+                          reasonTitleFa: 'توقفات جزئی سنسور گام فیدر و تخلیه شوت ضایعات کناره ورق',
+                          category: 'MINOR_STOP',
+                          categoryLabelFa: 'توقفات جزئی و افت سرعت (Minor Stops)',
+                          durationMinutes: selectedMachine.minorStopLossMinutes ?? selectedMachine.sixBigLosses[2]?.lostTimeMinutes ?? 20,
+                          occurrencesCount: 5,
+                          sharePercent: 17,
+                          timeRangeFa: 'پراکنده در طول شیفت',
+                          shiftLabelFa: 'مجموع شیفت‌ها',
+                          operatorOrTechName: 'اپراتور ارشد دستگاه',
+                          rootCauseFa: 'گیر کردن ورق در غلتک صاف‌کن و پر شدن باکس ضایعات',
+                          correctiveActionFa: 'تنظیم کشش کویل‌بازکن و روغن‌کاری نوار ورودی',
+                        },
+                      ];
+
+                const unplannedLogs = logs.filter(l => l.category === 'UNPLANNED_BREAKDOWN');
+                const plannedLogs = logs.filter(l => l.category === 'PLANNED_SETUP');
+                const minorLogs = logs.filter(l => l.category === 'MINOR_STOP');
+
+                const unplannedTotalMin = unplannedLogs.reduce((s, l) => s + l.durationMinutes, 0);
+                const plannedTotalMin = plannedLogs.reduce((s, l) => s + l.durationMinutes, 0);
+                const minorTotalMin = minorLogs.reduce((s, l) => s + l.durationMinutes, 0);
+
+                const filteredLogs =
+                  drawerCategoryFilter === 'ALL'
+                    ? logs
+                    : logs.filter(l => l.category === drawerCategoryFilter);
+
                 return (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-slate-300">{row.label}</span>
-                      <span className="font-mono font-bold text-white tabular-nums">{formatNumber(row.val)} دقیقه ({toPersianDigits(pct)}٪)</span>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Filter className="w-3.5 h-3.5 text-rose-400" />
+                        تفکیک دسته‌بندی توقفات دستگاه (برای فیلتر روی هر کارت کلیک کنید):
+                      </h4>
+                      {drawerCategoryFilter !== 'ALL' && (
+                        <button
+                          type="button"
+                          onClick={() => setDrawerCategoryFilter('ALL')}
+                          className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
+                        >
+                          نمایش همه دسته‌ها ({toPersianDigits(logs.length)})
+                        </button>
+                      )}
                     </div>
-                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <div className={`${row.color} h-full rounded-full`} style={{ width: `${pct}%` }} />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDrawerCategoryFilter(
+                            drawerCategoryFilter === 'UNPLANNED_BREAKDOWN' ? 'ALL' : 'UNPLANNED_BREAKDOWN'
+                          )
+                        }
+                        className={`p-3 rounded-xl border text-right transition cursor-pointer ${
+                          drawerCategoryFilter === 'UNPLANNED_BREAKDOWN'
+                            ? 'bg-rose-950/50 border-rose-500 ring-2 ring-rose-500/30'
+                            : 'bg-slate-950 border-slate-800 hover:border-rose-500/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-rose-400">توقفات برنامه‌ریزی‌نشده و خرابی</span>
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px]">
+                            {toPersianDigits(unplannedLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
+                          </span>
+                        </div>
+                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                          {formatNumber(unplannedTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          خرابی اضطراری پرس، قالب و انتظار مواد
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDrawerCategoryFilter(
+                            drawerCategoryFilter === 'PLANNED_SETUP' ? 'ALL' : 'PLANNED_SETUP'
+                          )
+                        }
+                        className={`p-3 rounded-xl border text-right transition cursor-pointer ${
+                          drawerCategoryFilter === 'PLANNED_SETUP'
+                            ? 'bg-amber-950/50 border-amber-500 ring-2 ring-amber-500/30'
+                            : 'bg-slate-950 border-slate-800 hover:border-amber-500/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-400">تعویض قالب (SMED) و برنامه‌ای</span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px]">
+                            {toPersianDigits(plannedLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
+                          </span>
+                        </div>
+                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                          {formatNumber(plannedTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          تعویض قالب، تنظیمات خط و نت دوره‌ای PM
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDrawerCategoryFilter(
+                            drawerCategoryFilter === 'MINOR_STOP' ? 'ALL' : 'MINOR_STOP'
+                          )
+                        }
+                        className={`p-3 rounded-xl border text-right transition cursor-pointer ${
+                          drawerCategoryFilter === 'MINOR_STOP'
+                            ? 'bg-cyan-950/50 border-cyan-500 ring-2 ring-cyan-500/30'
+                            : 'bg-slate-950 border-slate-800 hover:border-cyan-500/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-cyan-400">توقفات جزئی و افت سرعت</span>
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px]">
+                            {toPersianDigits(minorLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
+                          </span>
+                        </div>
+                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                          {formatNumber(minorTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          خطای سنسور فیدر ورق و تخلیه شوت ضایعات
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Granular Downtime Events List */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                          لیست ریزِ توقفات ثبت‌شده دستگاه ({toPersianDigits(filteredLogs.length)} ردیف)
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          MTBF: {toPersianDigits(selectedMachine.mtbfHours)}h | MTTR: {toPersianDigits(selectedMachine.mttrMinutes)}m
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {filteredLogs.map(item => {
+                          const catBadge =
+                            item.category === 'UNPLANNED_BREAKDOWN'
+                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              : item.category === 'PLANNED_SETUP'
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+
+                          const barColor =
+                            item.category === 'UNPLANNED_BREAKDOWN'
+                              ? 'bg-rose-500'
+                              : item.category === 'PLANNED_SETUP'
+                              ? 'bg-amber-500'
+                              : 'bg-cyan-500';
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="p-3.5 rounded-xl bg-slate-900 border border-slate-800/90 space-y-2"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] font-bold">
+                                    {item.reasonCode}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${catBadge}`}>
+                                    {item.categoryLabelFa}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 font-mono text-xs tabular-nums">
+                                  <span className="text-slate-400 text-[11px]">
+                                    {toPersianDigits(item.occurrencesCount)} مرتبه
+                                  </span>
+                                  <span className="px-2.5 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 font-black">
+                                    {formatNumber(item.durationMinutes)} دقیقه
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="text-xs font-bold text-slate-100">{item.reasonTitleFa}</div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60">
+                                <div>
+                                  <strong className="text-slate-300">بازه زمانی و شیفت:</strong> {item.timeRangeFa}
+                                </div>
+                                <div>
+                                  <strong className="text-slate-300">مسئول رسیدگی:</strong> {item.operatorOrTechName}
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <strong className="text-rose-300">علت ریشه‌ای (Root Cause):</strong> {item.rootCauseFa}
+                                </div>
+                                <div className="sm:col-span-2 text-emerald-400">
+                                  <strong>اقدام اصلاحی و پیشگیرانه:</strong> {item.correctiveActionFa}
+                                </div>
+                              </div>
+
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`${barColor} h-full rounded-full`}
+                                  style={{ width: `${Math.min(100, Math.max(6, item.sharePercent))}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              })()}
 
-            {/* Machine Six Big Losses */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <div className="text-xs font-bold text-slate-200">تفکیک ۶ ضایعه بزرگ در این دستگاه:</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {selectedMachine.sixBigLosses.map(l => (
-                  <div key={l.lossNumber} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                    <div className="flex justify-between font-bold text-slate-200">
-                      <span>{l.lossTitleFa}</span>
-                      <span className="font-mono text-rose-400 tabular-nums">{formatNumber(l.lostTimeMinutes)} دقیقه</span>
+              {/* Time Waterfall Bars */}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5 text-xs">
+                <div className="text-slate-200 font-bold">آبشار تبدیل زمان برنامه‌ریزی‌شده به زمان خالص ارزش‌آفرین (دقیقه):</div>
+                {[
+                  { label: '۱. زمان برنامه‌ریزی‌شده تولید (Planned Production Time)', val: selectedMachine.plannedProductionMinutes, color: 'bg-slate-600' },
+                  { label: '۲. زمان کارکرد واقعی پس از کسر توقفات (Run Time)', val: selectedMachine.operatingRunMinutes, color: 'bg-cyan-500' },
+                  { label: '۳. زمان کارکرد خالص پس از کسر افت سرعت (Net Operating Time)', val: selectedMachine.netOperatingMinutes, color: 'bg-amber-500' },
+                  { label: '۴. زمان کاملاً اثربخش تولید قطعه سالم (Fully Productive Time)', val: selectedMachine.fullyProductiveMinutes, color: 'bg-emerald-500' },
+                ].map((row, idx) => {
+                  const pct = Math.round((row.val / Math.max(1, selectedMachine.plannedProductionMinutes)) * 100);
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-300">{row.label}</span>
+                        <span className="font-mono font-bold text-white tabular-nums">{formatNumber(row.val)} دقیقه ({toPersianDigits(pct)}٪)</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div className={`${row.color} h-full rounded-full`} style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">{l.kaizenActionFa}</div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+
+              {/* Machine Six Big Losses */}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                <div className="text-xs font-bold text-slate-200">تفکیک ۶ ضایعه بزرگ استاندارد TPM در این دستگاه:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {selectedMachine.sixBigLosses.map(l => (
+                    <div key={l.lossNumber} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                      <div className="flex justify-between font-bold text-slate-200">
+                        <span>{l.lossTitleFa}</span>
+                        <span className="font-mono text-rose-400 tabular-nums">{formatNumber(l.lostTimeMinutes)} دقیقه</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">{l.kaizenActionFa}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

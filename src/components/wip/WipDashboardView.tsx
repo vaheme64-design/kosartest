@@ -26,6 +26,7 @@ import {
   formatWeightKg,
   toPersianDigits,
 } from '../../utils/formatters';
+import { KpiCardsSkeleton, ChartSkeleton } from '../ui/Skeleton';
 
 interface WipDashboardViewProps {
   metrics: WipDashboardMetrics | null;
@@ -50,6 +51,18 @@ export const WipDashboardView: React.FC<WipDashboardViewProps> = ({
   onNavigateToOrders,
   onNavigateToTransfers,
 }) => {
+  if (loading && !metrics) {
+    return (
+      <div className="space-y-6">
+        <KpiCardsSkeleton count={6} columns={6} theme="light" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartSkeleton rows={4} theme="light" />
+          <ChartSkeleton rows={4} theme="light" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner and Quick Actions */}

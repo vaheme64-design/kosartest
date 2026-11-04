@@ -52,6 +52,7 @@ import { OeeModuleView } from './OeeModuleView';
 import { MachineUtilizationView } from './MachineUtilizationView';
 import { ConsumablesForecastView } from '../planning/ConsumablesForecastView';
 import { MrpModuleView } from '../planning/MrpModuleView';
+import { TableSkeleton, KpiCardsSkeleton, ChartSkeleton } from '../ui/Skeleton';
 
 export type ReportTypeKey =
   | 'plan_vs_actual'
@@ -582,202 +583,136 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
 
   return (
     <div className="space-y-6">
-      {/* Sleek Header & Report Selector */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+      {/* Grafana-Inspired Header & Single Unified Report Filter Bar */}
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
-                KPIMS Reports & OEE Engine
-              </span>
-              <span className="text-slate-300">|</span>
-              <h2 className="text-sm font-bold text-slate-900 tracking-wide">
-                مرکز جامع گزارش‌های مدیریتی، بهره‌وری ماشین، پیش‌بینی مواد و OEE کارخانه
-              </h2>
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {currentDef ? currentDef.description : '۲۰ گزارش و ماژول تحلیلی: تأخیرات تولید، OEE، بهره ماشین، پیش‌بینی مواد مصرفی و MRP'}
-            </p>
+            <div>
+              <h2 className="text-base lg:text-lg font-bold text-slate-900 tracking-tight">
+                مرکز گزارش‌های مدیریتی، بهره‌وری ماشین، پیش‌بینی مواد و OEE
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {currentDef
+                  ? currentDef.description
+                  : '۲۰ گزارش و ماژول تحلیلی: تأخیرات تولید، OEE، بهره ماشین، پیش‌بینی مواد مصرفی و MRP'}
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>چاپ رسمی گزارش</span>
+              <span>چاپ رسمی</span>
             </button>
 
             {!isStandaloneModule && (
               <button
                 onClick={fetchActiveReport}
                 disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-orange-400 ${loading ? 'animate-spin' : ''}`} />
                 <span>بروزرسانی</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Featured 5 Analytical & Forecasting Modules Quick Bar */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold text-slate-700 px-2 py-1 flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
-            ماژول‌های تحلیلی و پیش‌بینی ویژه:
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setActiveReport('oee_module');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeReport === 'oee_module'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
-            }`}
-          >
-            <Percent className="w-3.5 h-3.5" />
-            <span>ماژول OEE و ۶ ضایعه بزرگ</span>
-          </button>
+        {/* Single Unified Filter & Module Selector Bar (Grafana Reference Style) */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Report / Module Selector Dropdown */}
+            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <Filter className="w-3.5 h-3.5 text-orange-600" />
+              <span className="text-slate-500 font-medium">انتخاب گزارش / ماژول:</span>
+              <select
+                value={activeReport}
+                onChange={e => setActiveReport(e.target.value as ReportTypeKey)}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer max-w-xs sm:max-w-md truncate"
+              >
+                {filteredReports.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setActiveReport('machine_utilization');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeReport === 'machine_utilization'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5" />
-            <span>گزارش بهره ماشین</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setActiveReport('consumables_forecast');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeReport === 'consumables_forecast'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
-            }`}
-          >
-            <Boxes className="w-3.5 h-3.5" />
-            <span>پیش‌بینی مواد مصرفی</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setActiveReport('mrp_forecast');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeReport === 'mrp_forecast'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-white hover:bg-indigo-50 text-slate-700 border border-slate-200'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5" />
-            <span>پیش‌بینی نیازمندی مواد (MRP)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setActiveReport('delays');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeReport === 'delays'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'bg-white hover:bg-rose-50 text-slate-700 border border-slate-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>گزارش تحلیلی تأخیر تولید</span>
-          </button>
-        </div>
-
-        {/* Category Pills & Report Selector */}
-        <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
-            {categories.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setSelectedCategory(cat.id);
+            {/* Category Filter Dropdown */}
+            <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700">
+              <select
+                value={selectedCategory}
+                onChange={e => {
+                  const catId = e.target.value;
+                  setSelectedCategory(catId);
                   const firstInCat = reportDefinitions.find(
-                    r => cat.id === 'ALL' || r.category === cat.id
+                    r => catId === 'ALL' || r.category === catId
                   );
                   if (firstInCat && activeReport !== firstInCat.id) {
                     setActiveReport(firstInCat.id);
                   }
                 }}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  selectedCategory === cat.id
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                }`}
+                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
               >
-                {cat.label}
-              </button>
-            ))}
-          </div>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>
+                    دسته: {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-slate-500 font-medium">انتخاب گزارش:</span>
-            <select
-              value={activeReport}
-              onChange={e => setActiveReport(e.target.value as ReportTypeKey)}
-              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:bg-white focus:border-indigo-600 cursor-pointer max-w-xs sm:max-w-md truncate shadow-2xs"
-            >
-              {filteredReports.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.title}
-                </option>
+            {/* Featured Quick Tags (Compact Grafana Tag Pills) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { id: 'oee_module', label: 'داشبورد OEE' },
+                { id: 'machine_utilization', label: 'بهره ماشین' },
+                { id: 'consumables_forecast', label: 'پیش‌بینی مصرفی' },
+                { id: 'mrp_forecast', label: 'پیش‌بینی MRP' },
+                { id: 'delays', label: 'تأخیرات تولید' },
+              ].map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('ALL');
+                    setActiveReport(item.id as ReportTypeKey);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer border ${
+                    activeReport === item.id
+                      ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80'
+                  }`}
+                >
+                  {item.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
-        </div>
 
-        {/* Quick Date Range Buttons */}
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-slate-400 ml-1">بازه زمانی سریع:</span>
+          {/* Quick Period Selector */}
+          <div className="flex items-center gap-1">
             {[
               { id: 'TODAY', label: 'امروز' },
-              { id: 'WEEK', label: '۷ روز اخیر' },
+              { id: 'WEEK', label: '۷ روز' },
               { id: 'MONTH', label: 'این ماه' },
-              { id: '3MONTH', label: '۳ ماهه اخیر' },
-              { id: 'ALL', label: 'کل سال / کل دوره' },
+              { id: 'ALL', label: 'کل دوره' },
             ].map(p => (
               <button
                 key={p.id}
                 onClick={() => applyQuickPeriod(p.id as any)}
-                className="px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-[11px] transition-colors cursor-pointer"
+                className="px-2 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] transition-colors cursor-pointer"
               >
                 {p.label}
               </button>
             ))}
           </div>
-
-          {reportMeta && (
-            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
-              <span>تولید سند:</span>
-              <span className="font-semibold text-slate-700">{formatToJalali(reportMeta.generatedAt)}</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -799,8 +734,21 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         />
       )}
 
+      {/* Loading Skeleton for Standard Tabular & Delay Reports */}
+      {!isStandaloneModule && loading && (
+        <div className="space-y-4">
+          {activeReport === 'delays' && (
+            <>
+              <KpiCardsSkeleton count={4} columns={4} theme="dark" />
+              <ChartSkeleton rows={4} theme="dark" />
+            </>
+          )}
+          <TableSkeleton rows={7} columns={8} theme="dark" />
+        </div>
+      )}
+
       {/* Main Report Table Container */}
-      {!isStandaloneModule && (
+      {!isStandaloneModule && !loading && (
       <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs">
         <div className="px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">

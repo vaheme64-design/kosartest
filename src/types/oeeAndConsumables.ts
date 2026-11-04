@@ -115,6 +115,22 @@ export interface SixBigLossesItem {
   kaizenActionFa: string;
 }
 
+export interface OeeMachineDowntimeLogItem {
+  id: string;
+  reasonCode: string;
+  reasonTitleFa: string;
+  category: 'UNPLANNED_BREAKDOWN' | 'PLANNED_SETUP' | 'MINOR_STOP';
+  categoryLabelFa: string;
+  durationMinutes: number;
+  occurrencesCount: number;
+  sharePercent: number;
+  timeRangeFa: string;
+  shiftLabelFa: string;
+  operatorOrTechName: string;
+  rootCauseFa: string;
+  correctiveActionFa: string;
+}
+
 export interface OeeMachineRecord {
   machineId: string;
   machineCode: string;
@@ -124,6 +140,8 @@ export interface OeeMachineRecord {
   tonnage: number;
   activePartCode: string;
   activePartName: string;
+  operatorName?: string;
+  status?: string;
 
   // Core OEE Factors (0 - 100%)
   availabilityPercent: number;        // دسترس‌پذیری (A)
@@ -137,6 +155,9 @@ export interface OeeMachineRecord {
   // Time Metrics (Minutes per Shift/Day)
   plannedProductionMinutes: number;   // زمان برنامه‌ریزی‌شده تولید
   downtimeLossMinutes: number;        // کل توقفات (خرابی + تعویض قالب)
+  plannedDowntimeMinutes?: number;    // توقفات برنامه‌ریزی‌شده و تعویض قالب (SMED / PM)
+  unplannedDowntimeMinutes?: number;  // توقفات برنامه‌ریزی‌نشده و خرابی اضطراری
+  minorStopLossMinutes?: number;      // توقفات جزئی و گیر کردن فیدر
   operatingRunMinutes: number;        // زمان کارکرد واقعی (Run Time)
   speedLossMinutes: number;           // افت زمان ناشی از کاهش سرعت و توقفات جزئی
   netOperatingMinutes: number;        // زمان کارکرد خالص
@@ -155,6 +176,8 @@ export interface OeeMachineRecord {
 
   gradeClass: 'WORLD_CLASS_A' | 'ACCEPTABLE_B' | 'NEEDS_IMPROVEMENT_C' | 'CRITICAL_D';
   sixBigLosses: SixBigLossesItem[];
+  downtimeBreakdown?: MachineDowntimeReason[];
+  downtimeLogs?: OeeMachineDowntimeLogItem[];
 }
 
 export interface OeeDashboardSummary {

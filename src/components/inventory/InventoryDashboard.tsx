@@ -25,6 +25,7 @@ import {
   WarehouseDefinition,
 } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits, formatDateTime } from '../../utils/formatters';
+import { KpiCardsSkeleton, TableSkeleton } from '../ui/Skeleton';
 
 interface InventoryDashboardProps {
   metrics: InventoryDashboardMetrics | null;
@@ -59,6 +60,15 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   onNavigateToSapco,
   onNavigateToLedger,
 }) => {
+  if (loading && !metrics && balances.length === 0) {
+    return (
+      <div className="space-y-6">
+        <KpiCardsSkeleton count={4} columns={4} theme="light" />
+        <TableSkeleton rows={6} columns={6} theme="light" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}

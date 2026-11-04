@@ -821,6 +821,62 @@ export function getOeeDashboardSummary(options?: {
     else if (oeePercent >= 60) gradeClass = 'NEEDS_IMPROVEMENT_C';
     else gradeClass = 'CRITICAL_D';
 
+    // Build granular downtime logs for slide-over drill-down drawer
+    const timeWindows = [
+      '۰۷:۴۰ تا ۰۸:۲۵ (شیفت صبح)',
+      '۱۰:۱۵ تا ۱۰:۴۵ (شیفت صبح)',
+      '۱۳:۱۰ تا ۱۳:۳۵ (شیفت صبح)',
+      '۱۵:۲۰ تا ۱۶:۰۵ (شیفت عصر)',
+      '۱۸:۱۰ تا ۱۸:۴۰ (شیفت عصر)',
+    ];
+
+    const baseDowntimeLogs = m.downtimeBreakdown.map((d, dIdx) => {
+      const isUnplanned = d.category === 'UNPLANNED';
+      return {
+        id: `${m.machineId}-DT-${dIdx + 1}`,
+        reasonCode: d.reasonCode,
+        reasonTitleFa: d.reasonTitleFa,
+        category: isUnplanned ? ('UNPLANNED_BREAKDOWN' as const) : ('PLANNED_SETUP' as const),
+        categoryLabelFa: isUnplanned
+          ? 'توقف برنامه‌ریزی‌نشده / خرابی اضطراری'
+          : 'توقف برنامه‌ریزی‌شده / تعویض قالب (SMED)',
+        durationMinutes: d.durationMinutes,
+        occurrencesCount: d.occurrencesCount,
+        sharePercent: Math.round((d.durationMinutes / Math.max(1, downtimeLossMinutes + minorStopsMin)) * 1000) / 10,
+        timeRangeFa: timeWindows[dIdx % timeWindows.length],
+        shiftLabelFa: dIdx % 2 === 0 ? 'شیفت صبح (A)' : 'شیفت عصر (B)',
+        operatorOrTechName: isUnplanned
+          ? 'تیم نت اضطراری (مهندس کریمی) + ' + m.operatorName
+          : 'تیم قالب‌بند SMED + ' + m.operatorName,
+        rootCauseFa: isUnplanned
+          ? 'خرابی و توقف ناگهانی ناشی از استهلاک قطعه، افت فشار هیدرولیک یا تأخیر تغذیه ورق پای خط'
+          : 'زمان توقف مصوب جهت باز و بستن کلمپ‌های قالب، تنظیم Shut Height و تایید قطعه اول QC',
+        correctiveActionFa: isUnplanned
+          ? 'ثبت دستور کار تعمیرات اضطراری (EM)، تعویض قطعه معیوب و بازنگری چک‌لیست PM هفتگی'
+          : 'اجرای استاندارد SMED، پیش‌تنظیم ارتفاع ضرب و آماده‌سازی کلاف بعدی کنار کویل‌بازکن',
+      };
+    });
+
+    // Add minor stops & speed loss entry so user sees all stop categories in the drawer
+    const downtimeLogs = [
+      ...baseDowntimeLogs,
+      {
+        id: `${m.machineId}-DT-MINOR`,
+        reasonCode: 'DT-MICRO-STOP',
+        reasonTitleFa: 'توقفات جزئی سنسور گام فیدر و تخلیه شوت ضایعات کناره ورق',
+        category: 'MINOR_STOP' as const,
+        categoryLabelFa: 'توقفات جزئی و افت سرعت (Minor Stops)',
+        durationMinutes: minorStopsMin,
+        occurrencesCount: Math.max(3, Math.round(minorStopsMin / 4)),
+        sharePercent: Math.round((minorStopsMin / Math.max(1, downtimeLossMinutes + minorStopsMin)) * 1000) / 10,
+        timeRangeFa: 'پراکنده در طول شیفت کاری',
+        shiftLabelFa: m.shiftLabelFa,
+        operatorOrTechName: m.operatorName,
+        rootCauseFa: 'توقفات زیر ۵ دقیقه ناشی از گیر کردن ورق در غلتک صاف‌کن (Leveler) و پر شدن باکس ضایعات',
+        correctiveActionFa: 'تنظیم کشش کویل‌بازکن، روغن‌کاری نوار ورودی و تخلیه نوبتی شوت ضایعات بدون توقف پرس',
+      },
+    ];
+
     return {
       machineId: m.machineId,
       machineCode: m.machineCode,
@@ -830,6 +886,8 @@ export function getOeeDashboardSummary(options?: {
       tonnage: m.tonnage,
       activePartCode: m.activeDieCode.replace('DIE', 'SAPCO'),
       activePartName: m.activePartName,
+      operatorName: m.operatorName,
+      status: m.status,
       availabilityPercent,
       performancePercent,
       qualityPercent,
@@ -839,6 +897,9 @@ export function getOeeDashboardSummary(options?: {
       varianceFromTargetPercent,
       plannedProductionMinutes,
       downtimeLossMinutes,
+      plannedDowntimeMinutes: setupSmedMin,
+      unplannedDowntimeMinutes: breakdownMin,
+      minorStopLossMinutes: minorStopsMin,
       operatingRunMinutes,
       speedLossMinutes,
       netOperatingMinutes,
@@ -854,6 +915,8 @@ export function getOeeDashboardSummary(options?: {
       firstPassYieldPercent: qualityPercent,
       gradeClass,
       sixBigLosses,
+      downtimeBreakdown: m.downtimeBreakdown,
+      downtimeLogs,
     };
   });
 

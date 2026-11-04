@@ -36,6 +36,7 @@ import {
 } from '../types/inventory';
 import { formatNumber, formatWeightKg, getVoucherTypeLabel, toPersianDigits } from '../utils/formatters';
 import { QuickEntryModals, QuickCreateEntityType } from './common/QuickEntryModals';
+import { MasterDataSkeleton } from './ui/Skeleton';
 
 interface TransactionsVouchersViewProps {
   parts: Part[];
@@ -208,6 +209,10 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
       }
     }
   }, [selectedPartId, voucherType, dies, machines]);
+
+  if (initialParts.length === 0 && machines.length === 0) {
+    return <MasterDataSkeleton />;
+  }
 
   // Available stock at source stage
   const currentStageStock = stageBalances.find(

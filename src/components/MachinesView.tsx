@@ -33,6 +33,7 @@ import {
 import { toPersianDigits, formatNumber } from '../utils/formatters';
 import { OeeModuleView } from './reports/OeeModuleView';
 import { MachineUtilizationView } from './reports/MachineUtilizationView';
+import { MasterDataSkeleton } from './ui/Skeleton';
 
 interface MachinesViewProps {
   machines: Machine[];
@@ -114,6 +115,10 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (machines.length === 0 && parts.length === 0) {
+    return <MasterDataSkeleton />;
+  }
 
   // Toggle machine capability checkbox
   const toggleCapability = (proc: ProcessType) => {

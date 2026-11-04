@@ -33,6 +33,7 @@ import { MrpModuleView } from './MrpModuleView';
 import { ConsumablesForecastView } from './ConsumablesForecastView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
+import { PlanningModuleSkeleton } from '../ui/Skeleton';
 
 interface ProductionPlanningModuleViewProps {
   parts: Part[];
@@ -214,18 +215,27 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
   const [planToast, setPlanToast] = useState<string | null>(null);
 
+  if (loading && !metrics && suggestions.length === 0 && customerOrders.length === 0) {
+    return <PlanningModuleSkeleton />;
+  }
+
   return (
     <div className="space-y-5">
-      {/* Command Header & Sub-Tab Navigation */}
-      <div className="bg-white p-4 lg:p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+      {/* Grafana-Inspired Header & Flat Section Selector Bar */}
+      <div className="bg-white p-4 lg:p-5 rounded-xl border border-slate-200/90 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-base lg:text-lg font-bold text-slate-900">
-              برنامه‌ریزی تولید، نیازسنجی مواد (MRP) و ظرفیت خطوط
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              موازنه سفارشات خودروسازان با موجودی آزاد ورق، پیشنهاد هوشمند تخصیص پرس‌ها و صدور دستور کار کارگاهی
-            </p>
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base lg:text-lg font-bold text-slate-900">
+                برنامه‌ریزی تولید، نیازسنجی مواد (MRP) و ظرفیت خطوط
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                موازنه سفارشات خودروسازان با موجودی آزاد ورق، پیش‌بینی مواد مصرفی و صدور دستور کار کارگاهی
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -233,7 +243,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
               type="button"
               onClick={loadPlanningData}
               disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-2 text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 rounded-lg text-xs font-medium transition-colors cursor-pointer"
               title="بروزرسانی داده‌ها"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -242,125 +252,66 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             <button
               type="button"
               onClick={() => setIsOrderModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-amber-400" />
+              <Plus className="w-3.5 h-3.5 text-orange-400" />
               <span>ثبت سفارش ساپکو / مشتری</span>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 pt-2 border-t border-slate-100 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('dashboard')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'dashboard'
-                ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <TrendingUp className={`w-3.5 h-3.5 ${activeSubTab === 'dashboard' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>داشبورد موازنه تقاضا و ظرفیت</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('mrp')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'mrp'
-                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
-                : 'text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900'
-            }`}
-          >
-            <Calculator className={`w-3.5 h-3.5 ${activeSubTab === 'mrp' ? 'text-white' : 'text-indigo-600'}`} />
-            <span>پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-              activeSubTab === 'mrp' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200 text-indigo-800'
-            }`}>
-              ATP
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('consumables')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'consumables'
-                ? 'bg-teal-600 text-white font-bold shadow-md shadow-teal-600/30'
-                : 'text-teal-700 bg-teal-50/70 hover:bg-teal-100 hover:text-teal-900'
-            }`}
-          >
-            <Package className={`w-3.5 h-3.5 ${activeSubTab === 'consumables' ? 'text-white' : 'text-teal-600'}`} />
-            <span>پیش‌بینی مواد مصرفی کارگاه</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-              activeSubTab === 'consumables' ? 'bg-teal-700 text-teal-100' : 'bg-teal-200 text-teal-800'
-            }`}>
-              ROP
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('recommendations')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'recommendations'
-                ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Cpu className={`w-3.5 h-3.5 ${activeSubTab === 'recommendations' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>تخصیص ماشین‌آلات و پیشنهاد برنامه</span>
-            {suggestions.length > 0 && (
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums ${
-                  activeSubTab === 'recommendations' ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-600'
-                }`}
+        {/* Single Flat Section Filter Bar (Grafana Style — No Crowded Multi-Row Tabs) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <Filter className="w-3.5 h-3.5 text-orange-600" />
+              <span className="text-slate-500 font-medium">نمای بخش برنامه‌ریزی:</span>
+              <select
+                value={activeSubTab}
+                onChange={e => setActiveSubTab(e.target.value as any)}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
-                {toPersianDigits(suggestions.length)}
-              </span>
-            )}
-          </button>
+                <option value="dashboard">داشبورد موازنه تقاضا و ظرفیت</option>
+                <option value="mrp">پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</option>
+                <option value="consumables">پیش‌بینی مواد مصرفی کارگاه (ROP)</option>
+                <option value="recommendations">
+                  تخصیص ماشین‌آلات و پیشنهاد برنامه ({toPersianDigits(suggestions.length)})
+                </option>
+                <option value="orders">
+                  سفارشات مشتریان ({toPersianDigits(customerOrders.length)})
+                </option>
+                <option value="approved_plans">
+                  برنامه‌های مصوب و صدور MO ({toPersianDigits(approvedPlans.length)})
+                </option>
+              </select>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('orders')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'orders'
-                ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileSpreadsheet className={`w-3.5 h-3.5 ${activeSubTab === 'orders' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>سفارشات مشتریان</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums ${
-                activeSubTab === 'orders' ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {toPersianDigits(customerOrders.length)}
-            </span>
-          </button>
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { id: 'dashboard', label: 'موازنه تقاضا' },
+                { id: 'mrp', label: 'نیازسنجی MRP' },
+                { id: 'consumables', label: 'مواد مصرفی' },
+                { id: 'recommendations', label: 'تخصیص پرس‌ها' },
+              ].map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveSubTab(item.id as any)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer border ${
+                    activeSubTab === item.id
+                      ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('approved_plans')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'approved_plans'
-                ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <CheckCircle2 className={`w-3.5 h-3.5 ${activeSubTab === 'approved_plans' ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>برنامه‌های مصوب و صدور دستور کار</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums ${
-                activeSubTab === 'approved_plans' ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {toPersianDigits(approvedPlans.length)}
-            </span>
-          </button>
+          <div className="text-[11px] text-slate-400">
+            پیشنهادهای فعال: {toPersianDigits(suggestions.length)} • سفارشات باز: {toPersianDigits(customerOrders.length)}
+          </div>
         </div>
       </div>
 

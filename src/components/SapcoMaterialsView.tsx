@@ -15,6 +15,7 @@ import {
 import { SapcoCoilReceipt, Part } from '../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits, exportToCsv } from '../utils/formatters';
 import { formatToJalali } from '../utils/jalali';
+import { InventoryModuleSkeleton } from './ui/Skeleton';
 
 interface SapcoMaterialsViewProps {
   coils: SapcoCoilReceipt[];
@@ -44,6 +45,10 @@ export const SapcoMaterialsView: React.FC<SapcoMaterialsViewProps> = ({
   const [widthMm, setWidthMm] = useState<number>(1250);
   const [receivedWeightKg, setReceivedWeightKg] = useState<number>(12000);
   const [heatNumber, setHeatNumber] = useState('');
+
+  if (loading && coils.length === 0) {
+    return <InventoryModuleSkeleton />;
+  }
 
   const rawParts = parts.filter(p => p.category === 'RAW_MATERIAL');
 

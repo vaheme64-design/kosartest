@@ -23,6 +23,7 @@ import {
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { Machine } from '../../types/inventory';
+import { KpiCardsSkeleton, TableSkeleton } from '../ui/Skeleton';
 
 interface PlanningDashboardViewProps {
   metrics: PlanningDashboardMetrics | null;
@@ -43,6 +44,15 @@ export const PlanningDashboardView: React.FC<PlanningDashboardViewProps> = ({
   onNavigateToRecommendations,
   loading,
 }) => {
+  if (loading && !metrics && netRequirements.length === 0) {
+    return (
+      <div className="space-y-6">
+        <KpiCardsSkeleton count={6} columns={6} theme="dark" />
+        <TableSkeleton rows={6} columns={7} theme="dark" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Actions Bar */}

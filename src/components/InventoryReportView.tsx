@@ -21,6 +21,7 @@ import {
   formatDateTime,
   exportToCsv,
 } from '../utils/formatters';
+import { TableSkeleton, KpiCardsSkeleton } from './common/Skeleton';
 
 interface InventoryReportViewProps {
   balances: StageInventorySummary[];
@@ -156,32 +157,36 @@ export const InventoryReportView: React.FC<InventoryReportViewProps> = ({
       </div>
 
       {/* 4 Summary Micro-Cards for Current Filter */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-          <span className="text-[11px] text-slate-400">موجودی آزاد و قابل استفاده</span>
-          <div className="text-base lg:text-lg font-bold text-emerald-400 mt-1">
-            {formatNumber(totalUsableQty)}
+      {loading ? (
+        <KpiCardsSkeleton count={4} columns={4} theme="dark" />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <span className="text-[11px] text-slate-400">موجودی آزاد و قابل استفاده</span>
+            <div className="text-base lg:text-lg font-bold text-emerald-400 mt-1">
+              {formatNumber(totalUsableQty)}
+            </div>
+          </div>
+          <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <span className="text-[11px] text-slate-400">موجودی در حال انتقال (بین مراحل)</span>
+            <div className="text-base lg:text-lg font-bold text-purple-400 mt-1">
+              {formatNumber(totalInTransitQty)}
+            </div>
+          </div>
+          <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <span className="text-[11px] text-slate-400">وزن کل موجودی در این نما</span>
+            <div className="text-base lg:text-lg font-bold text-white mt-1">
+              {formatWeightKg(totalWeightKg)}
+            </div>
+          </div>
+          <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <span className="text-[11px] text-slate-400">مجموع ضایعات ثبتی</span>
+            <div className="text-base lg:text-lg font-bold text-rose-400 mt-1">
+              {formatNumber(totalScrapQty)}
+            </div>
           </div>
         </div>
-        <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-          <span className="text-[11px] text-slate-400">موجودی در حال انتقال (بین مراحل)</span>
-          <div className="text-base lg:text-lg font-bold text-purple-400 mt-1">
-            {formatNumber(totalInTransitQty)}
-          </div>
-        </div>
-        <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-          <span className="text-[11px] text-slate-400">وزن کل موجودی در این نما</span>
-          <div className="text-base lg:text-lg font-bold text-white mt-1">
-            {formatWeightKg(totalWeightKg)}
-          </div>
-        </div>
-        <div className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
-          <span className="text-[11px] text-slate-400">مجموع ضایعات ثبتی</span>
-          <div className="text-base lg:text-lg font-bold text-rose-400 mt-1">
-            {formatNumber(totalScrapQty)}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
@@ -230,6 +235,9 @@ export const InventoryReportView: React.FC<InventoryReportViewProps> = ({
       </div>
 
       {/* Data Table */}
+      {loading ? (
+        <TableSkeleton rows={8} columns={8} theme="dark" />
+      ) : (
       <div className="bg-slate-800/60 rounded-2xl border border-slate-700/60 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
@@ -372,6 +380,7 @@ export const InventoryReportView: React.FC<InventoryReportViewProps> = ({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

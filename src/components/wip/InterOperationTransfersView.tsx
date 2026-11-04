@@ -17,6 +17,7 @@ import {
   toPersianDigits,
   formatDateTime,
 } from '../../utils/formatters';
+import { TableSkeleton } from '../ui/Skeleton';
 
 interface InterOperationTransfersViewProps {
   transfers: WipTransfer[];
@@ -39,6 +40,10 @@ export const InterOperationTransfersView: React.FC<InterOperationTransfersViewPr
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  if (loading && transfers.length === 0) {
+    return <TableSkeleton rows={5} columns={6} theme="light" />;
+  }
 
   const filteredTransfers = transfers.filter(trf => {
     if (statusFilter !== 'ALL' && trf.status !== statusFilter) return false;

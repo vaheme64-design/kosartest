@@ -32,6 +32,7 @@ import {
   MoMaterialCheckResult,
 } from '../../types/mrp';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { ReportModuleSkeleton } from '../common/Skeleton';
 
 interface MrpModuleViewProps {
   onRefreshGlobal?: () => Promise<void>;
@@ -325,6 +326,11 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           </div>
           <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-emerald-200 text-xs cursor-pointer">بستن</button>
         </div>
+      )}
+
+      {/* Skeleton Loading State */}
+      {loading && !mrpData && (
+        <ReportModuleSkeleton kpiCount={6} showChart={false} tableRows={6} tableColumns={9} />
       )}
 
       {/* KPI Cards Summary */}

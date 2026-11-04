@@ -49,6 +49,7 @@ import { AdvancedBomModuleView } from './bom/AdvancedBomModuleView';
 import { ParallelProductionFlowView } from './wip/ParallelProductionFlowView';
 import { TraceabilityTagModal } from './wip/TraceabilityTagModal';
 import { toPersianDigits } from '../utils/formatters';
+import { MasterDataSkeleton } from './ui/Skeleton';
 
 export type MasterSubSection =
   | 'HUB'
@@ -621,69 +622,142 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       s.grade.toLowerCase().includes(sheetSearch.toLowerCase())
   );
 
+  if (parts.length === 0 && machines.length === 0) {
+    return <MasterDataSkeleton />;
+  }
+
   return (
     <div className="space-y-5">
-      {/* Top Header & View Switcher (Supports both Image 1 Hub & Image 2 Tabbed Workbench) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">اطلاعات پایه</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            {viewMode === 'CARDS_HUB'
-              ? 'کلیه تعاریف پایه سامانه — همه صفحه‌ها جستجوی زنده، خروجی اکسل و ورود گروهی دارند'
-              : 'مدیریت قطعات، مواد، عملیات، ماشین‌آلات، قالب‌ها، مسیر تولید، انبارها، مشتریان و سفارشات'}
-          </p>
+      {/* Grafana-Inspired Header & Flat Section Selector (Zero Nested Tabs) */}
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
+              <Boxes className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900">اطلاعات پایه کارخانه</h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                مدیریت یکپارچه قطعات، ورق‌ها، درخت محصول (BOM)، مسیر تولید، ماشین‌آلات، انبارها و مشتریان
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 self-end md:self-auto">
+            <div className="inline-flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('CARDS_HUB');
+                  setActiveSection('HUB');
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'CARDS_HUB' && activeSection === 'HUB'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-orange-600" />
+                <span>فهرست کارتی</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('SEGMENTED_TABS');
+                  if (activeSection === 'HUB') setActiveSection('RAW_MATERIALS');
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeSection !== 'HUB'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5 text-slate-600" />
+                <span>نمای جدولی مستقیم</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-orange-400" />
+              <span>به‌روزرسانی</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Switch between Image 1 UX (Card Hub) & Image 2 UX (Tabbed Table) */}
-          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+        {/* Single Flat Section Selector Bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <span className="text-slate-500 font-medium">انتخاب جدول پایه:</span>
+              <select
+                value={activeSection}
+                onChange={e => {
+                  const val = e.target.value as MasterSubSection;
+                  setActiveSection(val);
+                  if (val !== 'HUB') setViewMode('SEGMENTED_TABS');
+                }}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+              >
+                <option value="HUB">پیشخوان همه جداول اطلاعات پایه (۱۱ بخش)</option>
+                {segmentedTabs.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+                <option value="UNITS">واحدهای شمارش</option>
+                <option value="SHIFTS">شیفت‌های کاری</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { id: 'PARTS', label: 'قطعات' },
+                { id: 'RAW_MATERIALS', label: 'ورق و کویل' },
+                { id: 'BOM', label: 'درخت محصول (BOM)' },
+                { id: 'ROUTINGS', label: 'مسیر تولید' },
+                { id: 'MACHINES', label: 'ماشین‌آلات' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveSection(tab.id as MasterSubSection);
+                    setViewMode('SEGMENTED_TABS');
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer border ${
+                    activeSection === tab.id
+                      ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeSection !== 'HUB' && (
             <button
               type="button"
               onClick={() => {
                 setViewMode('CARDS_HUB');
                 setActiveSection('HUB');
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'CARDS_HUB'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
             >
-              <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
-              <span>نمای کارتی (طرح ۱ / ERPNext)</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+              <span>بازگشت به فهرست کارتی</span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode('SEGMENTED_TABS');
-                if (activeSection === 'HUB') setActiveSection('RAW_MATERIALS');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'SEGMENTED_TABS'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Table2 className="w-3.5 h-3.5 text-blue-600" />
-              <span>نمای تب‌بندی یکپارچه (طرح ۲)</span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-            <span>به‌روزرسانی</span>
-          </button>
+          )}
         </div>
       </div>
 
-      {/* =====================================================================
-          MODE 1: WORKSPACE CARD HUB (EXACT UX/UI OF UPLOADED IMAGE 1)
-         ===================================================================== */}
-      {viewMode === 'CARDS_HUB' && activeSection === 'HUB' && (
+      {/* MODE 1: WORKSPACE CARD HUB */}
+      {activeSection === 'HUB' && (
         <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {hubCards.map(card => {
@@ -691,18 +765,19 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
               return (
                 <div
                   key={card.id}
-                  onClick={() => setActiveSection(card.id)}
-                  className="group bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-emerald-300 rounded-2xl p-5 flex flex-col justify-between transition-all cursor-pointer shadow-2xs hover:shadow-md"
+                  onClick={() => {
+                    setActiveSection(card.id);
+                    setViewMode('SEGMENTED_TABS');
+                  }}
+                  className="group bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-orange-300 rounded-xl p-5 flex flex-col justify-between transition-all cursor-pointer shadow-2xs"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${themeMeta.softBgClass} ${themeMeta.activeTextClass}`}
-                        >
-                          <Icon className="w-5 h-5" />
+                        <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-200/60 text-orange-600 flex items-center justify-center shrink-0">
+                          <Icon className="w-4 h-4" />
                         </div>
-                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-orange-700 transition-colors">
                           {card.title}
                         </h3>
                       </div>
@@ -715,78 +790,18 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
 
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     {card.countBadge ? (
-                      <span className="text-[11px] font-medium text-slate-400">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-medium text-slate-600">
                         {card.countBadge}
                       </span>
                     ) : (
                       <span />
                     )}
-                    <span
-                      className={`inline-flex items-center gap-1 text-xs font-bold ${themeMeta.activeTextClass} group-hover:translate-x-[-2px] transition-transform`}
-                    >
-                      <span>ورود به بخش</span>
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 group-hover:text-orange-600 transition-colors">
+                      <span>مشاهده</span>
                       <ArrowLeft className="w-3.5 h-3.5" />
                     </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Back Bar when drilling into a Card from Mode 1 */}
-      {viewMode === 'CARDS_HUB' && activeSection !== 'HUB' && (
-        <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setActiveSection('HUB')}
-            className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-emerald-700 cursor-pointer"
-          >
-            <ArrowRight className="w-4 h-4" />
-            <span>بازگشت به پیشخوان کارتی اطلاعات پایه (۱۰ بخش)</span>
-          </button>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {hubCards.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveSection(c.id)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
-                  activeSection === c.id
-                    ? themeMeta.activeBgClass
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {c.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-          MODE 2: SEGMENTED HORIZONTAL PILL TABS (EXACT UX/UI OF IMAGE 2)
-         ===================================================================== */}
-      {viewMode === 'SEGMENTED_TABS' && (
-        <div className="flex items-center justify-start overflow-x-auto pb-1">
-          <div className="inline-flex items-center bg-slate-100/90 border border-slate-200/80 p-1 rounded-xl gap-1">
-            {segmentedTabs.map(tab => {
-              const isActive = activeSection === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveSection(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
               );
             })}
           </div>

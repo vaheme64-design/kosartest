@@ -22,6 +22,7 @@ import {
 } from '../../types/oeeAndConsumables';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { ReportModuleSkeleton } from '../common/Skeleton';
 
 export interface MachineUtilizationViewProps {
   machines?: any[];
@@ -248,6 +249,11 @@ export const MachineUtilizationView: React.FC<MachineUtilizationViewProps> = () 
           </select>
         </div>
       </div>
+
+      {/* Skeleton Loading State */}
+      {loading && !data && (
+        <ReportModuleSkeleton kpiCount={6} showChart={true} tableRows={5} tableColumns={8} />
+      )}
 
       {/* 6 KPI Summary Cards */}
       {data && (

@@ -21,6 +21,7 @@ import {
 import { UserRoleProfile } from '../types/inventory';
 import { auth } from '../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { KpiCardsSkeleton } from './ui/Skeleton';
 
 interface UserManagementViewProps {
   currentUser: UserRoleProfile;
@@ -35,9 +36,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'rbac' | 'db_architecture'>('rbac');
   const [dbStatus, setDbStatus] = useState<any>(null);
+  const [loadingDb, setLoadingDb] = useState<boolean>(true);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoadingDb(true);
     fetch('/api/db/status')
       .then(res => res.json())
       .then(data => {
@@ -45,8 +48,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           setDbStatus(data);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingDb(false));
   }, []);
+
+  if (loadingDb && !dbStatus) {
+    return <KpiCardsSkeleton count={6} columns={6} theme="dark" />;
+  }
 
   const rolesInfo: {
     role: UserRoleProfile['role'];

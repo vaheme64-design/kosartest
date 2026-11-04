@@ -26,6 +26,7 @@ import {
 } from '../../types/oeeAndConsumables';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { ReportModuleSkeleton } from '../common/Skeleton';
 
 export const ConsumablesForecastView: React.FC = () => {
   const [data, setData] = useState<ConsumablesForecastSummary | null>(null);
@@ -315,6 +316,11 @@ export const ConsumablesForecastView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Skeleton Loading State */}
+      {loading && !data && (
+        <ReportModuleSkeleton kpiCount={5} showChart={false} tableRows={6} tableColumns={9} />
+      )}
 
       {/* 5 KPI Summary Cards */}
       {data && (

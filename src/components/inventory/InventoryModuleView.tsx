@@ -51,6 +51,7 @@ import { IssueFormModal } from './IssueFormModal';
 import { TransferFormModal } from './TransferFormModal';
 import { AdjustmentFormModal } from './AdjustmentFormModal';
 import { ReturnFromProductionModal } from './ReturnFromProductionModal';
+import { InventoryModuleSkeleton } from '../ui/Skeleton';
 
 export type InventorySubTab =
   | 'DASHBOARD'
@@ -383,9 +384,13 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
     FINISHED_GOOD: 'محصول نهایی',
   };
 
+  if (loading && !metrics && balances.length === 0 && coils.length === 0) {
+    return <InventoryModuleSkeleton />;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Top Compact Alert Banner (Only 1 slim line at the top - navigates to the dedicated ALERTS page on click) */}
+      {/* Top Compact Alert Banner */}
       {reorderAlerts.length > 0 && activeSubTab !== 'ALERTS' && (
         <div className="bg-amber-50 border border-amber-200/90 rounded-xl px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
           <div className="flex items-center gap-2.5 text-xs">
@@ -424,16 +429,21 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
         </div>
       )}
 
-      {/* Task-Oriented Command Header */}
-      <div className="bg-white p-4 lg:p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+      {/* Grafana-Inspired Clean Header & Unified Flat Section Toolbar (No Nested Sub-Tab Rows) */}
+      <div className="bg-white p-4 lg:p-5 rounded-xl border border-slate-200/90 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-base lg:text-lg font-bold text-slate-900">
-              مرکز فرماندهی انبار، رول‌های ورق و قراردادها
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              عملیات روزانه انبار را با دکمه‌های سریع انجام دهید یا از نوار پایین بخش مورد نظر خود را انتخاب کنید
-            </p>
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
+              <Boxes className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base lg:text-lg font-bold text-slate-900">
+                مرکز فرماندهی انبار، رول‌های ورق و قراردادها
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                عملیات روزانه انبار را با دکمه‌های سریع انجام دهید یا بخش مورد نظر خود را از فیلتر یکپارچه زیر انتخاب کنید
+              </p>
+            </div>
           </div>
 
           {/* Primary Task-Oriented Operations */}
@@ -441,10 +451,10 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
             <button
               type="button"
               onClick={() => setIsReceiptOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
-              <ArrowDownLeft className="w-4 h-4" />
-              <span>ثبت رسید کالا / رول ورق</span>
+              <ArrowDownLeft className="w-3.5 h-3.5" />
+              <span>ثبت رسید کالا / رول</span>
             </button>
             <button
               type="button"
@@ -452,10 +462,10 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
                 setIssueModalPreset({ subType: 'PRODUCTION_LINE', warehouseId: 'WH-RAW' });
                 setIsIssueOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
-              <ArrowUpRight className="w-4 h-4 text-amber-400" />
-              <span>صدور حواله خروج به خط</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+              <span>حواله خروج به خط</span>
             </button>
             <button
               type="button"
@@ -463,110 +473,82 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
                 setIssueModalPreset({ subType: 'CUSTOMER_DELIVERY', warehouseId: 'WH-FINISHED' });
                 setIsIssueOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
-              <Truck className="w-4 h-4" />
-              <span>تحویل محصول به مشتری (خروج بار)</span>
+              <Truck className="w-3.5 h-3.5" />
+              <span>تحویل به مشتری</span>
             </button>
             <button
               type="button"
               onClick={() => setIsReturnOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             >
-              <RotateCcw className="w-4 h-4 text-blue-600" />
-              <span>برگشت ورق از خط تولید</span>
+              <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
+              <span>برگشت از خط</span>
             </button>
             <button
               type="button"
               onClick={() => setIsTransferOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />
-              <span>انتقال بین انبارها</span>
+              <span>انتقال</span>
             </button>
             <button
               type="button"
               onClick={() => setIsAdjustmentOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             >
               <Scale className="w-3.5 h-3.5 text-slate-500" />
-              <span>تعدیل انبارگردانی</span>
+              <span>انبارگردانی</span>
             </button>
           </div>
         </div>
 
-        {/* Streamlined Sub-Tabs Navigation (6 Core Tabs + Expandable Tools) */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 overflow-x-auto">
-          <div className="flex items-center gap-1">
-            {primaryTabs.map(tab => {
-              const isActive = activeSubTab === tab.id;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveSubTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
-                    isActive
-                      ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                  <span>{tab.label}</span>
-                  {tab.badge !== undefined && tab.badge > 0 && (
-                    <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums ${
-                        tab.badgeColor
-                          ? tab.badgeColor
-                          : isActive
-                          ? 'bg-slate-700 text-slate-200'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {toPersianDigits(tab.badge)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        {/* Single Flat Filter / View Selector Bar (Replaces multi-row sub-tabs) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <Layers className="w-3.5 h-3.5 text-orange-600" />
+              <span className="text-slate-500 font-medium">نمای بخش انبار:</span>
+              <select
+                value={activeSubTab}
+                onChange={e => setActiveSubTab(e.target.value as InventorySubTab)}
+                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+              >
+                {[...primaryTabs, ...secondaryTabs].map(tab => (
+                  <option key={tab.id} value={tab.id}>
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* Secondary Tools Toggle */}
-            {(showSecondaryTabs || isSecondaryActive) ? (
-              secondaryTabs.map(tab => {
+            {/* Quick Tag Filter Chips (Compact Grafana Tag Style) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {primaryTabs.slice(0, 5).map(tab => {
                 const isActive = activeSubTab === tab.id;
-                const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveSubTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer border ${
                       isActive
-                        ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                        : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                    <span>{tab.label}</span>
+                    {tab.label}
                   </button>
                 );
-              })
-            ) : null}
+              })}
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowSecondaryTabs(prev => !prev)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-              showSecondaryTabs || isSecondaryActive
-                ? 'bg-slate-100 text-slate-800'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-            }`}
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-            <span>{showSecondaryTabs || isSecondaryActive ? 'ابزارهای کمتر' : 'اکسل و گزارش‌های تکمیلی'}</span>
-          </button>
+          <div className="text-[11px] text-slate-400">
+            کل رول‌های فعال: {toPersianDigits(coils.length)} • قراردادها: {toPersianDigits(contracts.length)}
+          </div>
         </div>
       </div>
 
