@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Cpu,
   Plus,
@@ -18,6 +18,12 @@ import {
   Clock,
   Gauge,
   SlidersHorizontal,
+  Edit2,
+  Trash2,
+  FileText,
+  Settings,
+  Printer,
+  Download,
 } from 'lucide-react';
 import {
   Machine,
@@ -34,6 +40,8 @@ import { toPersianDigits, formatNumber } from '../utils/formatters';
 import { OeeModuleView } from './reports/OeeModuleView';
 import { MachineUtilizationView } from './reports/MachineUtilizationView';
 import { MasterDataSkeleton } from './ui/Skeleton';
+import { StandardTable, StandardTableHeader, StandardTableRow, StandardTableCell, StandardTableHeadCell } from './common/StandardTable';
+import { SearchableSelect } from './common/SearchableSelect';
 
 interface MachinesViewProps {
   machines: Machine[];
@@ -45,6 +53,7 @@ interface MachinesViewProps {
   onSaveDie?: (die: Partial<DieMold>) => Promise<{ success: boolean; message?: string; error?: string }>;
   onDeleteDie?: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   onSaveOperator?: (op: Partial<Operator>) => Promise<{ success: boolean; message?: string; error?: string }>;
+  onDeleteOperator?: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   onSaveHall?: (hall: Partial<FactoryHall>) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
@@ -58,6 +67,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   onSaveDie,
   onDeleteDie,
   onSaveOperator,
+  onDeleteOperator,
   onSaveHall,
 }) => {
   type SubTab = 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
@@ -101,8 +111,9 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
     notes: '',
   });
 
-  // Operator Modal
+  // Operator State & Modals
   const [isOpModalOpen, setIsOpModalOpen] = useState(false);
+  const [editingOperator, setEditingOperator] = useState<Partial<Operator> | null>(null);
   const [opFormData, setOpFormData] = useState<Partial<Operator>>({
     personnelCode: '',
     fullName: '',
@@ -112,6 +123,114 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
     phone: '',
     active: true,
   });
+  const [operatorSearch, setOperatorSearch] = useState('');
+  const [selectedOpForReport, setSelectedOpForReport] = useState<Operator | null>(null);
+  const [opTimesheetData, setOpTimesheetData] = useState<any>(null);
+  const [loadingTimesheet, setLoadingTimesheet] = useState(false);
+
+  // Dynamic Machine Process Capabilities
+  const [availableProcesses, setAvailableProcesses] = useState<Array<{ code: string; name: string; category?: string; description?: string }>>([
+    ...PROCESS_DEFINITIONS,
+  ]);
+  const [isNewProcessModalOpen, setIsNewProcessModalOpen] = useState(false);
+  const [newProcCode, setNewProcCode] = useState('');
+  const [newProcName, setNewProcName] = useState('');
+
+  const loadProcesses = async () => {
+    try {
+      const res = await fetch('/api/processes');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setAvailableProcesses(json.data);
+      }
+    } catch (err) {
+      console.warn('Using default processes', err);
+    }
+  };
+
+  useEffect(() => {
+    loadProcesses();
+  }, []);
+
+  const handleCreateProcess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProcCode.trim() || !newProcName.trim()) return;
+    try {
+      const res = await fetch('/api/processes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newProcCode.trim(),
+          name: newProcName.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMachineFormData(prev => ({
+          ...prev,
+          capabilities: [...(prev.capabilities || []), newProcCode.trim().toUpperCase() as ProcessType],
+        }));
+        setNewProcCode('');
+        setNewProcName('');
+        setIsNewProcessModalOpen(false);
+        await loadProcesses();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteProcess = async (code: string) => {
+    if (!confirm(`آیا از حذف قابلیت فرآیندی «${code}» اطمینان دارید؟`)) return;
+    try {
+      await fetch(`/api/processes/${code}`, { method: 'DELETE' });
+      await loadProcesses();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenTimesheetReport = async (op: Operator) => {
+    setSelectedOpForReport(op);
+    setLoadingTimesheet(true);
+    setOpTimesheetData(null);
+    try {
+      const res = await fetch(`/api/operators/${op.id}/timesheet`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setOpTimesheetData(json.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingTimesheet(false);
+    }
+  };
+
+  const handleEditOp = (op: Operator) => {
+    setEditingOperator(op);
+    setOpFormData({
+      id: op.id,
+      personnelCode: op.personnelCode,
+      fullName: op.fullName,
+      skillProcessTypes: op.skillProcessTypes || ['BLANKING'],
+      defaultShift: op.defaultShift || 'MORNING',
+      hallId: op.hallId || 'HALL-HEAVY-PRESS',
+      phone: op.phone || '',
+      active: op.active !== undefined ? op.active : true,
+    });
+    setFormError(null);
+    setIsOpModalOpen(true);
+  };
+
+  const handleDeleteOp = async (op: Operator) => {
+    if (!confirm(`آیا از حذف اپراتور «${op.fullName}» (کد ${op.personnelCode}) اطمینان دارید؟`)) return;
+    if (onDeleteOperator) {
+      await onDeleteOperator(op.id);
+    } else {
+      await fetch(`/api/operators/${op.id}`, { method: 'DELETE' });
+    }
+  };
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,13 +240,13 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   }
 
   // Toggle machine capability checkbox
-  const toggleCapability = (proc: ProcessType) => {
-    const current = machineFormData.capabilities || [];
+  const toggleCapability = (proc: string) => {
+    const current = (machineFormData.capabilities || []) as string[];
     if (current.includes(proc)) {
       if (current.length === 1) return; // Keep at least one
-      setMachineFormData({ ...machineFormData, capabilities: current.filter(c => c !== proc) });
+      setMachineFormData({ ...machineFormData, capabilities: current.filter(c => c !== proc) as ProcessType[] });
     } else {
-      setMachineFormData({ ...machineFormData, capabilities: [...current, proc] });
+      setMachineFormData({ ...machineFormData, capabilities: [...current, proc] as ProcessType[] });
     }
   };
 
@@ -672,47 +791,114 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
 
       {/* TAB 4: OPERATORS & LINE TECHNICIANS */}
       {activeSubTab === 'operators' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                  <th className="py-3 px-3">کد پرسنلی</th>
-                  <th className="py-3 px-3">نام و نام خانوادگی</th>
-                  <th className="py-3 px-3">مهارت‌های تخصصی</th>
-                  <th className="py-3 px-3">شیفت کاری پیش‌فرض</th>
-                  <th className="py-3 px-3">شماره تماس داخلی / همراه</th>
-                  <th className="py-3 px-3">وضعیت</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {operators.map(op => (
-                  <tr key={op.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-orange-700">{op.personnelCode}</td>
-                    <td className="py-3 px-3 text-slate-900 font-bold">{op.fullName}</td>
-                    <td className="py-3 px-3">
-                      <div className="flex flex-wrap gap-1">
-                        {op.skillProcessTypes?.map((s, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono font-semibold">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-slate-700">
-                      {op.defaultShift === 'MORNING' ? 'شیفت صبح' : op.defaultShift === 'EVENING' ? 'شیفت عصر' : 'شیفت شب'}
-                    </td>
-                    <td className="py-3 px-3 font-mono text-slate-500 text-[11px]">{op.phone || '-'}</td>
-                    <td className="py-3 px-3">
-                      <span className="text-emerald-700 font-semibold flex items-center gap-1 text-[11px]">
-                        <CheckCircle2 className="w-3 h-3" />
-                        شاغل در خط
-                      </span>
-                    </td>
+        <div className="space-y-3">
+          {/* Search bar and counter */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="جستجو در اپراتورها (نام، کد پرسنلی، مهارت)..."
+                value={operatorSearch}
+                onChange={e => setOperatorSearch(e.target.value)}
+                className="w-full pr-8 pl-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-orange-500 text-slate-900"
+              />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>تعداد پرسنل فعال: {toPersianDigits(operators.filter(o => o.active).length)} نفر</span>
+              <button
+                type="button"
+                onClick={handleOpenNewOp}
+                className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-xs shadow-2xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ اپراتور جدید</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                    <th className="py-3 px-3">کد پرسنلی</th>
+                    <th className="py-3 px-3">نام و نام خانوادگی</th>
+                    <th className="py-3 px-3">مهارت‌های تخصصی</th>
+                    <th className="py-3 px-3">شیفت پیش‌فرض</th>
+                    <th className="py-3 px-3">تماس</th>
+                    <th className="py-3 px-3 text-center">وضعیت</th>
+                    <th className="py-3 px-3 text-center">عملیات و گزارش</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {operators
+                    .filter(op => {
+                      if (!operatorSearch.trim()) return true;
+                      const q = operatorSearch.toLowerCase();
+                      return (
+                        op.fullName.toLowerCase().includes(q) ||
+                        op.personnelCode.toLowerCase().includes(q) ||
+                        op.skillProcessTypes?.some(s => s.toLowerCase().includes(q))
+                      );
+                    })
+                    .map(op => (
+                      <tr key={op.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3 font-mono font-bold text-orange-700">{op.personnelCode}</td>
+                        <td className="py-3 px-3 text-slate-900 font-bold">{op.fullName}</td>
+                        <td className="py-3 px-3">
+                          <div className="flex flex-wrap gap-1">
+                            {op.skillProcessTypes?.map((s, i) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono font-semibold">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-slate-700">
+                          {op.defaultShift === 'MORNING' ? 'شیفت صبح' : op.defaultShift === 'EVENING' ? 'شیفت عصر' : 'شیفت شب'}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-500 text-[11px]">{op.phone || '-'}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            شاغل
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenTimesheetReport(op)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-[11px] transition cursor-pointer"
+                              title="مشاهده کارنامه و ساعات کارکرد"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>گزارش کارکرد</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditOp(op)}
+                              className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition cursor-pointer"
+                              title="ویرایش مشخصات اپراتور"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOp(op)}
+                              className="p-1 rounded-lg hover:bg-rose-50 text-rose-500 hover:text-rose-700 transition cursor-pointer"
+                              title="حذف اپراتور"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -776,21 +962,34 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
 
               {/* Multi-Capability Checkboxes */}
               <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <label className="text-slate-800 font-bold block mb-1">
-                  قابلیت‌های فرآیندی این دستگاه (چند انتخابی بر اساس قالب‌های قابل نصب):
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {PROCESS_DEFINITIONS.map(p => {
-                    const isChecked = (machineFormData.capabilities || []).includes(p.code);
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-800 font-bold">
+                    قابلیت‌های فرآیندی این دستگاه (چند انتخابی بر اساس قالب‌های قابل نصب):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewProcessModalOpen(true)}
+                    className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ قابلیت جدید / ویرایش لیست</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  {availableProcesses.map(p => {
+                    const isChecked = (machineFormData.capabilities || []).includes(p.code as any);
                     return (
-                      <label key={p.code} className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleCapability(p.code)}
-                          className="rounded bg-white border-slate-300 text-orange-600 focus:ring-0"
-                        />
-                        <span>{p.name}</span>
+                      <label key={p.code} className="flex items-center justify-between gap-1 cursor-pointer text-[11px] text-slate-700 hover:text-slate-900 bg-white px-2 py-1.5 rounded-lg border border-slate-200/80">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleCapability(p.code)}
+                            className="rounded bg-white border-slate-300 text-orange-600 focus:ring-0 cursor-pointer"
+                          />
+                          <span className="truncate">{p.name}</span>
+                        </div>
+                        <span className="font-mono text-[9px] text-slate-400">{p.code}</span>
                       </label>
                     );
                   })}
@@ -1061,17 +1260,237 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsOpModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium"
+                  onClick={() => {
+                    setIsOpModalOpen(false);
+                    setEditingOperator(null);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all cursor-pointer"
                 >
-                  {loading ? 'در حال ثبت...' : 'ثبت اپراتور'}
+                  {loading ? 'در حال ثبت...' : editingOperator ? 'ذخیره تغییرات اپراتور' : 'ثبت اپراتور جدید'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: OPERATOR TIMESHEET & PERFORMANCE REPORT (گزارش کارکرد هر نفر) */}
+      {selectedOpForReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-200">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    گزارش کارکرد و بازدهی: {selectedOpForReport.fullName}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    کد پرسنلی: {selectedOpForReport.personnelCode} • شیفت: {selectedOpForReport.defaultShift === 'MORNING' ? 'صبح' : 'عصر'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOpForReport(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingTimesheet ? (
+              <div className="py-12 text-center text-xs text-slate-500">
+                در حال فراخوانی آمار و کارکرد شیفت‌ها...
+              </div>
+            ) : opTimesheetData ? (
+              <div className="space-y-4 text-xs">
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-right">
+                    <span className="text-[10px] text-slate-500 block">ساعات کارکرد کل:</span>
+                    <span className="text-base font-extrabold text-slate-900 font-mono">
+                      {toPersianDigits(opTimesheetData.summary.totalHoursWorked)} ساعت
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/90 text-right">
+                    <span className="text-[10px] text-emerald-700 block">تولید سالم کل:</span>
+                    <span className="text-base font-extrabold text-emerald-800 font-mono">
+                      {formatNumber(opTimesheetData.summary.totalPiecesProduced)} عدد
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/90 text-right">
+                    <span className="text-[10px] text-amber-700 block">توقفات ثبت‌شده:</span>
+                    <span className="text-base font-extrabold text-amber-900 font-mono">
+                      {toPersianDigits(opTimesheetData.summary.downtimeReportedHours)} ساعت
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200/90 text-right">
+                    <span className="text-[10px] text-indigo-700 block">راندمان عملکرد:</span>
+                    <span className="text-base font-extrabold text-indigo-900 font-mono">
+                      {toPersianDigits(opTimesheetData.summary.overallEfficiencyPercent)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Shift Log Table */}
+                <div>
+                  <h4 className="font-bold text-slate-800 mb-2">ریز عملکرد روزانه و شیفت‌های اخیر:</h4>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200/90">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3">تاریخ و شیفت</th>
+                          <th className="py-2.5 px-3">دستگاه</th>
+                          <th className="py-2.5 px-3">قطعه تولیدی</th>
+                          <th className="py-2.5 px-3 text-center">تولید سالم</th>
+                          <th className="py-2.5 px-3 text-center">ضایعات</th>
+                          <th className="py-2.5 px-3 text-center">توقف (دقیقه)</th>
+                          <th className="py-2.5 px-3">علت توقف</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
+                        {opTimesheetData.shiftRecords.map((r: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50/80">
+                            <td className="py-2.5 px-3 font-sans font-medium text-slate-900">
+                              {r.date} <span className="text-[10px] text-slate-400 block">{r.shift}</span>
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-slate-800">{r.machineCode}</td>
+                            <td className="py-2.5 px-3 font-sans">
+                              <span className="font-semibold text-slate-900">{r.partName}</span>
+                              <span className="text-[10px] text-slate-400 block font-mono">{r.partCode}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                              {formatNumber(r.actualProduced)}
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-rose-600 font-semibold">
+                              {toPersianDigits(r.scrapCount)}
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-amber-700">
+                              {toPersianDigits(r.downtimeMin)}
+                            </td>
+                            <td className="py-2.5 px-3 font-sans text-slate-500 text-[11px] max-w-xs truncate">
+                              {r.downtimeReason}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>چاپ کارنامه</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOpForReport(null)}
+                    className="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold cursor-pointer"
+                  >
+                    بستن
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DYNAMIC PROCESS CAPABILITIES MANAGEMENT (مدیریت قابلیت‌های فرآیندی پرس) */}
+      {isNewProcessModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-orange-600" />
+                <h3 className="text-sm font-bold text-slate-900">مدیریت قابلیت‌های فرآیندی پرس‌ها</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewProcessModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Existing Processes List */}
+            <div className="space-y-1 max-h-48 overflow-y-auto divide-y divide-slate-100 text-xs">
+              <span className="text-[11px] font-bold text-slate-500 block mb-1">قابلیت‌های ثبت‌شده در سیستم:</span>
+              {availableProcesses.map(p => (
+                <div key={p.code} className="flex items-center justify-between py-1.5 px-1">
+                  <div>
+                    <span className="font-bold text-slate-900 font-mono">{p.code}</span>
+                    <span className="text-slate-500 mr-2 text-[11px]">{p.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteProcess(p.code)}
+                    className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50 cursor-pointer"
+                    title="حذف قابلیت"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Form to add a new process */}
+            <form onSubmit={handleCreateProcess} className="pt-3 border-t border-slate-100 space-y-2.5 text-xs">
+              <span className="text-[11px] font-bold text-slate-700 block">افزودن قابلیت فرآیندی جدید:</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">شناسه انگلیسی (Code) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: COINING یا FLANGING"
+                    value={newProcCode}
+                    onChange={e => setNewProcCode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-orange-500 uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">عنوان فارسی فرایند *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: سکه‌زنی یا فلنج‌کاری"
+                    value={newProcName}
+                    onChange={e => setNewProcName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewProcessModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs cursor-pointer"
+                >
+                  بستن
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs cursor-pointer shadow-xs"
+                >
+                  + افزودن قابلیت
                 </button>
               </div>
             </form>

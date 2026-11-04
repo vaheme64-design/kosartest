@@ -31,6 +31,7 @@ import { MachineRecommendationView } from './MachineRecommendationView';
 import { NewCustomerOrderModal } from './NewCustomerOrderModal';
 import { MrpModuleView } from './MrpModuleView';
 import { ConsumablesForecastView } from './ConsumablesForecastView';
+import { DailyProductionScheduleView } from './DailyProductionScheduleView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
@@ -49,7 +50,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   onGlobalRefresh,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'mrp' | 'consumables' | 'recommendations' | 'orders' | 'approved_plans'
+    'dashboard' | 'daily_schedule' | 'mrp' | 'consumables' | 'recommendations' | 'orders' | 'approved_plans'
   >('dashboard');
 
   const [loading, setLoading] = useState(false);
@@ -272,6 +273,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                 className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
                 <option value="dashboard">داشبورد موازنه تقاضا و ظرفیت</option>
+                <option value="daily_schedule">برنامه روزانه شرکت به تفکیک سالن (Daily Dispatch)</option>
                 <option value="mrp">پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</option>
                 <option value="consumables">پیش‌بینی مواد مصرفی کارگاه (ROP)</option>
                 <option value="recommendations">
@@ -289,6 +291,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
                 { id: 'dashboard', label: 'موازنه تقاضا' },
+                { id: 'daily_schedule', label: 'برنامه روزانه سالن' },
                 { id: 'mrp', label: 'نیازسنجی MRP' },
                 { id: 'consumables', label: 'مواد مصرفی' },
                 { id: 'recommendations', label: 'تخصیص پرس‌ها' },
@@ -338,6 +341,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
           onNavigateToRecommendations={navigateToRecommendationsForPart}
           loading={loading}
         />
+      )}
+
+      {/* 1.0. Daily Production Schedule Sub-Tab (برنامه روزانه شرکت به تفکیک سالن) */}
+      {activeSubTab === 'daily_schedule' && (
+        <DailyProductionScheduleView />
       )}
 
       {/* 1.1. MRP & Material Requirements Forecast Sub-Tab */}

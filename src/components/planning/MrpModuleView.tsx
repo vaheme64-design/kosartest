@@ -250,7 +250,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
   return (
     <div className="space-y-5 print:space-y-3">
       {/* Unified Light Header & Dropdown List Selector */}
-      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <span className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 shrink-0">
@@ -442,7 +442,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
       {activeTab === 'materials' && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 no-print">
             <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
@@ -474,8 +474,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 onClick={() => setSeverityFilter('ALL')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition ${
                   severityFilter === 'ALL'
-                    ? 'bg-slate-700 text-slate-900 font-bold'
-                    : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
+                    ? 'bg-slate-700 text-white font-bold'
+                    : 'bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200'
                 }`}
               >
                 همه ({toPersianDigits(mrpData?.materials.length || 0)})
@@ -486,7 +486,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'HARD_SHORTAGE'
                     ? 'bg-rose-500 text-white font-bold'
-                    : 'bg-slate-50 text-rose-400 hover:bg-rose-950/40 border border-rose-900/40'
+                    : 'bg-slate-50 text-rose-600 hover:bg-rose-50 border border-rose-200'
                 }`}
               >
                 <ShieldAlert className="w-3 h-3" />
@@ -498,7 +498,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'SHORTAGE_COVERED_BY_CONTRACT'
                     ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-slate-50 text-amber-400 hover:bg-amber-950/40 border border-amber-900/40'
+                    : 'bg-slate-50 text-amber-700 hover:bg-amber-50 border border-amber-200'
                 }`}
               >
                 <Info className="w-3 h-3" />
@@ -510,7 +510,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'OK'
                     ? 'bg-emerald-600 text-white font-bold'
-                    : 'bg-slate-50 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/40'
+                    : 'bg-slate-50 text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
                 }`}
               >
                 <CheckCircle2 className="w-3 h-3" />
@@ -520,23 +520,30 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           </div>
 
           {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl printable-area">
+            {/* Print Header shown only during print */}
+            <div className="hidden print:block p-4 border-b border-slate-300 text-center">
+              <span className="text-xs text-slate-600 block">شرکت تولیدی قطعات خودرو (زنجیره تامین ساپکو)</span>
+              <h2 className="text-base font-bold text-slate-900 mt-1">گزارش رسمی پیش‌بینی نیازمندی مواد و موازنه کلاف (MRP)</h2>
+              <span className="text-[10px] text-slate-500 font-mono">تاریخ موازنه: {mrpData?.ranAtFa || 'امروز'}</span>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-bold text-[11px]">
                   <tr>
                     <th className="py-3 px-3">کد و عنوان ماده اولیه</th>
                     <th className="py-3 px-3 text-center">گرید و ضخامت</th>
-                    <th className="py-3 px-3 text-center text-indigo-400 font-bold">نیاز کل (kg)</th>
-                    <th className="py-3 px-3 text-center text-slate-700">موجودی ملکی</th>
-                    <th className="py-3 px-3 text-center text-emerald-400">امانی ساپکو</th>
-                    <th className="py-3 px-3 text-center text-rose-400/80">قرنطینه</th>
-                    <th className="py-3 px-3 text-center text-amber-400">رزرو فعال</th>
-                    <th className="py-3 px-3 text-center text-emerald-700 font-bold">موجودی آزاد (ATP)</th>
+                    <th className="py-3 px-3 text-center text-indigo-700 font-bold">نیاز کل (kg)</th>
+                    <th className="py-3 px-3 text-center text-slate-800">موجودی ملکی</th>
+                    <th className="py-3 px-3 text-center text-emerald-700">امانی ساپکو</th>
+                    <th className="py-3 px-3 text-center text-rose-600">قرنطینه</th>
+                    <th className="py-3 px-3 text-center text-amber-700">رزرو فعال</th>
+                    <th className="py-3 px-3 text-center text-emerald-800 font-bold">موجودی آزاد (ATP)</th>
                     <th className="py-3 px-3 text-center text-indigo-700">قرارداد باز</th>
-                    <th className="py-3 px-3 text-center text-rose-400 font-black">کسری قطعی</th>
+                    <th className="py-3 px-3 text-center text-rose-700 font-black">کسری قطعی</th>
                     <th className="py-3 px-3 text-center">وضعیت تأمین</th>
-                    <th className="py-3 px-3 text-center">قطعات متقاضی</th>
+                    <th className="py-3 px-3 text-center no-print">قطعات متقاضی</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono">

@@ -283,6 +283,21 @@ export default function App() {
     }
   };
 
+  const handleDeleteOperator = async (opId: string) => {
+    try {
+      const res = await fetch(`/api/operators/${opId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'خطا در حذف اپراتور');
+      await loadAllData();
+      return { success: true, message: data.message };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'خطا در حذف اپراتور';
+      return { success: false, error: msg };
+    }
+  };
+
   const handleSaveHall = async (hallData: Partial<FactoryHall>) => {
     try {
       const res = await fetch('/api/halls', {
@@ -604,6 +619,7 @@ export default function App() {
               onSaveDie={handleSaveDie}
               onDeleteDie={handleDeleteDie}
               onSaveOperator={handleSaveOperator}
+              onDeleteOperator={handleDeleteOperator}
               onSaveHall={handleSaveHall}
             />
           )}

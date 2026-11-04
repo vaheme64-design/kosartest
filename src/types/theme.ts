@@ -40,6 +40,60 @@ export interface ColorThemeMeta {
   buttonPrimaryClass: string;
 }
 
+export interface UnifiedColorPalette {
+  appBackground: string;
+  surface: string;
+  surfaceMuted: string;
+  borderSubtle: string;
+  borderDefault: string;
+  borderStrong: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  textInverted: string;
+  tableHeaderBg: string;
+  tableHeaderText: string;
+  tableHeaderBorder: string;
+  tableRowBase: string;
+  tableRowStripe: string;
+  tableRowHover: string;
+  tableRowText: string;
+  cardBg: string;
+  cardBorder: string;
+  accentBrand: string;
+  accentBadge: string;
+  headerBannerBg: string;
+  headerBannerText: string;
+  headerBannerSubtext: string;
+}
+
+export const UNIFIED_COLOR_CONFIG: UnifiedColorPalette = {
+  appBackground: 'bg-slate-50 text-slate-900',
+  surface: 'bg-white',
+  surfaceMuted: 'bg-slate-50',
+  borderSubtle: 'border-slate-100',
+  borderDefault: 'border-slate-200/90',
+  borderStrong: 'border-slate-300',
+  textPrimary: 'text-slate-900',
+  textSecondary: 'text-slate-600',
+  textMuted: 'text-slate-400',
+  textInverted: 'text-white',
+  tableHeaderBg: 'bg-slate-50',
+  tableHeaderText: 'text-slate-700 font-semibold',
+  tableHeaderBorder: 'border-b border-slate-200',
+  tableRowBase: 'bg-white',
+  tableRowStripe: 'even:bg-slate-50/50',
+  tableRowHover: 'hover:bg-amber-50/40 hover:text-slate-950 transition-colors',
+  tableRowText: 'text-slate-800',
+  cardBg: 'bg-white',
+  cardBorder: 'border border-slate-200/90 shadow-2xs',
+  accentBrand: 'bg-orange-600 hover:bg-orange-500 text-white',
+  accentBadge: 'bg-orange-50 text-orange-900 border border-orange-200 font-bold',
+  headerBannerBg: 'bg-white border border-slate-200/90 shadow-2xs',
+  headerBannerText: 'text-slate-900 font-bold',
+  headerBannerSubtext: 'text-slate-500',
+};
+
 export const LAYOUT_TEMPLATES: Record<ErpLayoutTemplate, LayoutTemplateMeta> = {
   HUB_WORKSPACE: {
     id: 'HUB_WORKSPACE',

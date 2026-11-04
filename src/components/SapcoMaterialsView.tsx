@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layers,
   Plus,
@@ -11,11 +11,15 @@ import {
   AlertTriangle,
   Download,
   Building2,
+  Trash2,
+  X,
+  Settings,
 } from 'lucide-react';
 import { SapcoCoilReceipt, Part } from '../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits, exportToCsv } from '../utils/formatters';
 import { formatToJalali } from '../utils/jalali';
 import { InventoryModuleSkeleton } from './ui/Skeleton';
+import { SearchableSelect } from './common/SearchableSelect';
 
 interface SapcoMaterialsViewProps {
   coils: SapcoCoilReceipt[];
@@ -35,6 +39,72 @@ export const SapcoMaterialsView: React.FC<SapcoMaterialsViewProps> = ({
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Dynamic Steel Grades Management
+  const [materialGradesList, setMaterialGradesList] = useState<Array<{ code: string; name: string; standard?: string; yieldStrengthMpa?: number }>>([
+    { code: 'DC04', name: 'DC04 (کشش عمیق)', standard: 'EN 10130' },
+    { code: 'ST14', name: 'ST14 (نورد سرد)', standard: 'DIN 1623' },
+    { code: 'ST12', name: 'ST12 (کشش معمولی)', standard: 'DIN 1623' },
+    { code: 'DX51D', name: 'DX51D (گالوانیزه)', standard: 'EN 10346' },
+    { code: 'ST37', name: 'ST37 (ساختمانی/شاسی)', standard: 'DIN 17100' },
+  ]);
+  const [isGradeModalOpen, setIsGradeModalOpen] = useState(false);
+  const [newGradeCode, setNewGradeCode] = useState('');
+  const [newGradeName, setNewGradeName] = useState('');
+  const [newGradeStandard, setNewGradeStandard] = useState('');
+
+  const loadGrades = async () => {
+    try {
+      const res = await fetch('/api/material-grades');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setMaterialGradesList(json.data);
+      }
+    } catch (e) {
+      console.warn('Using default grades list', e);
+    }
+  };
+
+  useEffect(() => {
+    loadGrades();
+  }, []);
+
+  const handleAddGrade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGradeCode.trim() || !newGradeName.trim()) return;
+    try {
+      const res = await fetch('/api/material-grades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newGradeCode.trim(),
+          name: newGradeName.trim(),
+          standard: newGradeStandard.trim() || 'استاندارد ساپکو',
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMaterialGrade(newGradeCode.trim().toUpperCase());
+        setNewGradeCode('');
+        setNewGradeName('');
+        setNewGradeStandard('');
+        setIsGradeModalOpen(false);
+        await loadGrades();
+      }
+    } catch (err) {
+      console.error('Error adding grade', err);
+    }
+  };
+
+  const handleDeleteGrade = async (code: string) => {
+    if (!confirm(`آیا از حذف گرید آلیاژ «${code}» اطمینان دارید؟`)) return;
+    try {
+      await fetch(`/api/material-grades/${code}`, { method: 'DELETE' });
+      await loadGrades();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Form State
   const [receiptNumber, setReceiptNumber] = useState('');
@@ -349,36 +419,49 @@ export const SapcoMaterialsView: React.FC<SapcoMaterialsViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs text-slate-700 font-medium mb-1">ماده اولیه مرتبط در کاتالوگ</label>
-                <select
-                  required
+                <label className="block text-xs text-slate-700 font-medium mb-1">ماده اولیه مرتبط در کاتالوگ (جستجو در کالاها)</label>
+                <SearchableSelect
                   value={selectedPartId}
-                  onChange={e => setSelectedPartId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500"
-                >
-                  <option value="">-- انتخاب ورق / ماده اولیه --</option>
-                  {rawParts.map(p => (
-                    <option key={p.id} value={p.id}>
-                      [{p.code}] {p.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={val => setSelectedPartId(val)}
+                  placeholder="-- جستجو و انتخاب ورق / ماده اولیه --"
+                  searchPlaceholder="جستجو با کد یا عنوان کالا..."
+                  options={rawParts.map(p => ({
+                    value: p.id,
+                    label: p.name,
+                    sublabel: `${p.code} • ${p.unit || 'کیلوگرم'}`,
+                    badge: 'ماده اولیه',
+                  }))}
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-700 font-medium mb-1">گرید آلیاژ</label>
-                  <select
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-700 font-medium">گرید آلیاژ</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsGradeModalOpen(true)}
+                      className="text-[10px] text-orange-600 hover:text-orange-700 font-semibold cursor-pointer"
+                      title="مدیریت و افزودن گرید جدید"
+                    >
+                      + گرید جدید
+                    </button>
+                  </div>
+                  <SearchableSelect
                     value={materialGrade}
-                    onChange={e => setMaterialGrade(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500"
-                  >
-                    <option value="DC04">DC04 (کشش عمیق)</option>
-                    <option value="ST14">ST14 (نورد سرد)</option>
-                    <option value="ST12">ST12 (کشش معمولی)</option>
-                    <option value="DX51D">DX51D (گالوانیزه)</option>
-                    <option value="ST37">ST37 (ساختمانی/شاسی)</option>
-                  </select>
+                    onChange={val => setMaterialGrade(val)}
+                    placeholder="انتخاب گرید..."
+                    searchPlaceholder="جستجو در گریدها..."
+                    options={materialGradesList.map(g => ({
+                      value: g.code,
+                      label: g.name,
+                      sublabel: g.standard || 'استاندارد ساپکو',
+                      badge: g.code,
+                    }))}
+                    onAddNew={() => setIsGradeModalOpen(true)}
+                    addNewText="+ تعریف گرید آلیاژ جدید"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-700 font-medium mb-1">ضخامت (mm)</label>
@@ -445,6 +528,104 @@ export const SapcoMaterialsView: React.FC<SapcoMaterialsViewProps> = ({
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer"
                 >
                   {submitting ? 'در حال ثبت رسید...' : 'ثبت قطعی رسید کویل'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Steel Grades Management Modal */}
+      {isGradeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-orange-600" />
+                <h3 className="text-sm font-bold text-slate-900">مدیریت و ویرایش گریدهای آلیاژ فولاد ساپکو</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGradeModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* List of existing grades with delete option */}
+            <div className="space-y-1.5 max-h-48 overflow-y-auto divide-y divide-slate-100">
+              <span className="text-[11px] font-bold text-slate-500 block mb-1">گریدهای تعریف‌شده در سیستم:</span>
+              {materialGradesList.map(g => (
+                <div key={g.code} className="flex items-center justify-between py-2 px-1 text-xs">
+                  <div>
+                    <span className="font-bold text-slate-900 font-mono">{g.code}</span>
+                    <span className="text-slate-500 mr-2 text-[11px]">{g.name}</span>
+                    {g.standard && <span className="text-[10px] text-slate-400 mr-1 font-mono">({g.standard})</span>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteGrade(g.code)}
+                    className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50 cursor-pointer"
+                    title="حذف گرید"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Form to add a new grade */}
+            <form onSubmit={handleAddGrade} className="pt-3 border-t border-slate-100 space-y-2.5 text-xs">
+              <span className="text-[11px] font-bold text-slate-700 block">افزودن گرید جدید:</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">کد گرید *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: CR240 یا ST13"
+                    value={newGradeCode}
+                    onChange={e => setNewGradeCode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-orange-500 uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">استاندارد مرجع</label>
+                  <input
+                    type="text"
+                    placeholder="DIN 1623 یا ساپکو"
+                    value={newGradeStandard}
+                    onChange={e => setNewGradeStandard(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-0.5">عنوان فارسی و مشخصه مکانیکی *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: ورق استحکام بالا کشش بدنه خودرو"
+                  value={newGradeName}
+                  onChange={e => setNewGradeName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGradeModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs cursor-pointer"
+                >
+                  بستن
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs cursor-pointer shadow-xs"
+                >
+                  + ذخیره گرید
                 </button>
               </div>
             </form>

@@ -342,7 +342,7 @@ export const TraceabilityTagModal: React.FC<TraceabilityTagModalProps> = ({
               {/* Tag Physical Frame */}
               <div
                 id="printable-tag"
-                className="bg-white border-2 border-slate-900 rounded-2xl p-5 shadow-lg space-y-4 font-mono text-slate-900"
+                className="bg-white border-2 border-slate-900 rounded-xl p-5 shadow-lg space-y-3 font-mono text-slate-900 printable-area"
               >
                 {/* Tag Top Header */}
                 <div className="flex items-start justify-between border-b-2 border-slate-900 pb-3">
@@ -357,9 +357,9 @@ export const TraceabilityTagModal: React.FC<TraceabilityTagModalProps> = ({
                       شماره بچ / لات: {generatedTag.lotNumber}
                     </span>
                   </div>
-                  <div className="text-left bg-white text-slate-900 px-3 py-1.5 rounded-lg">
-                    <span className="text-[10px] block">شماره کارت</span>
-                    <span className="text-xs font-bold">{generatedTag.tagNumber}</span>
+                  <div className="text-left bg-slate-100 border border-slate-300 text-slate-900 px-3 py-1.5 rounded-lg">
+                    <span className="text-[10px] block text-slate-500">شماره کارت رهگیری</span>
+                    <span className="text-xs font-bold font-mono">{generatedTag.tagNumber}</span>
                   </div>
                 </div>
 
@@ -375,7 +375,7 @@ export const TraceabilityTagModal: React.FC<TraceabilityTagModalProps> = ({
                   </div>
                   <div className="p-2 border border-slate-300 rounded-lg bg-emerald-50 border-emerald-300 text-emerald-900">
                     <span className="text-[10px] text-emerald-700 block">تعداد در بسته:</span>
-                    <span className="font-extrabold text-base">{toPersianDigits(generatedTag.quantity)} {generatedTag.unit}</span>
+                    <span className="font-extrabold text-base font-mono">{toPersianDigits(generatedTag.quantity)} {generatedTag.unit}</span>
                   </div>
 
                   <div className="p-2 border border-slate-300 rounded-lg">
@@ -417,27 +417,27 @@ export const TraceabilityTagModal: React.FC<TraceabilityTagModalProps> = ({
                 </div>
 
                 {/* Barcode & Scan Block */}
-                <div className="p-3 bg-slate-100 border border-slate-300 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-right">
+                <div className="p-3 bg-white border border-slate-400 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-right">
                   <div className="space-y-1">
-                    <div className="tracking-widest font-mono text-xs font-bold text-slate-800">
+                    <div className="tracking-widest font-mono text-xs font-bold text-slate-900">
                       {generatedTag.barcodeValue}
                     </div>
-                    {/* Simulated Clean 1D Barcode Pattern */}
-                    <div className="h-8 flex items-center justify-center sm:justify-start gap-1 overflow-hidden opacity-80">
-                      {[1,2,1,3,1,1,2,4,1,2,1,3,2,1,2,1,3,1,2,1,4,1,2,1,3,1,2,1].map((w, i) => (
+                    {/* High-Contrast 1D Barcode Pattern (Real Dark Bars) */}
+                    <div className="h-9 flex items-center justify-center sm:justify-start gap-1 overflow-hidden bg-white p-1 rounded">
+                      {[2,1,3,1,1,2,4,1,2,1,3,2,1,2,1,3,1,2,1,4,1,2,1,3,1,2,1,3,1,2].map((w, i) => (
                         <span
                           key={i}
-                          className="h-full bg-white inline-block"
-                          style={{ width: `${w * 2.5}px` }}
+                          className="h-full bg-slate-950 inline-block"
+                          style={{ width: `${w * 2.2}px` }}
                         />
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-300 shrink-0">
-                    <QrCode className="w-7 h-7 text-slate-900" />
-                    <span className="text-[10px] text-slate-600 font-sans font-medium text-right">
-                      اسکن با بارکدخوان خط<br />یا سامانه سیار انبار
+                  <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-300 shrink-0">
+                    <QrCode className="w-8 h-8 text-slate-950" />
+                    <span className="text-[10px] text-slate-700 font-sans font-medium text-right">
+                      اسکن بارکد رهگیری<br />سامانه ردیابی پای خط ساپکو
                     </span>
                   </div>
                 </div>

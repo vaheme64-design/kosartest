@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Part, CustomerDefinition, SapcoContract } from '../../types/inventory';
 import { QuickEntryModals, QuickCreateEntityType } from '../common/QuickEntryModals';
+import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 
 interface NewCustomerOrderModalProps {
   isOpen: boolean;
@@ -145,33 +146,30 @@ export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveQuickModal('CUSTOMER')}
-                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
+                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
                   <span>+ مشتری جدید</span>
                 </button>
               </div>
-              {localCustomers.length > 0 ? (
-                <select
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value={customerName}>{customerName}</option>
-                  {localCustomers.map(c => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                />
-              )}
+              <SearchableSelect
+                value={customerName}
+                onChange={val => setCustomerName(val)}
+                placeholder="انتخاب یا جستجوی مشتری..."
+                searchPlaceholder="جستجوی نام یا کد مشتری..."
+                options={
+                  localCustomers.length > 0
+                    ? localCustomers.map(c => ({
+                        value: c.name,
+                        label: c.name,
+                        sublabel: c.code,
+                        badge: 'خودروساز',
+                      }))
+                    : [{ value: customerName, label: customerName }]
+                }
+                onAddNew={() => setActiveQuickModal('CUSTOMER')}
+                addNewText="+ ثبت مشتری جدید"
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -180,62 +178,62 @@ export const NewCustomerOrderModal: React.FC<NewCustomerOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveQuickModal('CONTRACT')}
-                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
+                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
                   <span>+ قرارداد جدید</span>
                 </button>
               </div>
-              {localContracts.length > 0 ? (
-                <select
-                  value={contractNumber}
-                  onChange={e => setContractNumber(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
-                >
-                  <option value={contractNumber}>{contractNumber}</option>
-                  {localContracts.map(cnt => (
-                    <option key={cnt.id} value={cnt.contractNumber}>
-                      {cnt.contractNumber} ({cnt.customerName})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={contractNumber}
-                  onChange={e => setContractNumber(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
-                />
-              )}
+              <SearchableSelect
+                value={contractNumber}
+                onChange={val => setContractNumber(val)}
+                placeholder="انتخاب یا جستجوی قرارداد..."
+                searchPlaceholder="جستجوی شماره قرارداد یا نام مشتری..."
+                options={
+                  localContracts.length > 0
+                    ? localContracts.map(cnt => ({
+                        value: cnt.contractNumber,
+                        label: cnt.contractNumber,
+                        sublabel: cnt.customerName || cnt.title,
+                        badge: `${cnt.allocatedWeightKg ? Math.round(cnt.allocatedWeightKg / 1000) : 0} تن سهمیه`,
+                      }))
+                    : [{ value: contractNumber, label: contractNumber }]
+                }
+                onAddNew={() => setActiveQuickModal('CONTRACT')}
+                addNewText="+ ثبت قرارداد جدید"
+              />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-slate-900">
-                قطعه خودرویی مورد سفارش <span className="text-rose-400">*</span>
+                قطعه خودرویی مورد سفارش <span className="text-rose-500">*</span>
               </label>
               <button
                 type="button"
                 onClick={() => setActiveQuickModal('PART')}
-                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
+                className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
               >
                 <Plus className="w-3 h-3" />
                 <span>+ تعریف سریع قطعه جدید</span>
               </button>
             </div>
-            <select
+            <SearchableSelect
               value={selectedPartId}
-              onChange={e => setSelectedPartId(e.target.value)}
-              className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">-- انتخاب قطعه از فهرست قطعات فعال --</option>
-              {localParts.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.code} - {p.name} ({p.carModel || 'بدنه'})
-                </option>
-              ))}
-            </select>
+              onChange={val => setSelectedPartId(val)}
+              placeholder="-- جستجو و انتخاب قطعه از فهرست قطعات فعال --"
+              searchPlaceholder="جستجو با کد قطعه، نام قطعه، یا مدل خودرو..."
+              options={localParts.map(p => ({
+                value: p.id,
+                label: p.name,
+                sublabel: `${p.code} • ${p.carModel || 'بدنه'}`,
+                badge: p.category === 'FINISHED_GOOD' ? 'محصول نهایی' : 'نیمه‌ساخته',
+              }))}
+              onAddNew={() => setActiveQuickModal('PART')}
+              addNewText="+ تعریف سریع قطعه جدید"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

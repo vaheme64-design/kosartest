@@ -41,6 +41,7 @@ import { OperationProductionModal } from './OperationProductionModal';
 import { OperationTransferModal } from './OperationTransferModal';
 import { InventoryReportView } from '../InventoryReportView';
 import { WipModuleSkeleton, Skeleton } from '../ui/Skeleton';
+import { TraceabilityInquiryView } from './TraceabilityInquiryView';
 
 interface ProductionWipModuleViewProps {
   parts: Part[];
@@ -52,6 +53,7 @@ interface ProductionWipModuleViewProps {
 
 type WipViewMode =
   | 'UNIFIED_DIRECTORY'
+  | 'TRACEABILITY'
   | 'DASHBOARD'
   | 'ORDERS'
   | 'TRANSFERS'
@@ -397,6 +399,9 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
                   <option value="UNIFIED_DIRECTORY">
                     نمای درختی یکپارچه (همه دستورات کار و ایستگاه‌ها)
                   </option>
+                  <option value="TRACEABILITY">
+                    فرم شناسایی و ردیابی قطعه (استعلام شماره رهگیری و پرینت لیبل)
+                  </option>
                   <option value="DASHBOARD">داشبورد گرافیکی گلوگاه‌ها</option>
                   <option value="ORDERS">
                     جدول تفصیلی دستورهای کار ({toPersianDigits(orders.length)})
@@ -556,6 +561,15 @@ export const ProductionWipModuleView: React.FC<ProductionWipModuleViewProps> = (
             </div>
           </div>
         </div>
+      )}
+
+      {/* Traceability & Part Identification Flow */}
+      {activeView === 'TRACEABILITY' && (
+        <TraceabilityInquiryView
+          parts={parts}
+          machines={machines}
+          operators={operators}
+        />
       )}
 
       {/* UNIFIED GRAFANA-STYLE DIRECTORY VIEW (Default — Zero Nested Tabs) */}

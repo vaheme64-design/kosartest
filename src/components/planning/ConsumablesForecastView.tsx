@@ -194,7 +194,7 @@ export const ConsumablesForecastView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-slate-900 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-slate-900 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 no-print">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shrink-0">
             <Flame className="w-6 h-6" />
@@ -373,7 +373,7 @@ export const ConsumablesForecastView: React.FC = () => {
       )}
 
       {/* Sub-navigation: Forecast Table vs Purchase Requisitions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2 no-print">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -424,7 +424,7 @@ export const ConsumablesForecastView: React.FC = () => {
       {activeSubView === 'forecast_table' ? (
         <>
           {/* Category Filter Buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-print">
             {categories.map(cat => (
               <button
                 key={cat.id}
@@ -442,24 +442,31 @@ export const ConsumablesForecastView: React.FC = () => {
           </div>
 
           {/* Consumables Forecast Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm printable-area">
+            {/* Print Header shown only during print */}
+            <div className="hidden print:block p-4 border-b border-slate-300 text-center">
+              <span className="text-xs text-slate-600 block">شرکت تولیدی قطعات خودرو (زنجیره تامین ساپکو)</span>
+              <h2 className="text-base font-bold text-slate-900 mt-1">گزارش رسمی پیش‌بینی مواد مصرفی و ملزومات کارگاهی (Consumables ROP)</h2>
+              <span className="text-[10px] text-slate-500 font-mono">افق پیش‌بینی: {toPersianDigits(horizonDays)} روز کاری</span>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-bold text-xs">
                   <tr>
                     <th className="py-3 px-3">کد و شرح کالای مصرفی</th>
                     <th className="py-3 px-3">مبنای مهندسی مصرف</th>
                     <th className="py-3 px-3 text-center">مصرف روزانه</th>
-                    <th className="py-3 px-3 text-center text-cyan-400 font-bold">
+                    <th className="py-3 px-3 text-center text-cyan-700 font-bold">
                       نیاز {toPersianDigits(horizonDays)} روزه
                     </th>
                     <th className="py-3 px-3 text-center text-slate-900 font-bold">موجودی فعلی</th>
-                    <th className="py-3 px-3 text-center">نقطه سفارش (ROP)</th>
-                    <th className="py-3 px-3 text-center font-bold">پوشش موجودی (روز)</th>
-                    <th className="py-3 px-3 text-center">تاریخ اتمام</th>
-                    <th className="py-3 px-3 text-center text-amber-400 font-black">پیشنهاد خرید</th>
-                    <th className="py-3 px-3 text-center">وضعیت</th>
-                    <th className="py-3 px-3 text-center">عملیات</th>
+                    <th className="py-3 px-3 text-center text-slate-800">نقطه سفارش (ROP)</th>
+                    <th className="py-3 px-3 text-center font-bold text-slate-800">پوشش موجودی (روز)</th>
+                    <th className="py-3 px-3 text-center text-slate-800">تاریخ اتمام</th>
+                    <th className="py-3 px-3 text-center text-amber-700 font-black">پیشنهاد خرید</th>
+                    <th className="py-3 px-3 text-center text-slate-800">وضعیت</th>
+                    <th className="py-3 px-3 text-center text-slate-800 no-print">عملیات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono tabular-nums">

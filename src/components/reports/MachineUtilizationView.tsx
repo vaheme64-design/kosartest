@@ -23,6 +23,7 @@ import {
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { ReportModuleSkeleton } from '../common/Skeleton';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 export interface MachineUtilizationViewProps {
   machines?: any[];
@@ -602,18 +603,19 @@ export const MachineUtilizationView: React.FC<MachineUtilizationViewProps> = () 
 
             <form onSubmit={handleLogSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-700 font-medium mb-1">دستگاه مورد نظر:</label>
-                <select
+                <label className="block text-slate-700 font-medium mb-1">دستگاه مورد نظر (جستجو در ماشین‌آلات):</label>
+                <SearchableSelect
                   value={logMachineId}
-                  onChange={e => setLogMachineId(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
-                >
-                  {data.machines.map(m => (
-                    <option key={m.machineId} value={m.machineId}>
-                      [{m.machineCode}] {m.machineName}
-                    </option>
-                  ))}
-                </select>
+                  onChange={val => setLogMachineId(val)}
+                  placeholder="جستجو و انتخاب پرس یا دستگاه..."
+                  searchPlaceholder="جستجوی کد دستگاه، نام پرس، یا سالن..."
+                  options={data.machines.map(m => ({
+                    value: m.machineId,
+                    label: m.machineName,
+                    sublabel: `${m.machineCode} • ${m.hallName}`,
+                    badge: `${m.tonnage} تن`,
+                  }))}
+                />
               </div>
 
               <div>

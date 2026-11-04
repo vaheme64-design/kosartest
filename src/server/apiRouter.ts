@@ -924,6 +924,96 @@ apiRouter.post('/operators', (req: Request, res: Response) => {
   }
 });
 
+apiRouter.delete('/operators/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = operatorsStore.length;
+  operatorsStore = operatorsStore.filter(o => o.id !== id && o.personnelCode !== id);
+  if (operatorsStore.length < initialCount) {
+    res.json({ success: true, message: 'اپراتور با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'اپراتور مورد نظر یافت نشد.' });
+  }
+});
+
+apiRouter.get('/operators/:id/timesheet', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const op = operatorsStore.find(o => o.id === id || o.personnelCode === id);
+  if (!op) {
+    return res.status(404).json({ success: false, error: 'اپراتور یافت نشد.' });
+  }
+
+  // Generate realistic performance and shift timesheet data
+  const timesheet = {
+    operator: op,
+    summary: {
+      totalHoursWorked: 168,
+      productiveHours: 154,
+      downtimeReportedHours: 14,
+      totalPiecesProduced: 18450,
+      totalScrapPieces: 112,
+      scrapRatePercent: 0.61,
+      overallEfficiencyPercent: 91.6,
+      currentStatus: 'فعال در خط پرس ۲ (شیفت روز)',
+    },
+    shiftRecords: [
+      {
+        date: '۱۴۰۳/۰۸/۲۴',
+        shift: 'صبح (۰۷:۰۰ - ۱۵:۰۰)',
+        machineCode: 'PRS-800-01',
+        partCode: 'SAPCO-ASSY-206-001',
+        partName: 'مجموعه براکت رام زیر رادیاتور پژو ۲۰۶',
+        plannedStrokes: 1200,
+        actualProduced: 1180,
+        scrapCount: 6,
+        downtimeMin: 20,
+        downtimeReason: 'تعویض کویل ورق و تنظیم روانکار',
+        approvalStatus: 'تایید سرپرست شیفت',
+      },
+      {
+        date: '۱۴۰۳/۰۸/۲۳',
+        shift: 'صبح (۰۷:۰۰ - ۱۵:۰۰)',
+        machineCode: 'PRS-400-01',
+        partCode: 'SAPCO-ASSY-TAR-002',
+        partName: 'مجموعه دیاق سپر جلو تارا با براکت ضربه‌گیر',
+        plannedStrokes: 1400,
+        actualProduced: 1420,
+        scrapCount: 8,
+        downtimeMin: 0,
+        downtimeReason: '—',
+        approvalStatus: 'تایید سرپرست شیفت',
+      },
+      {
+        date: '۱۴۰۳/۰۸/۲۲',
+        shift: 'صبح (۰۷:۰۰ - ۱۵:۰۰)',
+        machineCode: 'PRS-250-01',
+        partCode: 'SAPCO-PNL-206-003',
+        partName: 'تقویتی گلگیر جلو چپ ۲۰۶',
+        plannedStrokes: 950,
+        actualProduced: 910,
+        scrapCount: 14,
+        downtimeMin: 45,
+        downtimeReason: 'گیرپاژ پین پران قالب و سرویس سریع',
+        approvalStatus: 'تایید سرپرست شیفت',
+      },
+      {
+        date: '۱۴۰۳/۰۸/۲۱',
+        shift: 'صبح (۰۷:۰۰ - ۱۵:۰۰)',
+        machineCode: 'PRS-800-01',
+        partCode: 'SAPCO-ASSY-SHH-004',
+        partName: 'سینی محافظ فلزی زیر موتور شاهین',
+        plannedStrokes: 1100,
+        actualProduced: 1090,
+        scrapCount: 5,
+        downtimeMin: 15,
+        downtimeReason: 'شارژ روغن هیدرولیک',
+        approvalStatus: 'تایید سرپرست شیفت',
+      },
+    ],
+  };
+
+  res.json({ success: true, data: timesheet });
+});
+
 /**
  * 10. Factory Halls & Production Lines (سالن‌ها و خطوط تولید)
  */
@@ -974,13 +1064,73 @@ apiRouter.post('/processes', (req: Request, res: Response) => {
   } else {
     const newProc = {
       id: `PROC-${Date.now()}`,
-      code: payload.code,
+      code: payload.code.toUpperCase().replace(/\s+/g, '_'),
       name: payload.name,
       category: payload.category || 'STAMPING',
       description: payload.description || '',
     };
     processesStore.push(newProc);
     return res.status(201).json({ success: true, message: 'فرایند جدید تعریف شد.', data: newProc });
+  }
+});
+
+apiRouter.delete('/processes/:code', (req: Request, res: Response) => {
+  const { code } = req.params;
+  const initialCount = processesStore.length;
+  processesStore = processesStore.filter(p => p.code !== code);
+  if (processesStore.length < initialCount) {
+    res.json({ success: true, message: 'قابلیت فرآیندی حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'قابلیت فرآیندی یافت نشد.' });
+  }
+});
+
+/**
+ * 11.0. Steel Coil Material Grades (گریدهای فولاد و آلیاژهای کلاف ساپکو)
+ */
+let materialGradesStore = [
+  { code: 'DC04', name: 'DC04 (کشش عمیق - Deep Drawing)', standard: 'EN 10130', yieldStrengthMpa: 210 },
+  { code: 'ST14', name: 'ST14 (نورد سرد کیفیت کشش عالی)', standard: 'DIN 1623', yieldStrengthMpa: 220 },
+  { code: 'ST12', name: 'ST12 (کشش معمولی تجاری)', standard: 'DIN 1623', yieldStrengthMpa: 280 },
+  { code: 'DX51D', name: 'DX51D (گالوانیزه غوطه‌وری گرم)', standard: 'EN 10346', yieldStrengthMpa: 260 },
+  { code: 'ST37', name: 'ST37 (فولاد ساختمانی و قطعات شاسی)', standard: 'DIN 17100', yieldStrengthMpa: 235 },
+  { code: 'ST52', name: 'ST52 (استحکام بالا سازه‌ای)', standard: 'DIN 17100', yieldStrengthMpa: 355 },
+  { code: 'DC01', name: 'DC01 (ورق روغنی نورد سرد تجاری)', standard: 'EN 10130', yieldStrengthMpa: 280 },
+];
+
+apiRouter.get('/material-grades', (_req: Request, res: Response) => {
+  res.json({ success: true, count: materialGradesStore.length, data: materialGradesStore });
+});
+
+apiRouter.post('/material-grades', (req: Request, res: Response) => {
+  const payload = req.body;
+  if (!payload.code || !payload.name) {
+    return res.status(400).json({ success: false, error: 'کد و عنوان گرید الزامی است.' });
+  }
+  const existingIndex = materialGradesStore.findIndex(g => g.code.toUpperCase() === payload.code.toUpperCase());
+  if (existingIndex >= 0) {
+    materialGradesStore[existingIndex] = { ...materialGradesStore[existingIndex], ...payload };
+    return res.json({ success: true, message: 'مشخصات گرید به‌روزرسانی شد.', data: materialGradesStore[existingIndex] });
+  } else {
+    const newGrade = {
+      code: payload.code.toUpperCase().trim(),
+      name: payload.name.trim(),
+      standard: payload.standard || 'استاندارد ساپکو',
+      yieldStrengthMpa: Number(payload.yieldStrengthMpa) || 240,
+    };
+    materialGradesStore.push(newGrade);
+    return res.status(201).json({ success: true, message: 'گرید آلیاژ جدید با موفقیت ثبت شد.', data: newGrade });
+  }
+});
+
+apiRouter.delete('/material-grades/:code', (req: Request, res: Response) => {
+  const { code } = req.params;
+  const initialCount = materialGradesStore.length;
+  materialGradesStore = materialGradesStore.filter(g => g.code.toUpperCase() !== code.toUpperCase());
+  if (materialGradesStore.length < initialCount) {
+    res.json({ success: true, message: 'گرید آلیاژ با موفقیت حذف شد.' });
+  } else {
+    res.status(404).json({ success: false, error: 'گرید آلیاژ یافت نشد.' });
   }
 });
 
