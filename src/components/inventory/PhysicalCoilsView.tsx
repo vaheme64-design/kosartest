@@ -306,8 +306,8 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
         <div
           className={`p-3 rounded-lg border flex items-center justify-between text-xs transition-all ${
             notification.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-700'
+              : 'bg-rose-950/40 border-rose-500/30 text-rose-700'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             )}
             <span>{notification.message}</span>
           </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white cursor-pointer">
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-900 cursor-pointer">
             ✕
           </button>
         </div>
@@ -331,12 +331,12 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
           onClick={() => setStatusFilter('ALL')}
           className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
             statusFilter === 'ALL'
-              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+              ? 'bg-white text-slate-900 border-slate-900 shadow-sm'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
           }`}
         >
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className={statusFilter === 'ALL' ? 'text-slate-300' : 'text-slate-500'}>کل کلاف‌های ثبت‌شده</span>
+            <span className={statusFilter === 'ALL' ? 'text-slate-700' : 'text-slate-500'}>کل کلاف‌های ثبت‌شده</span>
             <Layers className="w-4 h-4 opacity-70" />
           </div>
           <div className="text-2xl font-bold font-mono tracking-tight">
@@ -358,7 +358,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <span className={statusFilter === 'FULL' ? 'text-emerald-100' : 'text-slate-500'}>کلاف‌های دست‌نخورده (کامل)</span>
             <Boxes className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'FULL' ? 'text-white' : 'text-emerald-700'}`}>
+          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'FULL' ? 'text-slate-900' : 'text-emerald-700'}`}>
             {formatNumber(fullCoilsCount)}{' '}
             <span className="text-xs font-normal opacity-70">رول</span>
           </div>
@@ -377,7 +377,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <span className={statusFilter === 'PARTIAL' ? 'text-amber-100' : 'text-slate-500'}>کلاف‌های ناقص / در گردش (ته‌رول)</span>
             <Split className="w-4 h-4 text-amber-500" />
           </div>
-          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'PARTIAL' ? 'text-white' : 'text-amber-700'}`}>
+          <div className={`text-2xl font-bold font-mono tracking-tight ${statusFilter === 'PARTIAL' ? 'text-slate-900' : 'text-amber-700'}`}>
             {formatNumber(partialCoilsCount)}{' '}
             <span className="text-xs font-normal opacity-70">رول</span>
           </div>
@@ -388,12 +388,12 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
           onClick={() => setStatusFilter('CONSUMED')}
           className={`p-4 rounded-xl border text-right transition-all cursor-pointer ${
             statusFilter === 'CONSUMED'
-              ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+              ? 'bg-slate-700 text-slate-900 border-slate-200 shadow-sm'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
           }`}
         >
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className={statusFilter === 'CONSUMED' ? 'text-slate-200' : 'text-slate-500'}>کلاف‌های پایان‌یافته (مصرف‌شده)</span>
+            <span className={statusFilter === 'CONSUMED' ? 'text-slate-900' : 'text-slate-500'}>کلاف‌های پایان‌یافته (مصرف‌شده)</span>
             <CheckCircle2 className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-2xl font-bold font-mono tracking-tight">
@@ -604,7 +604,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
 
       {/* Multi-Part Issue Modal */}
       {issueModalOpen && selectedCoil && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 text-right shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
               <div>
@@ -786,7 +786,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
+                  className="px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
                 >
                   ثبت خروج و صدور به خط تولید
                 </button>
@@ -798,7 +798,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
 
       {/* Remnant Return Modal */}
       {returnModalOpen && selectedCoil && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 text-right shadow-xl">
             <h3 className="text-sm font-bold text-slate-900 mb-1">
               برگشت ته‌کلاف یا مازاد از خط تولید به انبار
@@ -854,7 +854,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
 
       {/* COIL GENEALOGY & TRACEABILITY AUDIT MODAL */}
       {genealogyModalOpen && selectedCoil && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-white backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 text-right shadow-2xl my-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
@@ -1061,7 +1061,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
               <button
                 type="button"
                 onClick={() => setGenealogyModalOpen(false)}
-                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                className="px-4 py-1.5 bg-white text-slate-900 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 بستن پنجره شناسنامه
               </button>
@@ -1072,7 +1072,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
 
       {/* Multi-Contract Allocation Modal */}
       {allocateModalOpen && selectedCoil && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full p-6 text-right shadow-xl">
             <h3 className="text-sm font-bold text-slate-900 mb-1">
               تسهیم چندقراردادی کلاف فیزیکی شماره {selectedCoil.coilId}
@@ -1147,7 +1147,7 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
+                    className="px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-xs font-medium transition-colors cursor-pointer shadow-xs"
                   >
                     ذخیره تسهیم
                   </button>

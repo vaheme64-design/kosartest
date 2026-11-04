@@ -97,7 +97,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
   return (
     <div className="space-y-6 font-sans text-right">
       {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 text-slate-900 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-2xl">
@@ -121,7 +121,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           <button
             onClick={() => setIsGuideOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-100 text-indigo-700 border border-indigo-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
           >
             <HelpCircle className="w-4 h-4 text-indigo-400" />
             <span>راهنمای تفاوت کاتالوگ و کویل</span>
@@ -132,7 +132,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
               onClick={onNavigateToBom}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-500/40 rounded-xl text-xs font-bold transition cursor-pointer"
             >
-              <Layers className="w-4 h-4 text-emerald-300" />
+              <Layers className="w-4 h-4 text-emerald-700" />
               <span>مشاهده درخت محصول (BOM)</span>
             </button>
           )}
@@ -141,7 +141,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
           <select
             value={selectedFlowId}
             onChange={e => setSelectedFlowId(e.target.value)}
-            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-bold cursor-pointer"
+            className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-500 font-bold cursor-pointer"
           >
             {flows.map(f => (
               <option key={f.id} value={f.id}>
@@ -159,7 +159,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-mono font-bold">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-white text-slate-900 font-mono font-bold">
                     {activeFlow.flowCode}
                   </span>
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-bold">
@@ -278,10 +278,10 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
             </div>
 
             {/* Production Simulator Block */}
-            <div className="bg-gradient-to-l from-slate-900 via-purple-950 to-slate-900 text-white rounded-3xl p-5 sm:p-6 space-y-4">
+            <div className="bg-gradient-to-l from-slate-900 via-purple-950 to-slate-900 text-slate-900 rounded-3xl p-5 sm:p-6 space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-purple-500/20 rounded-xl text-purple-300">
+                  <div className="p-2 bg-purple-500/20 rounded-xl text-purple-700">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
@@ -299,7 +299,7 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
                     type="number"
                     value={simStrokes}
                     onChange={e => setSimStrokes(Number(e.target.value))}
-                    className="w-28 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white text-center font-mono font-bold focus:outline-none focus:border-purple-400"
+                    className="w-28 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 text-center font-mono font-bold focus:outline-none focus:border-purple-400"
                     placeholder="تعداد ضرب"
                   />
                   <button
@@ -316,15 +316,15 @@ export const ParallelProductionFlowView: React.FC<ParallelProductionFlowViewProp
               {simResult && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-purple-800/40 text-xs">
                   <div className="p-3 bg-purple-900/40 border border-purple-500/30 rounded-2xl space-y-1">
-                    <span className="text-[11px] text-purple-300 block">تعداد ضرب پرس مشترک:</span>
-                    <span className="text-base font-extrabold font-mono text-white">
+                    <span className="text-[11px] text-purple-700 block">تعداد ضرب پرس مشترک:</span>
+                    <span className="text-base font-extrabold font-mono text-slate-900">
                       {toPersianDigits(simResult.strokes)} ضرب
                     </span>
-                    <span className="text-[10px] text-purple-300 block">مصرف ورق: ~{toPersianDigits(simResult.rawCoilConsumedKg)} kg</span>
+                    <span className="text-[10px] text-purple-700 block">مصرف ورق: ~{toPersianDigits(simResult.rawCoilConsumedKg)} kg</span>
                   </div>
 
                   <div className="p-3 bg-indigo-900/40 border border-indigo-500/30 rounded-2xl space-y-1">
-                    <span className="text-[11px] text-indigo-300 block">تولید قطعه سمت چپ (LH):</span>
+                    <span className="text-[11px] text-indigo-700 block">تولید قطعه سمت چپ (LH):</span>
                     <span className="text-base font-extrabold font-mono text-emerald-400">
                       {toPersianDigits(simResult.leftQty)} عدد
                     </span>

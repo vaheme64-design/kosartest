@@ -80,15 +80,15 @@ export const OperationInputModal: React.FC<OperationInputModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50 backdrop-blur-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl">
               <Play className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-slate-900">
                 شروع فرآیند و ثبت ورودی به دستگاه ({operation.stepCode})
               </h3>
               <p className="text-xs text-slate-400">{operation.stepName} - دستور {operation.moNumber}</p>
@@ -96,21 +96,21 @@ export const OperationInputModal: React.FC<OperationInputModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+            className="text-slate-400 hover:text-slate-900 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-700 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Current Station Status Overview */}
-        <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 grid grid-cols-2 gap-2 text-xs">
+        <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 grid grid-cols-2 gap-2 text-xs">
           <div>
             <span className="text-slate-400 block text-[11px]">موجودی در انتظار پای کار:</span>
             <span className="font-mono font-bold text-amber-400 text-sm">
@@ -119,14 +119,14 @@ export const OperationInputModal: React.FC<OperationInputModalProps> = ({
           </div>
           <div>
             <span className="text-slate-400 block text-[11px]">موقعیت انبار پای خط:</span>
-            <span className="font-mono text-cyan-300">{operation.warehouseLocation}</span>
+            <span className="font-mono text-cyan-700">{operation.warehouseLocation}</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-200">
+              <label className="text-xs font-semibold text-slate-900">
                 تعداد قابل بارگذاری به دستگاه (PCS) <span className="text-rose-400">*</span>
               </label>
               <button
@@ -144,17 +144,17 @@ export const OperationInputModal: React.FC<OperationInputModalProps> = ({
               value={quantity}
               onChange={e => setQuantity(e.target.value)}
               placeholder={`حداکثر ${availableWaiting}`}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-blue-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-200">دستگاه / خط پرس</label>
+              <label className="text-xs font-semibold text-slate-900">دستگاه / خط پرس</label>
               <select
                 value={selectedMachineId}
                 onChange={e => setSelectedMachineId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
               >
                 <option value="">{operation.machineName || '-- انتخاب ماشین --'}</option>
                 {machines.map(m => (
@@ -166,34 +166,34 @@ export const OperationInputModal: React.FC<OperationInputModalProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-200">اپراتور مسئول</label>
+              <label className="text-xs font-semibold text-slate-900">اپراتور مسئول</label>
               <input
                 type="text"
                 value={operatorName}
                 onChange={e => setOperatorName(e.target.value)}
                 placeholder="نام اپراتور شیفت"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-200">یادداشت فرآیند</label>
+            <label className="text-xs font-semibold text-slate-900">یادداشت فرآیند</label>
             <input
               type="text"
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="توضیحات ستاپ قالب، شماره پالت، فشار پرس..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
             >
               انصراف
             </button>

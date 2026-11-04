@@ -25,12 +25,12 @@ export const MasterDataDifferenceGuideModal: React.FC<MasterDataDifferenceGuideM
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200 text-right font-sans">
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 flex items-start justify-between gap-4">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-slate-900 p-5 sm:p-6 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-indigo-500/20 border border-indigo-400/30 rounded-2xl text-indigo-300">
+            <div className="p-3 bg-indigo-500/20 border border-indigo-400/30 rounded-2xl text-indigo-700">
               <HelpCircle className="w-6 h-6" />
             </div>
             <div>
@@ -44,7 +44,7 @@ export const MasterDataDifferenceGuideModal: React.FC<MasterDataDifferenceGuideM
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -137,22 +137,22 @@ export const MasterDataDifferenceGuideModal: React.FC<MasterDataDifferenceGuideM
           </div>
 
           {/* Practical Example: Anti-Theft Bracket */}
-          <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-3">
+          <div className="bg-white text-slate-900 rounded-2xl p-5 space-y-3">
             <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
               <Sparkles className="w-4 h-4" />
               <span>مثال کاربردی واقعی: قطعه «تقویتی قفل ضد سرقت درب»</span>
             </div>
-            <div className="text-xs text-slate-300 leading-relaxed space-y-2">
+            <div className="text-xs text-slate-700 leading-relaxed space-y-2">
               <div className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۱</span>
+                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۱</span>
                 <span>در <strong>کاتالوگ قطعات</strong>: محصول نهایی «ضد سرقت» با واحد «عدد» و دو قطعه نیمه‌ساخته داخلی آن («پوسته اصلی» و «لچکی زبانه») را تعریف می‌کنید.</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۲</span>
+                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۲</span>
                 <span>در <strong>درخت محصول (BOM)</strong>: تعریف می‌کنید که این قطعه نیازمند ۰/۵۲ کیلوگرم ورق ST14 (پوسته) + ۰/۲۱ کیلوگرم ورق DC04 (لچکی) + ۲ عدد پیچ M6 + ۲ عدد مهره جوشی M6 است.</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۳</span>
+                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-[10px] shrink-0 mt-0.5">۳</span>
                 <span>در <strong>انبار کویل‌ها</strong>: هنگام رسید تریلی از ساپکو، رول فیزیکی شماره CP-1002 با وزن ۷ تن ثبت می‌شود. موقع برش، حواله خروج از همین رول فیزیکی کسر می‌گردد و کد رهگیری متناظر به آن متصل می‌شود.</span>
               </div>
             </div>
@@ -191,7 +191,7 @@ export const MasterDataDifferenceGuideModal: React.FC<MasterDataDifferenceGuideM
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            className="px-5 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             متوجه شدم و بستن راهنما
           </button>

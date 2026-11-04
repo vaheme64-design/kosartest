@@ -159,10 +159,10 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2">
               <Layers className="w-5 h-5 text-blue-400" />
               کاتالوگ جامع قطعات و مواد اولیه ({toPersianDigits(parts.length)} قطعه فعال)
             </h2>
@@ -175,14 +175,14 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium border border-slate-700 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-100 text-slate-900 rounded-xl text-xs font-medium border border-slate-200 transition-all"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>خروجی اکسل (CSV)</span>
           </button>
           <button
             onClick={handleOpenNewModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-900/30"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-slate-900 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-900/30"
           >
             <Plus className="w-4 h-4" />
             <span>تعریف قطعه جدید</span>
@@ -191,7 +191,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
           {/* Search */}
           <div className="relative min-w-[240px] flex-1">
@@ -201,7 +201,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="جستجوی نام قطعه، کد کاتالوگ یا کد ساپکو..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="w-full bg-white border border-slate-200 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -209,7 +209,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
           >
             <option value="ALL">همه دسته‌بندی‌ها</option>
             <option value="RAW_MATERIAL">مواد اولیه (ورق و کویل ساپکو)</option>
@@ -221,7 +221,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
           <select
             value={carModelFilter}
             onChange={e => setCarModelFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
           >
             <option value="ALL">همه خودروها</option>
             {carModels.map(m => (
@@ -233,16 +233,16 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
         </div>
 
         <div className="text-xs text-slate-400">
-          تعداد: <span className="font-bold text-white">{formatNumber(filteredParts.length)}</span> قطعه
+          تعداد: <span className="font-bold text-slate-900">{formatNumber(filteredParts.length)}</span> قطعه
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-slate-800/60 rounded-2xl border border-slate-700/60 overflow-hidden">
+      <div className="bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-700 text-slate-400 font-semibold">
+              <tr className="bg-white border-b border-slate-200 text-slate-400 font-semibold">
                 <th className="py-3 px-3">کد کاتالوگ</th>
                 <th className="py-3 px-3">عنوان قطعه / ماده اولیه</th>
                 <th className="py-3 px-3">دسته‌بندی</th>
@@ -255,14 +255,14 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                 <th className="py-3 px-3">عملیات</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {filteredParts.map(p => {
                 const isRaw = p.category === 'RAW_MATERIAL';
                 const isFinished = p.category === 'FINISHED_GOOD';
                 return (
-                  <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                  <tr key={p.id} className="hover:bg-slate-100 transition-colors">
                     <td className="py-3 px-3 font-mono font-bold text-amber-400">{p.code}</td>
-                    <td className="py-3 px-3 text-slate-200 font-medium max-w-xs">
+                    <td className="py-3 px-3 text-slate-900 font-medium max-w-xs">
                       <div>{p.name}</div>
                     </td>
                     <td className="py-3 px-3">
@@ -278,21 +278,21 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                         {isRaw ? 'ماده اولیه' : isFinished ? 'محصول نهایی' : 'نیمه‌ساخته WIP'}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-300">
+                    <td className="py-3 px-3 text-slate-700">
                       <div className="flex items-center gap-1">
                         <Car className="w-3 h-3 text-slate-500" />
                         <span>{p.carModel || 'مشترک'}</span>
                       </div>
                     </td>
                     <td className="py-3 px-3 font-mono text-slate-400 text-[11px]">{p.sapcoCode || '-'}</td>
-                    <td className="py-3 px-3 font-bold text-white font-mono">{p.weightPerUnitKg}</td>
-                    <td className="py-3 px-3 font-mono text-slate-300">{p.thicknessMm ? `${p.thicknessMm} mm` : '-'}</td>
-                    <td className="py-3 px-3 font-mono text-indigo-300">{p.materialGrade || '-'}</td>
+                    <td className="py-3 px-3 font-bold text-slate-900 font-mono">{p.weightPerUnitKg}</td>
+                    <td className="py-3 px-3 font-mono text-slate-700">{p.thicknessMm ? `${p.thicknessMm} mm` : '-'}</td>
+                    <td className="py-3 px-3 font-mono text-indigo-700">{p.materialGrade || '-'}</td>
                     <td className="py-3 px-3 text-slate-400">{p.unit}</td>
                     <td className="py-3 px-3">
                       <button
                         onClick={() => handleEditPart(p)}
-                        className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                        className="text-xs text-blue-400 hover:text-blue-700 font-medium transition-colors"
                       >
                         ویرایش
                       </button>
@@ -307,22 +307,22 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
 
       {/* Modal for Create/Edit Part */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white">
+        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-sm font-bold text-slate-900">
                 {editingPart ? 'ویرایش مشخصات قطعه' : 'تعریف قطعه / ماده اولیه جدید'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-slate-900 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {formError && (
-              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 text-xs">
                 {formError}
               </div>
             )}
@@ -330,23 +330,23 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
             <form onSubmit={handleFormSubmit} className="mt-4 space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">کد کاتالوگ قطعه *</label>
+                  <label className="text-slate-700 font-medium">کد کاتالوگ قطعه *</label>
                   <input
                     type="text"
                     value={formData.code || ''}
                     onChange={e => setFormData({ ...formData, code: e.target.value })}
                     placeholder="مثال: IKCO-206-BRK05"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">دسته‌بندی *</label>
+                  <label className="text-slate-700 font-medium">دسته‌بندی *</label>
                   <select
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value as any })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
                   >
                     <option value="RAW_MATERIAL">ماده اولیه (کویل/ورق ساپکو)</option>
                     <option value="WIP_PART">قطعه نیمه‌ساخته (WIP)</option>
@@ -356,24 +356,24 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-slate-300 font-medium">عنوان کامل قطعه در خط تولید *</label>
+                <label className="text-slate-700 font-medium">عنوان کامل قطعه در خط تولید *</label>
                 <input
                   type="text"
                   value={formData.name || ''}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder="مثال: براکت تقویتی ستون وسط تارا با پوشش کاتافورز"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">واحد اندازه‌گیری *</label>
+                  <label className="text-slate-700 font-medium">واحد اندازه‌گیری *</label>
                   <select
                     value={formData.unit}
                     onChange={e => setFormData({ ...formData, unit: e.target.value as any })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
                   >
                     <option value="PCS">عدد (PCS)</option>
                     <option value="KG">کیلوگرم (KG)</option>
@@ -381,71 +381,71 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">وزن واحد (کیلوگرم) *</label>
+                  <label className="text-slate-700 font-medium">وزن واحد (کیلوگرم) *</label>
                   <input
                     type="number"
                     step="0.001"
                     min="0.001"
                     value={formData.weightPerUnitKg || 1}
                     onChange={e => setFormData({ ...formData, weightPerUnitKg: parseFloat(e.target.value) || 1 })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">ضخامت ورق (mm)</label>
+                  <label className="text-slate-700 font-medium">ضخامت ورق (mm)</label>
                   <input
                     type="number"
                     step="0.1"
                     value={formData.thicknessMm || ''}
                     onChange={e => setFormData({ ...formData, thicknessMm: parseFloat(e.target.value) || undefined })}
                     placeholder="مثلاً: 1.5"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">گرید فولاد</label>
+                  <label className="text-slate-700 font-medium">گرید فولاد</label>
                   <input
                     type="text"
                     value={formData.materialGrade || ''}
                     onChange={e => setFormData({ ...formData, materialGrade: e.target.value })}
                     placeholder="ST14, DC04, DX51D"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">مدل خودرو</label>
+                  <label className="text-slate-700 font-medium">مدل خودرو</label>
                   <input
                     type="text"
                     value={formData.carModel || ''}
                     onChange={e => setFormData({ ...formData, carModel: e.target.value })}
                     placeholder="تارا، پژو ۲۰۶، دنا"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">کد ساپکو / OEM</label>
+                  <label className="text-slate-700 font-medium">کد ساپکو / OEM</label>
                   <input
                     type="text"
                     value={formData.sapcoCode || ''}
                     onChange={e => setFormData({ ...formData, sapcoCode: e.target.value })}
                     placeholder="SAP-88102"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl font-medium transition-colors"
                 >
                   انصراف
                 </button>

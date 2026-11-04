@@ -194,17 +194,17 @@ export const ConsumablesForecastView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-slate-900 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shrink-0">
             <Flame className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base lg:text-lg font-bold text-white">
+              <h2 className="text-base lg:text-lg font-bold text-slate-900">
                 ماژول پیش‌بینی مواد مصرفی و ملزومات کارگاهی (Consumables & Supplies Forecasting)
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-700 border border-cyan-500/30">
                 ROP & Burn-Rate Engine
               </span>
             </div>
@@ -229,7 +229,7 @@ export const ConsumablesForecastView: React.FC = () => {
             type="button"
             onClick={loadForecast}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
             <span>محاسبه مجدد</span>
@@ -238,7 +238,7 @@ export const ConsumablesForecastView: React.FC = () => {
           <button
             type="button"
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>خروجی اکسل</span>
@@ -247,7 +247,7 @@ export const ConsumablesForecastView: React.FC = () => {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-slate-400" />
             <span>چاپ</span>
@@ -256,7 +256,7 @@ export const ConsumablesForecastView: React.FC = () => {
       </div>
 
       {notice && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-700 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             <span>{notice}</span>
@@ -266,7 +266,7 @@ export const ConsumablesForecastView: React.FC = () => {
       )}
 
       {/* Horizon & Demand Growth Controls */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-slate-400 font-medium flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-cyan-400" />
@@ -285,7 +285,7 @@ export const ConsumablesForecastView: React.FC = () => {
               className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                 horizonDays === h.days
                   ? 'bg-cyan-600 text-white font-bold'
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
               }`}
             >
               {h.label}
@@ -307,7 +307,7 @@ export const ConsumablesForecastView: React.FC = () => {
                 className={`px-2.5 py-1 rounded-lg font-mono text-[11px] cursor-pointer transition tabular-nums ${
                   growthPercent === g
                     ? 'bg-amber-500 text-slate-950 font-black'
-                    : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
                 }`}
               >
                 {g > 0 ? `+${toPersianDigits(g)}٪` : `${toPersianDigits(g)}٪`}
@@ -325,7 +325,7 @@ export const ConsumablesForecastView: React.FC = () => {
       {/* 5 KPI Summary Cards */}
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-900 border border-rose-500/40 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-rose-500/40 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-rose-400 font-bold flex items-center gap-1">
               <ShieldAlert className="w-3.5 h-3.5" />
               اقلام بحرانی (نیاز به خرید فوری)
@@ -336,7 +336,7 @@ export const ConsumablesForecastView: React.FC = () => {
             <span className="text-[10px] text-rose-400/80 mt-1 block">پوشش کمتر از Lead-Time تامین‌کننده</span>
           </div>
 
-          <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-amber-500/40 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-amber-400 font-bold block">رسیده به نقطه سفارش (ROP)</span>
             <div className="text-2xl font-black text-amber-400 font-mono tabular-nums mt-1">
               {toPersianDigits(data.belowReorderPointCount)} <span className="text-xs font-sans font-normal text-slate-400">قلم</span>
@@ -344,7 +344,7 @@ export const ConsumablesForecastView: React.FC = () => {
             <span className="text-[10px] text-slate-400 mt-1 block">نیازمند ثبت سفارش شارژ مجدد</span>
           </div>
 
-          <div className="bg-slate-900 border border-emerald-500/30 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-emerald-500/30 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-emerald-400 font-bold block">موجودی کافی و ایمن</span>
             <div className="text-2xl font-black text-emerald-400 font-mono tabular-nums mt-1">
               {toPersianDigits(data.adequateStockCount)} <span className="text-xs font-sans font-normal text-slate-400">قلم</span>
@@ -352,9 +352,9 @@ export const ConsumablesForecastView: React.FC = () => {
             <span className="text-[10px] text-slate-400 mt-1 block">پوشش کامل افق {toPersianDigits(data.horizonDays)} روزه</span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-cyan-400 font-bold block">کمترین روز پوشش موجودی</span>
-            <div className="text-xl font-black text-white font-mono tabular-nums mt-1">
+            <div className="text-xl font-black text-slate-900 font-mono tabular-nums mt-1">
               {data.lowestDaysOfSupplyItem ? `${toPersianDigits(data.lowestDaysOfSupplyItem.daysRemaining)} روز` : '-'}
             </div>
             <span className="text-[10px] text-slate-400 mt-1 block truncate" title={data.lowestDaysOfSupplyItem?.name}>
@@ -362,9 +362,9 @@ export const ConsumablesForecastView: React.FC = () => {
             </span>
           </div>
 
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-indigo-500/30 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-indigo-400 font-bold block">برآورد بودجه خرید پیشنهادی</span>
-            <div className="text-lg font-black text-indigo-300 font-mono tabular-nums mt-1">
+            <div className="text-lg font-black text-indigo-700 font-mono tabular-nums mt-1">
               {formatNumber(Math.round(data.totalSuggestedProcurementBudgetRials / 1000000))} <span className="text-[10px] font-sans font-normal text-slate-400">میلیون ریال</span>
             </div>
             <span className="text-[10px] text-slate-400 mt-1 block">برای پوشش کسری و نقطه سفارش</span>
@@ -373,7 +373,7 @@ export const ConsumablesForecastView: React.FC = () => {
       )}
 
       {/* Sub-navigation: Forecast Table vs Purchase Requisitions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -381,7 +381,7 @@ export const ConsumablesForecastView: React.FC = () => {
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
               activeSubView === 'forecast_table'
                 ? 'bg-cyan-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                : 'bg-white text-slate-400 hover:text-slate-900 border border-slate-200'
             }`}
           >
             <Flame className="w-4 h-4" />
@@ -394,13 +394,13 @@ export const ConsumablesForecastView: React.FC = () => {
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
               activeSubView === 'requisitions'
                 ? 'bg-emerald-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                : 'bg-white text-slate-400 hover:text-slate-900 border border-slate-200'
             }`}
           >
             <FileText className="w-4 h-4" />
             <span>درخواست‌های خرید تدارکات صادره (PR)</span>
             {data && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-white tabular-nums">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20 text-slate-900 tabular-nums">
                 {toPersianDigits(data.activeRequisitions.length)}
               </span>
             )}
@@ -415,7 +415,7 @@ export const ConsumablesForecastView: React.FC = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="جستجو در نام یا کد کالای مصرفی..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pr-8 pl-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full bg-white border border-slate-200 rounded-xl pr-8 pl-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
             />
           </div>
         )}
@@ -432,8 +432,8 @@ export const ConsumablesForecastView: React.FC = () => {
                 onClick={() => setCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition cursor-pointer ${
                   categoryFilter === cat.id
-                    ? 'bg-slate-800 text-cyan-300 border border-cyan-500/40 font-bold'
-                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-slate-100 text-cyan-700 border border-cyan-500/40 font-bold'
+                    : 'bg-white text-slate-400 hover:text-slate-900 border border-slate-200'
                 }`}
               >
                 {cat.label}
@@ -442,10 +442,10 @@ export const ConsumablesForecastView: React.FC = () => {
           </div>
 
           {/* Consumables Forecast Table */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
                   <tr>
                     <th className="py-3 px-3">کد و شرح کالای مصرفی</th>
                     <th className="py-3 px-3">مبنای مهندسی مصرف</th>
@@ -453,7 +453,7 @@ export const ConsumablesForecastView: React.FC = () => {
                     <th className="py-3 px-3 text-center text-cyan-400 font-bold">
                       نیاز {toPersianDigits(horizonDays)} روزه
                     </th>
-                    <th className="py-3 px-3 text-center text-slate-200 font-bold">موجودی فعلی</th>
+                    <th className="py-3 px-3 text-center text-slate-900 font-bold">موجودی فعلی</th>
                     <th className="py-3 px-3 text-center">نقطه سفارش (ROP)</th>
                     <th className="py-3 px-3 text-center font-bold">پوشش موجودی (روز)</th>
                     <th className="py-3 px-3 text-center">تاریخ اتمام</th>
@@ -462,31 +462,31 @@ export const ConsumablesForecastView: React.FC = () => {
                     <th className="py-3 px-3 text-center">عملیات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 font-mono tabular-nums">
+                <tbody className="divide-y divide-slate-100 font-mono tabular-nums">
                   {filteredItems.map(item => (
-                    <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                    <tr key={item.id} className="hover:bg-slate-100 transition">
                       <td className="py-3 px-3 font-sans">
-                        <div className="font-bold text-slate-100">{item.name}</div>
+                        <div className="font-bold text-slate-900">{item.name}</div>
                         <div className="text-[11px] text-slate-400 font-mono">
                           {item.code} • <span className="font-sans text-cyan-400">{item.categoryLabelFa}</span>
                         </div>
                       </td>
                       <td className="py-3 px-3 font-sans">
-                        <div className="text-[11px] text-slate-300">{item.consumptionDriverLabelFa}</div>
+                        <div className="text-[11px] text-slate-700">{item.consumptionDriverLabelFa}</div>
                         <div className="text-[10px] text-slate-500 font-mono">
                           ضریب: {toPersianDigits(item.standardRatePerDriverUnit)} {item.unit} (پرت: {toPersianDigits(item.wasteAllowancePercent)}٪)
                         </div>
                       </td>
-                      <td className="py-3 px-3 text-center text-slate-300">
+                      <td className="py-3 px-3 text-center text-slate-700">
                         {toPersianDigits(item.dailyBurnRate)} <span className="text-[10px] text-slate-500">{item.unit}</span>
                       </td>
                       <td className="py-3 px-3 text-center font-bold text-cyan-400 text-sm">
                         {formatNumber(item.forecastedGrossRequirement)} <span className="text-[10px] font-normal">{item.unit}</span>
                       </td>
-                      <td className="py-3 px-3 text-center font-bold text-slate-100">
+                      <td className="py-3 px-3 text-center font-bold text-slate-900">
                         {formatNumber(item.currentStock)} <span className="text-[10px] font-normal text-slate-400">{item.unit}</span>
                       </td>
-                      <td className="py-3 px-3 text-center text-slate-300">
+                      <td className="py-3 px-3 text-center text-slate-700">
                         {formatNumber(item.reorderPoint)}
                         <span className="block text-[10px] text-slate-500">اطمینان: {formatNumber(item.minSafetyStock)}</span>
                       </td>
@@ -496,14 +496,14 @@ export const ConsumablesForecastView: React.FC = () => {
                             item.daysOfSupplyRemaining <= item.supplierLeadTimeDays
                               ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                               : item.daysOfSupplyRemaining <= 20
-                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                              ? 'bg-amber-500/15 text-amber-800 border border-amber-500/30'
                               : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                           }`}
                         >
                           {toPersianDigits(item.daysOfSupplyRemaining)} روز
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center text-[11px] text-slate-300">
+                      <td className="py-3 px-3 text-center text-[11px] text-slate-700">
                         {item.estimatedRunOutDateFa}
                       </td>
                       <td className="py-3 px-3 text-center font-black text-amber-400 text-sm">
@@ -520,17 +520,17 @@ export const ConsumablesForecastView: React.FC = () => {
                       </td>
                       <td className="py-3 px-3 text-center font-sans">
                         {item.status === 'CRITICAL_SHORTAGE' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-700 border border-rose-500/30">
                             کسری فوری
                           </span>
                         )}
                         {item.status === 'BELOW_ROP' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-800 border border-amber-500/30">
                             نقطه سفارش
                           </span>
                         )}
                         {item.status === 'ADEQUATE' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 border border-emerald-500/30">
                             موجودی کافی
                           </span>
                         )}
@@ -541,7 +541,7 @@ export const ConsumablesForecastView: React.FC = () => {
                             type="button"
                             onClick={() => handleOpenEdit(item)}
                             title="تنظیم موجودی یا ضریب مصرف"
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-100 text-slate-700 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -550,7 +550,7 @@ export const ConsumablesForecastView: React.FC = () => {
                               type="button"
                               onClick={() => handleIssueRequisition([item.code])}
                               title="صدور درخواست خرید برای این قلم"
-                              className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[10px] font-bold cursor-pointer transition"
+                              className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-700 hover:text-slate-900 border border-emerald-500/30 text-[10px] font-bold cursor-pointer transition"
                             >
                               خرید
                             </button>
@@ -568,12 +568,12 @@ export const ConsumablesForecastView: React.FC = () => {
         /* Active Purchase Requisitions View */
         <div className="space-y-4">
           {data?.activeRequisitions.map(pr => (
-            <div key={pr.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div key={pr.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-black text-emerald-400">{pr.prNumber}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
                       {pr.status === 'APPROVED_BY_PLANT_MGR' ? 'تأیید مدیریت کارخانه' : 'در انتظار تأیید تدارکات'}
                     </span>
                   </div>
@@ -591,7 +591,7 @@ export const ConsumablesForecastView: React.FC = () => {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-950 text-slate-400 font-mono text-[11px]">
+                  <thead className="bg-slate-50 text-slate-400 font-mono text-[11px]">
                     <tr>
                       <th className="py-2 px-3">کد کالا</th>
                       <th className="py-2 px-3">شرح کالای مصرفی</th>
@@ -601,19 +601,19 @@ export const ConsumablesForecastView: React.FC = () => {
                       <th className="py-2 px-3 text-left">برآورد مبلغ (ریال)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 font-mono tabular-nums">
+                  <tbody className="divide-y divide-slate-100 font-mono tabular-nums">
                     {pr.lines.map((line, idx) => (
                       <tr key={idx}>
                         <td className="py-2 px-3 text-cyan-400 font-bold">{line.consumableCode}</td>
-                        <td className="py-2 px-3 font-sans text-slate-200">{line.consumableName}</td>
+                        <td className="py-2 px-3 font-sans text-slate-900">{line.consumableName}</td>
                         <td className="py-2 px-3 text-center text-slate-400">
                           {formatNumber(line.currentStock)} {line.unit}
                         </td>
                         <td className="py-2 px-3 text-center font-bold text-emerald-400">
                           {formatNumber(line.orderQuantity)} {line.unit}
                         </td>
-                        <td className="py-2 px-3 font-sans text-slate-300">{line.supplierName}</td>
-                        <td className="py-2 px-3 text-left text-slate-200 font-bold">
+                        <td className="py-2 px-3 font-sans text-slate-700">{line.supplierName}</td>
+                        <td className="py-2 px-3 text-left text-slate-900 font-bold">
                           {formatNumber(line.estimatedCostRials)}
                         </td>
                       </tr>
@@ -623,7 +623,7 @@ export const ConsumablesForecastView: React.FC = () => {
               </div>
 
               {pr.notes && (
-                <div className="text-[11px] text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                <div className="text-[11px] text-slate-400 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   توضیحات: {pr.notes}
                 </div>
               )}
@@ -634,21 +634,21 @@ export const ConsumablesForecastView: React.FC = () => {
 
       {/* Edit Consumable Stock / Rate Modal */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-white">تنظیم موجودی و ضریب مصرف مهندسی</h3>
+                <h3 className="text-sm font-bold text-slate-900">تنظیم موجودی و ضریب مصرف مهندسی</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{editingItem.name}</p>
               </div>
-              <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-900 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">
+                <label className="block text-slate-700 font-medium mb-1">
                   موجودی آزاد فعلی در انبار ({editingItem.unit}):
                 </label>
                 <input
@@ -656,12 +656,12 @@ export const ConsumablesForecastView: React.FC = () => {
                   step="0.1"
                   value={editStockVal}
                   onChange={e => setEditStockVal(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">
+                <label className="block text-slate-700 font-medium mb-1">
                   ضریب مصرف استاندارد ({editingItem.consumptionDriverLabelFa}):
                 </label>
                 <input
@@ -669,12 +669,12 @@ export const ConsumablesForecastView: React.FC = () => {
                   step="0.01"
                   value={editRateVal}
                   onChange={e => setEditRateVal(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">
+                <label className="block text-slate-700 font-medium mb-1">
                   حداقل موجودی اطمینان (Safety Stock - {editingItem.unit}):
                 </label>
                 <input
@@ -682,15 +682,15 @@ export const ConsumablesForecastView: React.FC = () => {
                   step="1"
                   value={editSafetyVal}
                   onChange={e => setEditSafetyVal(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setEditingItem(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 cursor-pointer"
                 >
                   انصراف
                 </button>

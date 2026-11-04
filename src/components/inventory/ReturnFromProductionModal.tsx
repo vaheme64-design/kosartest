@@ -111,7 +111,7 @@ export const ReturnFromProductionModal: React.FC<ReturnFromProductionModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-white backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
@@ -145,7 +145,7 @@ export const ReturnFromProductionModal: React.FC<ReturnFromProductionModalProps>
             </span>
             <span>انتخاب رول صادرشده و وزن برگشتی</span>
           </div>
-          <span className="text-slate-300">───</span>
+          <span className="text-slate-700">───</span>
           <div className={`flex items-center gap-2 font-semibold ${step === 2 ? 'text-blue-700' : 'text-slate-400'}`}>
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${step === 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
               ۲
@@ -360,7 +360,7 @@ export const ReturnFromProductionModal: React.FC<ReturnFromProductionModalProps>
                 type="button"
                 disabled={enteredReturnKg <= 0 || exceedsIssued || !selectedCoil}
                 onClick={() => setStep(2)}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-5 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <span>پیش‌نمایش سند برگشت</span>
                 <ArrowLeft className="w-4 h-4" />

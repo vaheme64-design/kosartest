@@ -152,9 +152,9 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2">
             <History className="w-5 h-5 text-purple-400" />
             دفتر کل گردش تراکنش‌ها و سوابق اصلاحات اسناد (Audit Trail)
           </h2>
@@ -167,7 +167,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium border border-slate-200 transition-all"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>به‌روزرسانی دفتر</span>
@@ -183,7 +183,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
           {/* Search */}
           <div className="relative min-w-[240px] flex-1">
@@ -193,7 +193,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="جستجوی شماره سند، کد قطعه، بارنامه، اپراتور..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="w-full bg-white border border-slate-200 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -201,7 +201,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
           <select
             value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
           >
             <option value="ALL">همه انواع اسناد</option>
             <option value="RECEIPT">رسیدهای ورود ساپکو</option>
@@ -218,7 +218,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
           >
             <option value="ALL">همه وضعیت‌ها</option>
             <option value="CONFIRMED">معتبر و تأییدشده</option>
@@ -229,7 +229,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
           <select
             value={stageFilter}
             onChange={e => setStageFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
           >
             <option value="ALL">همه انبارها و ایستگاه‌ها</option>
             {FACTORY_STAGES.map(st => (
@@ -241,16 +241,16 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
         </div>
 
         <div className="text-xs text-slate-400">
-          تعداد اسناد: <span className="font-bold text-white">{formatNumber(filteredTransactions.length)}</span>
+          تعداد اسناد: <span className="font-bold text-slate-900">{formatNumber(filteredTransactions.length)}</span>
         </div>
       </div>
 
       {/* Ledger Table */}
-      <div className="bg-slate-800/60 rounded-2xl border border-slate-700/60 overflow-hidden">
+      <div className="bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-700 text-slate-400 font-semibold select-none">
+              <tr className="bg-white border-b border-slate-200 text-slate-400 font-semibold select-none">
                 <th className="py-3 px-3">شماره سند</th>
                 <th className="py-3 px-3">نوع سند</th>
                 <th className="py-3 px-3">قطعه / ماده اولیه</th>
@@ -265,7 +265,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                 <th className="py-3 px-3 text-center">عملیات اصلاحی</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {pagedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-slate-400">
@@ -280,7 +280,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                   return (
                     <tr
                       key={t.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
+                      className={`hover:bg-slate-100 transition-colors ${
                         isReversed ? 'opacity-60 bg-rose-950/10' : ''
                       }`}
                     >
@@ -297,16 +297,16 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                           {badge.label}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-200 font-medium max-w-[200px]">
+                      <td className="py-3 px-3 text-slate-900 font-medium max-w-[200px]">
                         <div className="truncate">{t.partName}</div>
                         <div className="text-[10px] text-slate-500 font-mono">{t.partCode}</div>
                       </td>
-                      <td className="py-3 px-3 text-slate-300 whitespace-nowrap">{t.stageName}</td>
+                      <td className="py-3 px-3 text-slate-700 whitespace-nowrap">{t.stageName}</td>
                       <td className="py-3 px-3 text-purple-400 whitespace-nowrap">
                         {t.targetStageName || '-'}
                       </td>
                       <td className="py-3 px-3 font-bold font-mono whitespace-nowrap">
-                        <span className={t.quantity < 0 ? 'text-rose-400' : 'text-white'}>
+                        <span className={t.quantity < 0 ? 'text-rose-400' : 'text-slate-900'}>
                           {t.quantity > 0 ? `+${formatNumber(t.quantity)}` : formatNumber(t.quantity)} {t.unit}
                         </span>
                       </td>
@@ -316,7 +316,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                       <td className="py-3 px-3 text-slate-400 text-[11px] truncate max-w-[120px]">
                         {t.referenceDoc || '-'}
                       </td>
-                      <td className="py-3 px-3 text-slate-300 text-[11px] whitespace-nowrap">
+                      <td className="py-3 px-3 text-slate-700 text-[11px] whitespace-nowrap">
                         {t.operatorName || '-'}
                       </td>
                       <td className="py-3 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
@@ -339,7 +339,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                         {t.status === 'CONFIRMED' && t.voucherType !== 'ADJUSTMENT' ? (
                           <button
                             onClick={() => handleOpenReverse(t)}
-                            className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 mx-auto"
+                            className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 border border-rose-500/30 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1 mx-auto"
                             title="ابطال سند با صدور سند اصلاحی جبرانی"
                           >
                             <RotateCcw className="w-3 h-3" />
@@ -359,7 +359,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
 
         {/* Pagination Bar */}
         {totalPages > 1 && (
-          <div className="p-3 bg-slate-900/60 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+          <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
             <div>
               صفحه {toPersianDigits(currentPage)} از {toPersianDigits(totalPages)}
             </div>
@@ -367,7 +367,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-100 text-slate-900 rounded-lg disabled:opacity-40 transition-colors"
               >
                 قبلی
               </button>
@@ -378,7 +378,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
                   className={`w-7 h-7 rounded-lg font-mono font-medium transition-colors ${
                     currentPage === pageNum
                       ? 'bg-purple-600 text-white font-bold'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      : 'bg-slate-100 hover:bg-slate-100 text-slate-700'
                   }`}
                 >
                   {toPersianDigits(pageNum)}
@@ -387,7 +387,7 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-100 text-slate-900 rounded-lg disabled:opacity-40 transition-colors"
               >
                 بعدی
               </button>
@@ -398,70 +398,70 @@ export const AuditLedgerView: React.FC<AuditLedgerViewProps> = ({
 
       {/* Reversal / Adjustment Modal */}
       {reversalModalTx && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2 text-rose-400">
                 <RotateCcw className="w-4 h-4" />
-                <h3 className="text-sm font-bold text-white">صدور سند اصلاحی و ابطال</h3>
+                <h3 className="text-sm font-bold text-slate-900">صدور سند اصلاحی و ابطال</h3>
               </div>
               <button
                 onClick={() => setReversalModalTx(null)}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-slate-900 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {reversalError && (
-              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 text-xs">
                 {reversalError}
               </div>
             )}
 
-            <div className="mt-4 space-y-3 text-xs text-slate-300">
-              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-1.5">
+            <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-slate-400">شماره سند هدف:</span>
                   <span className="font-mono font-bold text-amber-400">{reversalModalTx.voucherNumber}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">عنوان قطعه:</span>
-                  <span className="font-medium text-white">{reversalModalTx.partName}</span>
+                  <span className="font-medium text-slate-900">{reversalModalTx.partName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">مقدار سند:</span>
-                  <span className="font-mono font-bold text-white">
+                  <span className="font-mono font-bold text-slate-900">
                     {formatNumber(reversalModalTx.quantity)} {reversalModalTx.unit}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">ایستگاه مربوطه:</span>
-                  <span className="text-slate-200">{reversalModalTx.stageName}</span>
+                  <span className="text-slate-900">{reversalModalTx.stageName}</span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 text-[11px] leading-relaxed">
                 طبق اصول حسابداری صنعتی کارخانه، این سند از پایگاه داده فیزیکی حذف نمی‌شود؛ بلکه وضعیت آن به «ابطال شده» تغییر یافته و یک سند معکوس خودکار (ADJUSTMENT) در دفاتر درج خواهد شد تا تراز موجودی اصلاح گردد.
               </div>
 
               <div className="space-y-1">
-                <label className="text-slate-300 font-medium">علت و دلیل صدور سند اصلاحی *</label>
+                <label className="text-slate-700 font-medium">علت و دلیل صدور سند اصلاحی *</label>
                 <textarea
                   rows={3}
                   value={reversalReason}
                   onChange={e => setReversalReason(e.target.value)}
                   placeholder="علت ابطال (مثلاً: ثبت اشتباه مقدار توسط اپراتور شیفت...)"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:border-amber-500"
                   required
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setReversalModalTx(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl font-medium transition-colors"
                 >
                   انصراف
                 </button>

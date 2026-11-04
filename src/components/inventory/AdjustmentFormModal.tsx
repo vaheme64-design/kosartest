@@ -142,7 +142,7 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-white backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200/80 w-full max-w-xl rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-5 bg-white border-b border-slate-100 flex items-center justify-between">
@@ -353,7 +353,7 @@ export const AdjustmentFormModal: React.FC<AdjustmentFormModalProps> = ({
             <button
               type="submit"
               disabled={loading || rawQty <= 0}
-              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-xs font-medium transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{loading ? 'در حال ثبت...' : 'ثبت قطعی تعدیل در دفاتر'}</span>

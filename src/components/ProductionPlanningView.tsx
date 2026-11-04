@@ -107,19 +107,19 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 p-5 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
         <div>
           <div className="flex items-center gap-2">
-            <CalendarDays className="w-6 h-6 text-indigo-400" />
-            <h2 className="text-xl font-bold text-white">برنامه‌ریزی تولید خطوط پرس و مونتاژ</h2>
+            <CalendarDays className="w-6 h-6 text-indigo-600" />
+            <h2 className="text-xl font-bold text-slate-900">برنامه‌ریزی تولید خطوط پرس و مونتاژ</h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             برنامه‌ریزی تیراژ هفتگی، ماهانه و تخصیص قطعات به سالن‌های پرس و مونتاژ بر اساس ظرفیت و سفارش ساپکو
           </p>
         </div>
         <button
           onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>ثبت برنامه تولید جدید</span>
@@ -128,52 +128,52 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
             <span>برنامه‌های در جریان</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+            <Clock className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-black text-white">
+          <div className="text-2xl font-black text-slate-900">
             {toPersianDigits(plans.filter(p => p.status === 'IN_PROGRESS').length)}
-            <span className="text-xs font-normal text-slate-400 mr-1.5">برنامه فعال</span>
+            <span className="text-xs font-normal text-slate-500 mr-1.5">برنامه فعال</span>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
             <span>مجموع تیراژ مصوب</span>
-            <Boxes className="w-4 h-4 text-blue-400" />
+            <Boxes className="w-4 h-4 text-blue-600" />
           </div>
-          <div className="text-2xl font-black text-white">
+          <div className="text-2xl font-black text-slate-900">
             {formatNumber(totalPlanned)}
-            <span className="text-xs font-normal text-slate-400 mr-1.5">عدد</span>
+            <span className="text-xs font-normal text-slate-500 mr-1.5">عدد</span>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
             <span>تولید محقق‌شده</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-black text-emerald-400">
+          <div className="text-2xl font-black text-emerald-600">
             {formatNumber(totalProduced)}
-            <span className="text-xs font-normal text-slate-400 mr-1.5">عدد</span>
+            <span className="text-xs font-normal text-slate-500 mr-1.5">عدد</span>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
             <span>درصد تحقق کل</span>
-            <TrendingUp className="w-4 h-4 text-indigo-400" />
+            <TrendingUp className="w-4 h-4 text-indigo-600" />
           </div>
-          <div className="text-2xl font-black text-indigo-400">
+          <div className="text-2xl font-black text-indigo-600">
             {toPersianDigits(completionRate)}٪
           </div>
         </div>
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/40 p-3 rounded-xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
           <input
@@ -181,7 +181,7 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
             placeholder="جستجوی برنامه تولید، قطعه یا کد..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pr-9 pl-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pr-9 pl-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600"
           />
         </div>
 
@@ -197,8 +197,8 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
               onClick={() => setStatusFilter(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                 statusFilter === tab.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               {tab.label}
@@ -214,31 +214,31 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
           return (
             <div
               key={plan.id}
-              className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all flex flex-col justify-between"
+              className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs hover:border-slate-300 transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-[11px] font-mono text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded">
+                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                     {plan.planNumber}
                   </span>
                   <div className="flex items-center gap-1.5">
                     {plan.priority === 3 && (
-                      <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full font-bold">
+                      <span className="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">
                         بحرانی ساپکو
                       </span>
                     )}
                     {plan.priority === 2 && (
-                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
                         فوری
                       </span>
                     )}
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                         plan.status === 'IN_PROGRESS'
-                          ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
                           : plan.status === 'COMPLETED'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-slate-700 text-slate-300'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-slate-100 text-slate-700'
                       }`}
                     >
                       {plan.status === 'IN_PROGRESS'
@@ -250,24 +250,24 @@ export const ProductionPlanningView: React.FC<ProductionPlanningViewProps> = ({
                   </div>
                 </div>
 
-                <h3 className="text-sm font-bold text-white leading-snug mb-1">{plan.title}</h3>
-                <div className="text-xs text-slate-400 mb-3 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1">{plan.title}</h3>
+                <div className="text-xs text-slate-500 mb-3 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-slate-400" />
                   <span>{plan.partName}</span>
                 </div>
 
                 {/* Progress bar */}
-                <div className="space-y-1.5 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 mb-3">
+                <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">پیشرفت تولید:</span>
-                    <span className="font-bold text-white">
+                    <span className="text-slate-500">پیشرفت تولید:</span>
+                    <span className="font-bold text-slate-900">
                       {formatNumber(plan.producedQty)} از {formatNumber(plan.plannedQty)} عدد ({toPersianDigits(progress)}٪)
                     </span>
                   </div>
-                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        progress >= 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-indigo-500' : 'bg-amber-500'
+                        progress >= 100 ? 'bg-emerald-600' : progress >= 50 ? 'bg-indigo-600' : 'bg-amber-500'
                       }`}
                       style={{ width: `${progress}%` }}
                     />

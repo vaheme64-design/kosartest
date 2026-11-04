@@ -739,11 +739,11 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
         <div className="space-y-4">
           {activeReport === 'delays' && (
             <>
-              <KpiCardsSkeleton count={4} columns={4} theme="dark" />
-              <ChartSkeleton rows={4} theme="dark" />
+              <KpiCardsSkeleton count={4} columns={4} theme="light" />
+              <ChartSkeleton rows={4} theme="light" />
             </>
           )}
-          <TableSkeleton rows={7} columns={8} theme="dark" />
+          <TableSkeleton rows={7} columns={8} theme="light" />
         </div>
       )}
 
@@ -756,7 +756,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
               {reportDefinitions.find(r => r.id === activeReport)?.title}
             </h3>
             {reportMeta && (
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[11px] text-slate-500 font-mono">
                 ({toPersianDigits(reportMeta.totalRecordsCount)} سطر)
               </span>
             )}
@@ -772,7 +772,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
             {reportMeta && (
               <>
                 <span className="text-slate-300">·</span>
-                <span className="text-slate-400 font-mono text-[10px]">
+                <span className="text-slate-500 font-mono text-[10px]">
                   {formatToJalali(reportMeta.generatedAt)}
                 </span>
               </>
@@ -784,13 +784,13 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 1. Plan vs Actual */}
           {activeReport === 'plan_vs_actual' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره برنامه و نسخه</th>
                   <th className="py-3 px-3">کد و نام قطعه</th>
                   <th className="py-3 px-3 text-center">تیراژ مصوب</th>
-                  <th className="py-3 px-3 text-center text-emerald-400">تولید واقعی سالم</th>
-                  <th className="py-3 px-3 text-center text-rose-400">ضایعات</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">تولید واقعی سالم</th>
+                  <th className="py-3 px-3 text-center text-rose-600">ضایعات</th>
                   <th className="py-3 px-3 text-center font-bold">درصد تحقق</th>
                   <th className="py-3 px-3 text-center">انحراف</th>
                   <th className="py-3 px-3 text-center">نوع داده</th>
@@ -798,7 +798,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                   <th className="py-3 px-3 text-center">جزئیات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {planVsActualData.map(r => (
                   <tr
                     key={r.planId}
@@ -806,7 +806,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                       setDrillDownItem({
                         title: `سند برنامه تولید: ${r.planNumber} (${r.planVersion})`,
                         subtitle: `${r.partName} - موعد تحویل: ${formatToJalali(r.targetDueDate)}`,
-                        badge: { text: r.status, color: 'bg-amber-500/20 text-amber-300' },
+                        badge: { text: r.status, color: 'bg-amber-100 text-amber-800' },
                         fields: [
                           { label: 'کد قطعه', value: r.partCode, isMono: true },
                           { label: 'تیراژ مصوب برنامه', value: r.plannedQuantity, isHighlight: true },
@@ -823,53 +823,53 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                         ],
                       })
                     }
-                    className="hover:bg-slate-800/40 cursor-pointer transition"
+                    className="hover:bg-slate-50/80 cursor-pointer transition"
                   >
                     <td className="py-3 px-3">
-                      <span className="font-bold text-slate-100">{r.planNumber}</span>{' '}
-                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1 rounded">
+                      <span className="font-bold text-slate-900">{r.planNumber}</span>{' '}
+                      <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold">
                         {r.planVersion}
                       </span>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-200">
+                    <td className="py-3 px-3 text-center font-bold text-slate-800">
                       {formatNumber(r.plannedQuantity)}
                     </td>
-                    <td className="py-3 px-3 text-center font-black text-emerald-400">
+                    <td className="py-3 px-3 text-center font-black text-emerald-700">
                       {formatNumber(r.actualProducedQuantity)}
                     </td>
-                    <td className="py-3 px-3 text-center text-rose-400">
+                    <td className="py-3 px-3 text-center text-rose-600 font-semibold">
                       {formatNumber(r.actualScrapQuantity)}
                     </td>
-                    <td className="py-3 px-3 text-center font-black text-slate-100">
+                    <td className="py-3 px-3 text-center font-black text-slate-900">
                       {toPersianDigits(r.achievementRatePercent)}%
                     </td>
                     <td
                       className={`py-3 px-3 text-center font-bold ${
-                        r.varianceQuantity < 0 ? 'text-rose-400' : 'text-emerald-400'
+                        r.varianceQuantity < 0 ? 'text-rose-600' : 'text-emerald-700'
                       }`}
                     >
                       {formatNumber(r.varianceQuantity)}
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       {r.isEstimate ? (
-                        <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold">
                           ▲ برآوردی
                         </span>
                       ) : (
-                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold">
                           ● قطعی واقعی
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-300">
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-600">
                       {formatToJalali(r.targetDueDate)}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <Eye className="w-4 h-4 text-amber-400 mx-auto" />
+                      <Eye className="w-4 h-4 text-orange-600 mx-auto" />
                     </td>
                   </tr>
                 ))}
@@ -880,43 +880,43 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 2. Customer Order Fulfillment */}
           {activeReport === 'fulfillment' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره سفارش و قرارداد</th>
                   <th className="py-3 px-3">مشتری</th>
                   <th className="py-3 px-3">قطعه</th>
                   <th className="py-3 px-3 text-center">تعهد سفارش</th>
-                  <th className="py-3 px-3 text-center text-emerald-400">تحویل شده</th>
-                  <th className="py-3 px-3 text-center text-amber-400">باقیمانده</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">تحویل شده</th>
+                  <th className="py-3 px-3 text-center text-amber-700">باقیمانده</th>
                   <th className="py-3 px-3 text-center font-bold">درصد تحقق</th>
                   <th className="py-3 px-3 text-center">موعد تحویل</th>
                   <th className="py-3 px-3 text-center">وضعیت</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {fulfillmentData.map(r => (
-                  <tr key={r.orderLineId} className="hover:bg-slate-800/40 transition">
+                  <tr key={r.orderLineId} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3">
-                      <span className="font-bold text-slate-100">{r.orderNumber}</span>
-                      <div className="text-[11px] text-slate-400">{r.contractNumber}</div>
+                      <span className="font-bold text-slate-900">{r.orderNumber}</span>
+                      <div className="text-[11px] text-slate-500">{r.contractNumber}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans font-bold text-slate-200">{r.customerName}</td>
+                    <td className="py-3 px-3 font-sans font-bold text-slate-800">{r.customerName}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold">{formatNumber(r.orderedQuantity)}</td>
-                    <td className="py-3 px-3 text-center text-emerald-400 font-bold">{formatNumber(r.deliveredQuantity)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400 font-black">{formatNumber(r.remainingQuantity)}</td>
-                    <td className="py-3 px-3 text-center font-black">{toPersianDigits(r.fulfillmentPercent)}%</td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px]">{formatToJalali(r.dueDate)}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-800">{formatNumber(r.orderedQuantity)}</td>
+                    <td className="py-3 px-3 text-center text-emerald-700 font-bold">{formatNumber(r.deliveredQuantity)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-black">{formatNumber(r.remainingQuantity)}</td>
+                    <td className="py-3 px-3 text-center font-black text-slate-900">{toPersianDigits(r.fulfillmentPercent)}%</td>
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-600">{formatToJalali(r.dueDate)}</td>
                     <td className="py-3 px-3 text-center font-sans">
                       {r.isDelayed ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                           {toPersianDigits(r.daysOverdue)} روز تأخیر
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           مطابق برنامه
                         </span>
                       )}
@@ -930,42 +930,42 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 3. Production Backlog */}
           {activeReport === 'backlog' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره سفارش</th>
                   <th className="py-3 px-3">مشتری و خودرو</th>
                   <th className="py-3 px-3">قطعه</th>
-                  <th className="py-3 px-3 text-center text-amber-400 font-bold">تعداد معوق (Backlog)</th>
+                  <th className="py-3 px-3 text-center text-amber-700 font-bold">تعداد معوق (Backlog)</th>
                   <th className="py-3 px-3 text-center">ورق مورد نیاز (kg)</th>
-                  <th className="py-3 px-3 text-center text-rose-400">روزهای گذشته از موعد</th>
+                  <th className="py-3 px-3 text-center text-rose-600">روزهای گذشته از موعد</th>
                   <th className="py-3 px-3 text-center">سطح فوریت</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {backlogData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.orderNumber}</td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900">{r.orderNumber}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.customerName}</div>
-                      <div className="text-[11px] text-slate-400">{r.carModel || '-'}</div>
+                      <div className="font-bold text-slate-800">{r.customerName}</div>
+                      <div className="text-[11px] text-slate-500">{r.carModel || '-'}</div>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-black text-amber-400 text-sm">
+                    <td className="py-3 px-3 text-center font-black text-amber-700 text-sm">
                       {formatNumber(r.backlogQuantity)}
                     </td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.requiredRawMaterialKg)} kg</td>
-                    <td className="py-3 px-3 text-center text-rose-400 font-bold">
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.requiredRawMaterialKg)} kg</td>
+                    <td className="py-3 px-3 text-center text-rose-600 font-bold">
                       {toPersianDigits(r.daysOverdue)} روز
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           r.urgencyLevel === 'CRITICAL'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border border-amber-200'
                         }`}
                       >
                         {r.urgencyLevel === 'CRITICAL' ? 'بحرانی' : 'اولویت بالا'}
@@ -980,35 +980,35 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 4. WIP by Part & Operation */}
           {activeReport === 'wip_operation' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره MO</th>
                   <th className="py-3 px-3">قطعه</th>
                   <th className="py-3 px-3">مرحله و فرایند</th>
                   <th className="py-3 px-3">موقعیت انبارش</th>
                   <th className="py-3 px-3 text-center">در صف ورودی</th>
-                  <th className="py-3 px-3 text-center text-amber-400">پای دستگاه</th>
-                  <th className="py-3 px-3 text-center text-cyan-400">آماده انتقال</th>
-                  <th className="py-3 px-3 text-center font-black text-purple-400">کل WIP فعال</th>
+                  <th className="py-3 px-3 text-center text-amber-700">پای دستگاه</th>
+                  <th className="py-3 px-3 text-center text-cyan-700">آماده انتقال</th>
+                  <th className="py-3 px-3 text-center font-black text-purple-700">کل WIP فعال</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {wipOpData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.moNumber}</td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900">{r.moNumber}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans">
-                      <span className="font-bold text-amber-400 font-mono">OP{r.stepNumber}</span> - {r.stepName}
-                      <span className="block text-[10px] text-slate-400 font-mono">{r.processType}</span>
+                    <td className="py-3 px-3 font-sans text-slate-800">
+                      <span className="font-bold text-orange-600 font-mono">OP{r.stepNumber}</span> - {r.stepName}
+                      <span className="block text-[10px] text-slate-500 font-mono">{r.processType}</span>
                     </td>
-                    <td className="py-3 px-3 text-slate-300">{r.warehouseLocation}</td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.waitingInputQty)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400 font-bold">{formatNumber(r.inProgressQty)}</td>
-                    <td className="py-3 px-3 text-center text-cyan-400 font-bold">{formatNumber(r.readyForTransferQty)}</td>
-                    <td className="py-3 px-3 text-center font-black text-purple-400 text-sm bg-purple-500/5">
+                    <td className="py-3 px-3 text-slate-600">{r.warehouseLocation}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.waitingInputQty)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-bold">{formatNumber(r.inProgressQty)}</td>
+                    <td className="py-3 px-3 text-center text-cyan-700 font-bold">{formatNumber(r.readyForTransferQty)}</td>
+                    <td className="py-3 px-3 text-center font-black text-purple-700 text-sm bg-purple-50/60">
                       {formatNumber(r.totalActiveWipQty)}
                     </td>
                   </tr>
@@ -1020,33 +1020,33 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 5. WIP Aging */}
           {activeReport === 'wip_aging' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره MO</th>
                   <th className="py-3 px-3">قطعه</th>
                   <th className="py-3 px-3">مرحله کارگاهی</th>
                   <th className="py-3 px-3">موقعیت انبارش</th>
                   <th className="py-3 px-3 text-center">موجودی در ایستگاه</th>
-                  <th className="py-3 px-3 text-center text-amber-400">مدت توقف (روز)</th>
+                  <th className="py-3 px-3 text-center text-amber-700">مدت توقف (روز)</th>
                   <th className="py-3 px-3 text-center">رده سنی</th>
                   <th className="py-3 px-3 text-center">وضعیت انباشت</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {wipAgingData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.moNumber}</td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900">{r.moNumber}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans font-medium text-slate-200">{r.stepName}</td>
-                    <td className="py-3 px-3 text-slate-300">{r.warehouseLocation}</td>
-                    <td className="py-3 px-3 text-center font-bold">{formatNumber(r.quantityInStation)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400 font-black text-sm">
+                    <td className="py-3 px-3 font-sans font-medium text-slate-800">{r.stepName}</td>
+                    <td className="py-3 px-3 text-slate-600">{r.warehouseLocation}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-800">{formatNumber(r.quantityInStation)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-black text-sm">
                       {toPersianDigits(r.idleDays)} روز
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px]">
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-600">
                       {r.ageCategory === 'OVER_7_DAYS_STAGNANT'
                         ? 'بیش از ۷ روز (راکد)'
                         : r.ageCategory === '3_TO_7_DAYS'
@@ -1057,10 +1057,10 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           r.statusSeverity === 'CRITICAL'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
                             : r.statusSeverity === 'ATTENTION'
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         }`}
                       >
                         {r.statusSeverity === 'CRITICAL' ? 'ایستگاه بحرانی' : r.statusSeverity === 'ATTENTION' ? 'نیازمند تسریع' : 'عادی'}
@@ -1075,44 +1075,44 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 6. Material Consumption vs Standard */}
           {activeReport === 'consumption' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره MO</th>
                   <th className="py-3 px-3">قطعه و گرید</th>
                   <th className="py-3 px-3 text-center">تولید سالم</th>
                   <th className="py-3 px-3 text-center">مصرف استاندارد BOM</th>
-                  <th className="py-3 px-3 text-center text-amber-400">مصرف واقعی کارگاه</th>
-                  <th className="py-3 px-3 text-center text-rose-400">ضایعات تولیدی</th>
+                  <th className="py-3 px-3 text-center text-amber-700">مصرف واقعی کارگاه</th>
+                  <th className="py-3 px-3 text-center text-rose-600">ضایعات تولیدی</th>
                   <th className="py-3 px-3 text-center font-bold">انحراف مصرف</th>
                   <th className="py-3 px-3 text-center">ارزیابی نرم</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {consumptionData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.moNumber}</td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900">{r.moNumber}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode} • {r.materialGrade}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode} • {r.materialGrade}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold">{formatNumber(r.totalProducedPieces)}</td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.theoreticalStandardConsumptionKg)} kg</td>
-                    <td className="py-3 px-3 text-center font-bold text-amber-400">{formatNumber(r.actualIssuedMaterialKg)} kg</td>
-                    <td className="py-3 px-3 text-center text-rose-400">{formatNumber(r.actualScrapKg)} kg</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-800">{formatNumber(r.totalProducedPieces)}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.theoreticalStandardConsumptionKg)} kg</td>
+                    <td className="py-3 px-3 text-center font-bold text-amber-700">{formatNumber(r.actualIssuedMaterialKg)} kg</td>
+                    <td className="py-3 px-3 text-center text-rose-600">{formatNumber(r.actualScrapKg)} kg</td>
                     <td
                       className={`py-3 px-3 text-center font-black ${
-                        r.varianceKg > 0 ? 'text-rose-400' : 'text-emerald-400'
+                        r.varianceKg > 0 ? 'text-rose-600' : 'text-emerald-700'
                       }`}
                     >
                       {formatNumber(r.varianceKg)} kg ({toPersianDigits(r.variancePercent)}%)
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       {r.isOverConsumption ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                           مازاد بر استاندارد
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           منطبق با نرم
                         </span>
                       )}
@@ -1126,40 +1126,40 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 7. SAPCO Material Account */}
           {activeReport === 'sapco_account' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره و عنوان قرارداد ساپکو</th>
                   <th className="py-3 px-3">گرید ورق</th>
                   <th className="py-3 px-3 text-center">سهمیه مصوب</th>
                   <th className="py-3 px-3 text-center">اول دوره (kg)</th>
-                  <th className="py-3 px-3 text-center text-emerald-400">رسید (kg)</th>
-                  <th className="py-3 px-3 text-center text-amber-400">مصرف خطوط (kg)</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">رسید (kg)</th>
+                  <th className="py-3 px-3 text-center text-amber-700">مصرف خطوط (kg)</th>
                   <th className="py-3 px-3 text-center font-black">مانده دفتری (kg)</th>
-                  <th className="py-3 px-3 text-center text-cyan-400">موجودی فیزیکی کارخانه</th>
+                  <th className="py-3 px-3 text-center text-cyan-700">موجودی فیزیکی کارخانه</th>
                   <th className="py-3 px-3 text-center">مغایرت انبار</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {sapcoAccountData.map(r => (
-                  <tr key={r.contractId} className="hover:bg-slate-800/40 transition">
+                  <tr key={r.contractId} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3">
-                      <span className="font-bold text-slate-100">{r.contractNumber}</span>
-                      <div className="text-[11px] text-slate-400 font-sans">{r.title}</div>
+                      <span className="font-bold text-slate-900">{r.contractNumber}</span>
+                      <div className="text-[11px] text-slate-500 font-sans">{r.title}</div>
                     </td>
-                    <td className="py-3 px-3 font-bold text-amber-400">{r.materialGrade}</td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.allocatedQuotaKg)}</td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.openingBalanceKg)}</td>
-                    <td className="py-3 px-3 text-center text-emerald-400">{formatNumber(r.totalReceivedKg)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400">{formatNumber(r.totalIssuedKg)}</td>
-                    <td className="py-3 px-3 text-center font-black text-slate-100 bg-slate-950">
+                    <td className="py-3 px-3 font-bold text-orange-700">{r.materialGrade}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.allocatedQuotaKg)}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.openingBalanceKg)}</td>
+                    <td className="py-3 px-3 text-center text-emerald-700 font-semibold">{formatNumber(r.totalReceivedKg)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-semibold">{formatNumber(r.totalIssuedKg)}</td>
+                    <td className="py-3 px-3 text-center font-black text-slate-900 bg-slate-50">
                       {formatNumber(r.closingBookBalanceKg)}
                     </td>
-                    <td className="py-3 px-3 text-center text-cyan-400 font-bold">
+                    <td className="py-3 px-3 text-center text-cyan-700 font-bold">
                       {formatNumber(r.physicalStockInPlantKg)}
                     </td>
                     <td
                       className={`py-3 px-3 text-center font-bold ${
-                        r.discrepancyKg === 0 ? 'text-emerald-400' : 'text-rose-400'
+                        r.discrepancyKg === 0 ? 'text-emerald-700' : 'text-rose-600'
                       }`}
                     >
                       {formatNumber(r.discrepancyKg)} kg
@@ -1173,24 +1173,24 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 8. Inventory Valuation Quantities */}
           {activeReport === 'valuation_qty' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">طبقه‌بندی</th>
                   <th className="py-3 px-3">کد و شرح قلم</th>
                   <th className="py-3 px-3 text-center font-bold">موجودی فیزیکی کل</th>
-                  <th className="py-3 px-3 text-center text-emerald-400">ملکی شرکت</th>
-                  <th className="py-3 px-3 text-center text-cyan-400">امانی ساپکو</th>
-                  <th className="py-3 px-3 text-center text-rose-400">مسدود کیفی</th>
-                  <th className="py-3 px-3 text-center text-amber-400">رزرو سفارش</th>
-                  <th className="py-3 px-3 text-center font-black text-amber-400">موجودی آزاد قابل تخصیص</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">ملکی شرکت</th>
+                  <th className="py-3 px-3 text-center text-cyan-700">امانی ساپکو</th>
+                  <th className="py-3 px-3 text-center text-rose-600">مسدود کیفی</th>
+                  <th className="py-3 px-3 text-center text-amber-700">رزرو سفارش</th>
+                  <th className="py-3 px-3 text-center font-black text-orange-700">موجودی آزاد قابل تخصیص</th>
                   <th className="py-3 px-3 text-center">وزن فیزیکی کل (kg)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {valuationData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-sans">
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                         {r.category === 'FINISHED_GOODS'
                           ? 'محصول نهایی'
                           : r.category === 'WIP_PARTS'
@@ -1199,20 +1199,20 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                       </span>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.description}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partOrMaterialCode}</div>
+                      <div className="font-bold text-slate-900">{r.description}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partOrMaterialCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-100">
+                    <td className="py-3 px-3 text-center font-bold text-slate-900">
                       {formatNumber(r.physicalQuantity)} {r.unit}
                     </td>
-                    <td className="py-3 px-3 text-center text-emerald-400">{formatNumber(r.companyOwnedQuantity)}</td>
-                    <td className="py-3 px-3 text-center text-cyan-400">{formatNumber(r.sapcoConsignmentQuantity)}</td>
-                    <td className="py-3 px-3 text-center text-rose-400">{formatNumber(r.qualityBlockedQuantity)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400">{formatNumber(r.reservedQuantity)}</td>
-                    <td className="py-3 px-3 text-center font-black text-amber-400 text-sm bg-amber-500/5">
+                    <td className="py-3 px-3 text-center text-emerald-700 font-semibold">{formatNumber(r.companyOwnedQuantity)}</td>
+                    <td className="py-3 px-3 text-center text-cyan-700 font-semibold">{formatNumber(r.sapcoConsignmentQuantity)}</td>
+                    <td className="py-3 px-3 text-center text-rose-600">{formatNumber(r.qualityBlockedQuantity)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700">{formatNumber(r.reservedQuantity)}</td>
+                    <td className="py-3 px-3 text-center font-black text-orange-700 text-sm bg-orange-50/60">
                       {formatNumber(r.availableFreeQuantity)}
                     </td>
-                    <td className="py-3 px-3 text-center text-slate-300">{formatNumber(r.totalPhysicalWeightKg)} kg</td>
+                    <td className="py-3 px-3 text-center text-slate-600">{formatNumber(r.totalPhysicalWeightKg)} kg</td>
                   </tr>
                 ))}
               </tbody>
@@ -1222,43 +1222,43 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 9. Scrap by Part & Operation */}
           {activeReport === 'scrap_analysis' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">قطعه</th>
                   <th className="py-3 px-3">مرحله و فرایند</th>
                   <th className="py-3 px-3">دستگاه پرس</th>
                   <th className="py-3 px-3 text-center">کل قطعات ورودی</th>
-                  <th className="py-3 px-3 text-center text-rose-400 font-bold">ضایعات (عدد)</th>
-                  <th className="py-3 px-3 text-center text-rose-400">وزن ضایعات (kg)</th>
+                  <th className="py-3 px-3 text-center text-rose-600 font-bold">ضایعات (عدد)</th>
+                  <th className="py-3 px-3 text-center text-rose-600">وزن ضایعات (kg)</th>
                   <th className="py-3 px-3 text-center">نرم مجاز</th>
                   <th className="py-3 px-3 text-center font-black">درصد واقعی ضایعات</th>
                   <th className="py-3 px-3">نقص شایع و علت ریشه‌ای</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {scrapData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans">
-                      <span className="font-bold text-amber-400 font-mono">OP{r.stepNumber}</span> - {r.stepName}
-                      <span className="block text-[10px] text-slate-400 font-mono">{r.processType}</span>
+                    <td className="py-3 px-3 font-sans text-slate-800">
+                      <span className="font-bold text-orange-600 font-mono">OP{r.stepNumber}</span> - {r.stepName}
+                      <span className="block text-[10px] text-slate-500 font-mono">{r.processType}</span>
                     </td>
-                    <td className="py-3 px-3 font-sans text-slate-300">{r.machineName || r.machineCode || '-'}</td>
-                    <td className="py-3 px-3 text-center">{formatNumber(r.totalInputQty)}</td>
-                    <td className="py-3 px-3 text-center text-rose-400 font-bold">{formatNumber(r.scrapPieces)}</td>
-                    <td className="py-3 px-3 text-center text-rose-400">{formatNumber(r.scrapWeightKg)} kg</td>
-                    <td className="py-3 px-3 text-center">{toPersianDigits(r.scrapNormPercent)}%</td>
+                    <td className="py-3 px-3 font-sans text-slate-600">{r.machineName || r.machineCode || '-'}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.totalInputQty)}</td>
+                    <td className="py-3 px-3 text-center text-rose-600 font-bold">{formatNumber(r.scrapPieces)}</td>
+                    <td className="py-3 px-3 text-center text-rose-600">{formatNumber(r.scrapWeightKg)} kg</td>
+                    <td className="py-3 px-3 text-center text-slate-600">{toPersianDigits(r.scrapNormPercent)}%</td>
                     <td
                       className={`py-3 px-3 text-center font-black text-sm ${
-                        r.isAboveNorm ? 'text-rose-400' : 'text-emerald-400'
+                        r.isAboveNorm ? 'text-rose-600' : 'text-emerald-700'
                       }`}
                     >
                       {toPersianDigits(r.actualScrapPercent)}%
                     </td>
-                    <td className="py-3 px-3 font-sans text-slate-300 text-[11px]">{r.commonScrapDefectType}</td>
+                    <td className="py-3 px-3 font-sans text-slate-600 text-[11px]">{r.commonScrapDefectType}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1268,42 +1268,42 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 10. Machine Workload & Capacity */}
           {activeReport === 'machine_workload' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">کد و نام ماشین</th>
                   <th className="py-3 px-3">سالن و فرایند</th>
                   <th className="py-3 px-3 text-center">تناژ اسمی</th>
                   <th className="py-3 px-3 text-center">ظرفیت شیفت (ساعت)</th>
-                  <th className="py-3 px-3 text-center text-amber-400">ساعت کار برنامه‌ریزی‌شده</th>
-                  <th className="py-3 px-3 text-center text-emerald-400">ظرفیت آزاد</th>
+                  <th className="py-3 px-3 text-center text-amber-700">ساعت کار برنامه‌ریزی‌شده</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">ظرفیت آزاد</th>
                   <th className="py-3 px-3 text-center font-black">درصد بهره‌وری</th>
                   <th className="py-3 px-3 text-center">وضعیت دستگاه</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {machineData.map(r => (
-                  <tr key={r.machineId} className="hover:bg-slate-800/40 transition">
+                  <tr key={r.machineId} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-100">{r.machineName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.machineCode}</div>
+                      <div className="font-bold text-slate-900">{r.machineName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.machineCode}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans text-slate-300">
+                    <td className="py-3 px-3 font-sans text-slate-600">
                       {r.hall} • <span className="font-mono">{r.processType}</span>
                     </td>
-                    <td className="py-3 px-3 text-center">{r.tonnage ? `${formatNumber(r.tonnage)} T` : '-'}</td>
-                    <td className="py-3 px-3 text-center">{toPersianDigits(r.nominalDailyCapacityHours)}h</td>
-                    <td className="py-3 px-3 text-center text-amber-400 font-bold">{toPersianDigits(r.scheduledWorkloadHours)}h</td>
-                    <td className="py-3 px-3 text-center text-emerald-400 font-bold">{toPersianDigits(r.availableCapacityHours)}h</td>
-                    <td className="py-3 px-3 text-center font-black text-slate-100 text-sm">
+                    <td className="py-3 px-3 text-center text-slate-700">{r.tonnage ? `${formatNumber(r.tonnage)} T` : '-'}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{toPersianDigits(r.nominalDailyCapacityHours)}h</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-bold">{toPersianDigits(r.scheduledWorkloadHours)}h</td>
+                    <td className="py-3 px-3 text-center text-emerald-700 font-bold">{toPersianDigits(r.availableCapacityHours)}h</td>
+                    <td className="py-3 px-3 text-center font-black text-slate-900 text-sm">
                       {toPersianDigits(r.utilizationRatePercent)}%
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       {r.machineStatus === 'MAINTENANCE' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                           تعمیرات اضطراری
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           آماده‌به‌کار
                         </span>
                       )}
@@ -1320,68 +1320,68 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
               {/* Analytic KPI Cards */}
               {delayAnalytics && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-slate-400 block font-sans">میانگین روزهای تأخیر</span>
-                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
-                      {toPersianDigits(delayAnalytics.averageDelayDays)} <span className="text-xs font-sans font-normal text-slate-400">روز</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-500 block font-sans">میانگین روزهای تأخیر</span>
+                    <div className="text-xl font-black text-rose-600 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.averageDelayDays)} <span className="text-xs font-sans font-normal text-slate-500">روز</span>
                     </div>
-                    <span className="text-[10px] text-slate-500 mt-1 block">از سررسید تعهدات</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">از سررسید تعهدات</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-emerald-400 block font-sans">نرخ تحویل به‌موقع (OTIF)</span>
-                    <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-emerald-700 block font-sans">نرخ تحویل به‌موقع (OTIF)</span>
+                    <div className="text-xl font-black text-emerald-700 font-mono mt-1">
                       {toPersianDigits(delayAnalytics.onTimeDeliveryRatePercent)}٪
                     </div>
-                    <span className="text-[10px] text-slate-400 mt-1 block">شاخص کیفی ساپکو</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">شاخص کیفی ساپکو</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-slate-400 block font-sans">کل موارد دارای تأخیر</span>
-                    <div className="text-xl font-black text-slate-100 font-mono mt-1">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-500 block font-sans">کل موارد دارای تأخیر</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">
                       {toPersianDigits(delayAnalytics.totalDelayedItemsCount)}
                     </div>
-                    <span className="text-[10px] text-slate-500 mt-1 block">سفارش، MO و عملیات</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">سفارش، MO و عملیات</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-rose-400 block font-sans">بیشترین روز تأخیر</span>
-                    <div className="text-xl font-black text-rose-400 font-mono mt-1">
-                      {toPersianDigits(delayAnalytics.maxDelayDays)} <span className="text-xs font-sans font-normal text-slate-400">روز</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-rose-600 block font-sans">بیشترین روز تأخیر</span>
+                    <div className="text-xl font-black text-rose-600 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.maxDelayDays)} <span className="text-xs font-sans font-normal text-slate-500">روز</span>
                     </div>
-                    <span className="text-[10px] text-rose-400/80 mt-1 block">اقلام با دیرکرد بالا</span>
+                    <span className="text-[10px] text-rose-600/80 mt-1 block">اقلام با دیرکرد بالا</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-amber-400 block font-sans">فوریت بحرانی</span>
-                    <div className="text-xl font-black text-amber-400 font-mono mt-1">
-                      {toPersianDigits(delayAnalytics.criticalUrgencyCount)} <span className="text-xs font-sans font-normal text-slate-400">مورد</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-amber-700 block font-sans">فوریت بحرانی</span>
+                    <div className="text-xl font-black text-amber-700 font-mono mt-1">
+                      {toPersianDigits(delayAnalytics.criticalUrgencyCount)} <span className="text-xs font-sans font-normal text-slate-500">مورد</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 mt-1 block">ریسک توقف خط مشتری</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">ریسک توقف خط مشتری</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-right">
-                    <span className="text-[11px] text-slate-400 block font-sans">برآورد ریسک جریمه ساپکو</span>
-                    <div className="text-lg font-black text-rose-300 font-mono mt-1">
-                      {formatNumber(Math.round(delayAnalytics.estimatedPenaltyRiskRials / 1000000))} <span className="text-[11px] font-sans font-normal text-slate-400">م.ریال</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right">
+                    <span className="text-[11px] text-slate-500 block font-sans">برآورد ریسک جریمه ساپکو</span>
+                    <div className="text-lg font-black text-rose-600 font-mono mt-1">
+                      {formatNumber(Math.round(delayAnalytics.estimatedPenaltyRiskRials / 1000000))} <span className="text-[11px] font-sans font-normal text-slate-500">م.ریال</span>
                     </div>
-                    <span className="text-[10px] text-rose-400/70 mt-1 block">جریمه تأخیر قرارداد</span>
+                    <span className="text-[10px] text-rose-600/70 mt-1 block">جریمه تأخیر قرارداد</span>
                   </div>
                 </div>
               )}
 
               {/* Root Cause Distribution Bars */}
               {delayAnalytics && (
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-200 font-sans flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-800 font-sans flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                       تفکیک سهم علل ریشه‌ای تأخیرات (Root Cause Breakdown) — روی هر علت جهت فیلتر جدول کلیک کنید:
                     </span>
                     {delayCauseFilter !== 'ALL' && (
                       <button
                         onClick={() => setDelayCauseFilter('ALL')}
-                        className="text-[11px] text-indigo-400 hover:text-indigo-300 font-sans cursor-pointer underline"
+                        className="text-[11px] text-indigo-600 hover:text-indigo-800 font-sans cursor-pointer underline"
                       >
                         حذف فیلتر علت
                       </button>
@@ -1397,23 +1397,23 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                           onClick={() => setDelayCauseFilter(isSelected ? 'ALL' : cause.causeKey)}
                           className={`p-2.5 rounded-lg border text-right transition cursor-pointer flex flex-col justify-between ${
                             isSelected
-                              ? 'bg-slate-800 border-indigo-500 ring-2 ring-indigo-500/30'
-                              : 'bg-slate-950 border-slate-800/80 hover:bg-slate-900'
+                              ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="text-[11px] font-bold text-slate-200">{cause.causeLabelFa}</span>
-                            <span className="text-xs font-mono font-black text-rose-400">
+                            <span className="text-[11px] font-bold text-slate-800">{cause.causeLabelFa}</span>
+                            <span className="text-xs font-mono font-black text-rose-600">
                               {toPersianDigits(cause.percentage)}٪
                             </span>
                           </div>
-                          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500 font-mono">
                             <span>{toPersianDigits(cause.itemsCount)} ردیف</span>
                             <span>{formatNumber(cause.totalDelayedPieces)} عدد</span>
                           </div>
-                          <div className="w-full bg-slate-800 h-1 rounded-full mt-1.5 overflow-hidden">
+                          <div className="w-full bg-slate-100 h-1 rounded-full mt-1.5 overflow-hidden">
                             <div
-                              className="bg-indigo-500 h-full rounded-full transition-all"
+                              className="bg-indigo-600 h-full rounded-full transition-all"
                               style={{ width: `${cause.percentage}%` }}
                             />
                           </div>
@@ -1424,9 +1424,9 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                 </div>
               )}
 
-              {/* Section Filters (kosar_za standard) */}
+              {/* Section Filters */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                <span className="text-slate-400 font-sans ml-1 text-[11px]">فیلتر بخش:</span>
+                <span className="text-slate-500 font-sans ml-1 text-[11px]">فیلتر بخش:</span>
                 {[
                   { id: 'ALL', label: 'همه بخش‌ها' },
                   { id: 'CUSTOMER_ORDER', label: 'ردیف سفارشات باز معوق' },
@@ -1439,8 +1439,8 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                     onClick={() => setDelaySectionFilter(sec.id as any)}
                     className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                       delaySectionFilter === sec.id
-                        ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                        ? 'bg-slate-900 text-white font-bold shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
                     }`}
                   >
                     {sec.label}
@@ -1449,23 +1449,23 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
               </div>
 
               {/* Table */}
-              <div className="rounded-xl border border-slate-800 overflow-hidden">
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-mono text-[11px] font-semibold">
                     <tr>
                       <th className="py-3 px-3">بخش و شماره مرجع</th>
                       <th className="py-3 px-3">طرف حساب / ایستگاه</th>
                       <th className="py-3 px-3">کد و نام قطعه خودرویی</th>
-                      <th className="py-3 px-3 text-center text-slate-200">تیراژ معوق</th>
+                      <th className="py-3 px-3 text-center text-slate-800">تیراژ معوق</th>
                       <th className="py-3 px-3 text-center">موعد مصوب</th>
-                      <th className="py-3 px-3 text-center text-amber-400">تکمیل (تخمینی / واقعی)</th>
-                      <th className="py-3 px-3 text-center text-rose-400 font-black">روزهای تأخیر</th>
+                      <th className="py-3 px-3 text-center text-amber-700">تکمیل (تخمینی / واقعی)</th>
+                      <th className="py-3 px-3 text-center text-rose-600 font-black">روزهای تأخیر</th>
                       <th className="py-3 px-3">علت ریشه‌ای تأخیر</th>
                       <th className="py-3 px-3 text-center">سطح فوریت</th>
                       <th className="py-3 px-3 text-center">بررسی</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                  <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                     {delaysData
                       .filter(r => {
                         if (delaySectionFilter !== 'ALL' && r.section !== delaySectionFilter) return false;
@@ -1473,70 +1473,70 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                         return true;
                       })
                       .map((r, i) => (
-                        <tr key={i} className="hover:bg-slate-800/40 transition">
+                        <tr key={i} className="hover:bg-slate-50/80 transition">
                           <td className="py-3 px-3 font-sans">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold block w-fit mb-1 ${
                               r.section === 'CUSTOMER_ORDER'
-                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                 : r.section === 'OPEN_MO'
-                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                 : r.section === 'COMPLETED_LATE_MO'
-                                ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                : 'bg-purple-50 text-purple-700 border border-purple-200'
                             }`}>
                               {r.sectionLabelFa}
                             </span>
-                            <div className="font-bold text-slate-100 font-mono">{r.referenceNumber}</div>
+                            <div className="font-bold text-slate-900 font-mono">{r.referenceNumber}</div>
                           </td>
-                          <td className="py-3 px-3 font-sans text-slate-300">
+                          <td className="py-3 px-3 font-sans text-slate-700">
                             <div className="font-semibold">{r.customerOrPlan}</div>
                             {r.operationName && (
                               <div className="text-[10px] text-slate-500">{r.operationName}</div>
                             )}
                           </td>
                           <td className="py-3 px-3 font-sans">
-                            <div className="font-bold text-slate-200">{r.partName}</div>
-                            <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                            <div className="font-bold text-slate-900">{r.partName}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                           </td>
-                          <td className="py-3 px-3 text-center font-bold text-sm text-slate-100">
+                          <td className="py-3 px-3 text-center font-bold text-sm text-slate-900">
                             {formatNumber(r.quantity)}
                           </td>
-                          <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-300">
+                          <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-600">
                             {formatToJalali(r.plannedDueDate)}
                           </td>
-                          <td className="py-3 px-3 text-center font-sans text-[11px] text-amber-400 font-bold">
+                          <td className="py-3 px-3 text-center font-sans text-[11px] text-amber-700 font-bold">
                             {formatToJalali(r.estimatedCompletionDate)}
                           </td>
                           <td className="py-3 px-3 text-center font-black text-sm">
-                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
                               {toPersianDigits(r.delayDays)} روز
                             </span>
                           </td>
                           <td className="py-3 px-3 font-sans">
-                            <span className="font-bold text-slate-200 block text-[11px]">
+                            <span className="font-bold text-slate-800 block text-[11px]">
                               {r.primaryDelayCause === 'RAW_MATERIAL_SHORTAGE' && 'کسری کلاف ساپکو'}
                               {r.primaryDelayCause === 'MACHINE_BREAKDOWN' && 'خرابی پرس و قالب'}
                               {r.primaryDelayCause === 'WIP_BOTTLENECK' && 'گلوگاه کار در جریان'}
                               {r.primaryDelayCause === 'CAPACITY_OVERLOAD' && 'بیش‌بار ظرفیت تناژ'}
                               {r.primaryDelayCause === 'QUALITY_HOLD' && 'توقف کیفی ابعادی'}
                             </span>
-                            <span className="text-[10px] text-slate-400 block mt-0.5 line-clamp-1" title={r.delayDescription}>
+                            <span className="text-[10px] text-slate-500 block mt-0.5 line-clamp-1" title={r.delayDescription}>
                               {r.delayDescription}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-center font-sans">
                             {r.urgencyLevel === 'CRITICAL' && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                 بحرانی
                               </span>
                             )}
                             {r.urgencyLevel === 'HIGH' && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                                 بالا
                               </span>
                             )}
                             {r.urgencyLevel === 'MEDIUM' && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                 متوسط
                               </span>
                             )}
@@ -1549,7 +1549,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                                   subtitle: r.partName,
                                   badge: {
                                     text: r.urgencyLevel === 'CRITICAL' ? 'بحرانی' : 'عادی',
-                                    color: r.urgencyLevel === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-300',
+                                    color: r.urgencyLevel === 'CRITICAL' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700',
                                   },
                                   fields: [
                                     { label: 'شماره سند', value: r.referenceNumber, isMono: true },
@@ -1564,7 +1564,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                                   ],
                                 });
                               }}
-                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-sans cursor-pointer transition"
+                              className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[10px] font-sans cursor-pointer transition"
                             >
                               جزئیات
                             </button>
@@ -1580,7 +1580,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 12. Inventory Movements */}
           {activeReport === 'movements' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره سند</th>
                   <th className="py-3 px-3">تاریخ سند</th>
@@ -1592,28 +1592,28 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                   <th className="py-3 px-3 text-center">کاربر ثبت‌کننده</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {movementsData.map(r => (
-                  <tr key={r.transactionId} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100">{r.documentNumber}</td>
-                    <td className="py-3 px-3 font-sans text-[11px] text-slate-300">{formatToJalali(r.transactionDate)}</td>
+                  <tr key={r.transactionId} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900">{r.documentNumber}</td>
+                    <td className="py-3 px-3 font-sans text-[11px] text-slate-600">{formatToJalali(r.transactionDate)}</td>
                     <td className="py-3 px-3 font-sans">
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                         {r.documentType}
                       </span>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-100">
+                    <td className="py-3 px-3 text-center font-bold text-slate-900">
                       {formatNumber(r.quantity)} {r.unit}
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-300">
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-600">
                       {r.sourceLocation} → {r.targetLocation}
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px]">{r.ownership}</td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-400">{r.operatorOrUser}</td>
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-700">{r.ownership}</td>
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-500">{r.operatorOrUser}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1623,37 +1623,37 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 13. Inventory Reconciliation */}
           {activeReport === 'reconciliation' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">کد و انبار</th>
                   <th className="py-3 px-3">قلم کالایی</th>
                   <th className="py-3 px-3 text-center">موجودی دفتری سیستم</th>
-                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">شمارش عینی انبارگردانی</th>
+                  <th className="py-3 px-3 text-center text-emerald-700 font-bold">شمارش عینی انبارگردانی</th>
                   <th className="py-3 px-3 text-center">مغایرت</th>
                   <th className="py-3 px-3 text-center">وضعیت موازنه</th>
                   <th className="py-3 px-3 text-center">تاریخ ممیزی</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {reconciliationData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-100">{r.warehouseName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.locationCode}</div>
+                      <div className="font-bold text-slate-900">{r.warehouseName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.locationCode}</div>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.partName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{r.partCode}</div>
+                      <div className="font-bold text-slate-900">{r.partName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{r.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-200">{formatNumber(r.bookQuantity)}</td>
-                    <td className="py-3 px-3 text-center font-black text-emerald-400">{formatNumber(r.physicalCountQuantity)}</td>
-                    <td className="py-3 px-3 text-center font-bold text-emerald-400">{formatNumber(r.varianceQuantity)}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-800">{formatNumber(r.bookQuantity)}</td>
+                    <td className="py-3 px-3 text-center font-black text-emerald-700">{formatNumber(r.physicalCountQuantity)}</td>
+                    <td className="py-3 px-3 text-center font-bold text-emerald-700">{formatNumber(r.varianceQuantity)}</td>
                     <td className="py-3 px-3 text-center font-sans">
-                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         موازنه کامل (بدون مغایرت)
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-400">
+                    <td className="py-3 px-3 text-center font-sans text-[11px] text-slate-500">
                       {formatToJalali(r.lastReconciledAt)}
                     </td>
                   </tr>
@@ -1665,53 +1665,53 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 14. Coil Inventory */}
           {activeReport === 'coil_inventory' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">شماره کویل</th>
                   <th className="py-3 px-3">مشخصات متریال (گرید و ضخامت)</th>
                   <th className="py-3 px-3 text-center">ابعاد (mm)</th>
                   <th className="py-3 px-3 text-center">وزن دریافتی (kg)</th>
-                  <th className="py-3 px-3 text-center text-amber-400">مصرف شده (kg)</th>
-                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">مانده موجودی (kg)</th>
+                  <th className="py-3 px-3 text-center text-amber-700">مصرف شده (kg)</th>
+                  <th className="py-3 px-3 text-center text-emerald-700 font-bold">مانده موجودی (kg)</th>
                   <th className="py-3 px-3 text-center">مالکیت</th>
                   <th className="py-3 px-3 text-center">وضعیت رول</th>
                   <th className="py-3 px-3 text-center">موقعیت انبار</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {coilInventoryData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100 font-mono">
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900 font-mono">
                       <div>{r.coilNumber}</div>
-                      <div className="text-[10px] text-slate-400 font-sans">ذوب: {r.heatNumber}</div>
+                      <div className="text-[10px] text-slate-500 font-sans">ذوب: {r.heatNumber}</div>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.materialGrade}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">قرارداد: {r.contractNumber}</div>
+                      <div className="font-bold text-slate-800">{r.materialGrade}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">قرارداد: {r.contractNumber}</div>
                     </td>
-                    <td className="py-3 px-3 text-center text-slate-300 font-mono">
+                    <td className="py-3 px-3 text-center text-slate-700 font-mono">
                       {r.thicknessMm} × {r.widthMm}
                     </td>
-                    <td className="py-3 px-3 text-center text-slate-300">{formatNumber(r.receivedWeightKg)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400">{formatNumber(r.consumedWeightKg)}</td>
-                    <td className="py-3 px-3 text-center font-bold text-emerald-400">{formatNumber(r.remainingWeightKg)}</td>
+                    <td className="py-3 px-3 text-center text-slate-700">{formatNumber(r.receivedWeightKg)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-semibold">{formatNumber(r.consumedWeightKg)}</td>
+                    <td className="py-3 px-3 text-center font-bold text-emerald-700">{formatNumber(r.remainingWeightKg)}</td>
                     <td className="py-3 px-3 text-center font-sans">
-                      <span className={`px-2 py-0.5 rounded text-[10px] ${r.ownership === 'SAPCO_CONSIGNMENT' ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-slate-800 text-slate-300'}`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${r.ownership === 'SAPCO_CONSIGNMENT' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
                         {r.ownership === 'SAPCO_CONSIGNMENT' ? 'امانی ساپکو' : 'ملکی'}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         r.status === 'FULL'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : r.status === 'PARTIAL'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          : 'bg-slate-800 text-slate-500'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                          : 'bg-slate-100 text-slate-500 border border-slate-200'
                       }`}>
                         {r.status === 'FULL' ? 'سالم (کامل)' : r.status === 'PARTIAL' ? 'بازشده (ناقص)' : 'مصرف‌شده'}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px]">{r.warehouseLocation}</td>
+                    <td className="py-3 px-3 text-center font-sans text-slate-500 text-[11px]">{r.warehouseLocation}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1721,7 +1721,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 15. Lot Consumption */}
           {activeReport === 'lot_consumption' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">سند و تاریخ حواله</th>
                   <th className="py-3 px-3">شناسه کویل / ذوب</th>
@@ -1730,37 +1730,37 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
                   <th className="py-3 px-3 text-center">دستور کار (MO)</th>
                   <th className="py-3 px-3">قطعه خروجی</th>
                   <th className="py-3 px-3 text-center">تیراژ تولیدی</th>
-                  <th className="py-3 px-3 text-center text-rose-400">ضایعات پرسی</th>
+                  <th className="py-3 px-3 text-center text-rose-600">ضایعات پرسی</th>
                   <th className="py-3 px-3 text-center">اپراتور</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {lotConsumptionData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-3">
-                      <div className="font-bold text-slate-100 font-mono">{r.issueDocumentNumber}</div>
-                      <div className="text-[10px] text-slate-400 font-sans">{formatToJalali(r.issueDate)}</div>
+                      <div className="font-bold text-slate-900 font-mono">{r.issueDocumentNumber}</div>
+                      <div className="text-[10px] text-slate-500 font-sans">{formatToJalali(r.issueDate)}</div>
                     </td>
                     <td className="py-3 px-3 font-mono">
-                      <div className="text-slate-200 font-bold">{r.coilNumber}</div>
-                      <div className="text-[10px] text-slate-400">{r.heatNumber}</div>
+                      <div className="text-slate-800 font-bold">{r.coilNumber}</div>
+                      <div className="text-[10px] text-slate-500">{r.heatNumber}</div>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <span className="text-slate-200 font-semibold">{r.materialGrade}</span>
-                      <span className="text-slate-400 font-mono mr-1">({r.thicknessMm}mm)</span>
+                      <span className="text-slate-800 font-semibold">{r.materialGrade}</span>
+                      <span className="text-slate-500 font-mono mr-1">({r.thicknessMm}mm)</span>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-100">{formatNumber(r.consumedKg)}</td>
-                    <td className="py-3 px-3 text-center text-indigo-300 font-mono">{r.targetMoNumber}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-900">{formatNumber(r.consumedKg)}</td>
+                    <td className="py-3 px-3 text-center text-indigo-700 font-semibold font-mono">{r.targetMoNumber}</td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{r.targetPartName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{r.targetPartCode}</div>
+                      <div className="font-bold text-slate-900">{r.targetPartName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{r.targetPartCode}</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-emerald-400">{formatNumber(r.piecesProduced)} عدد</td>
-                    <td className="py-3 px-3 text-center text-rose-400 font-mono">
+                    <td className="py-3 px-3 text-center font-bold text-emerald-700">{formatNumber(r.piecesProduced)} عدد</td>
+                    <td className="py-3 px-3 text-center text-rose-600 font-mono">
                       <div>{formatNumber(r.scrapKg)} kg</div>
-                      <div className="text-[10px] text-slate-400 font-sans">({r.scrapPercent}%)</div>
+                      <div className="text-[10px] text-slate-500 font-sans">({r.scrapPercent}%)</div>
                     </td>
-                    <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px]">{r.operatorName}</td>
+                    <td className="py-3 px-3 text-center font-sans text-slate-600 text-[11px]">{r.operatorName}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1770,30 +1770,30 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
           {/* 16. Supplier Matrix (Grade x Thickness) */}
           {activeReport === 'supplier_matrix' && (
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="py-3 px-3">گرید فولاد</th>
                   <th className="py-3 px-3 text-center">ضخامت ورق (mm)</th>
                   <th className="py-3 px-3 text-center">اول دوره (kg)</th>
-                  <th className="py-3 px-3 text-center text-blue-400">رسید امانی ساپکو (kg)</th>
-                  <th className="py-3 px-3 text-center text-indigo-400">رسید خرید آزاد / ملکی (kg)</th>
-                  <th className="py-3 px-3 text-center text-amber-400">جمع مصرف پرسی (kg)</th>
-                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">مانده پایان دوره (kg)</th>
+                  <th className="py-3 px-3 text-center text-blue-700">رسید امانی ساپکو (kg)</th>
+                  <th className="py-3 px-3 text-center text-indigo-700">رسید خرید آزاد / ملکی (kg)</th>
+                  <th className="py-3 px-3 text-center text-amber-700">جمع مصرف پرسی (kg)</th>
+                  <th className="py-3 px-3 text-center text-emerald-700 font-bold">مانده پایان دوره (kg)</th>
                   <th className="py-3 px-3 text-center">تعداد کویل</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
                 {supplierMatrixData.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 px-3 font-bold text-slate-100 font-sans">{r.grade}</td>
-                    <td className="py-3 px-3 text-center font-bold text-slate-300 font-mono">{r.thicknessMm} mm</td>
-                    <td className="py-3 px-3 text-center text-slate-400">{formatNumber(r.openingBalanceKg)}</td>
-                    <td className="py-3 px-3 text-center text-blue-400">{formatNumber(r.consignmentReceivedKg)}</td>
-                    <td className="py-3 px-3 text-center text-indigo-400">{formatNumber(r.financialReceivedKg)}</td>
-                    <td className="py-3 px-3 text-center text-amber-400 font-bold">{formatNumber(r.totalConsumptionKg)}</td>
-                    <td className="py-3 px-3 text-center font-black text-emerald-400">{formatNumber(r.closingBalanceKg)}</td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition">
+                    <td className="py-3 px-3 font-bold text-slate-900 font-sans">{r.grade}</td>
+                    <td className="py-3 px-3 text-center font-bold text-slate-700 font-mono">{r.thicknessMm} mm</td>
+                    <td className="py-3 px-3 text-center text-slate-600">{formatNumber(r.openingBalanceKg)}</td>
+                    <td className="py-3 px-3 text-center text-blue-700 font-semibold">{formatNumber(r.consignmentReceivedKg)}</td>
+                    <td className="py-3 px-3 text-center text-indigo-700 font-semibold">{formatNumber(r.financialReceivedKg)}</td>
+                    <td className="py-3 px-3 text-center text-amber-700 font-bold">{formatNumber(r.totalConsumptionKg)}</td>
+                    <td className="py-3 px-3 text-center font-black text-emerald-700">{formatNumber(r.closingBalanceKg)}</td>
                     <td className="py-3 px-3 text-center font-sans">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-bold">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-bold">
                         {toPersianDigits(r.totalCoilsCount)} کلاف
                       </span>
                     </td>

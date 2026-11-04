@@ -73,19 +73,19 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
   });
 
   const statusBadges: Record<string, { label: string; color: string }> = {
-    PLANNED: { label: 'برنامه‌ریزی‌شده', color: 'bg-slate-700 text-slate-300' },
-    RELEASED: { label: 'صادرشده به سالن', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-    IN_PROGRESS: { label: 'در جریان ساخت', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-    COMPLETED: { label: 'تکمیل‌شده', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-    CANCELLED: { label: 'لغوشده', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+    PLANNED: { label: 'برنامه‌ریزی‌شده', color: 'bg-slate-700 text-slate-700' },
+    RELEASED: { label: 'صادرشده به سالن', color: 'bg-blue-500/20 text-blue-700 border-blue-500/30' },
+    IN_PROGRESS: { label: 'در جریان ساخت', color: 'bg-amber-500/20 text-amber-800 border-amber-500/30' },
+    COMPLETED: { label: 'تکمیل‌شده', color: 'bg-emerald-500/20 text-emerald-700 border-emerald-500/30' },
+    CANCELLED: { label: 'لغوشده', color: 'bg-rose-500/20 text-rose-700 border-rose-500/30' },
   };
 
   return (
     <div className="space-y-6">
       {/* Header and Controls */}
-      <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base lg:text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2">
             <Layers className="w-5 h-5 text-indigo-400" />
             دستورهای کار تولید و فرآیندهای ساخت (Manufacturing Orders)
           </h2>
@@ -106,7 +106,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
           <div className="relative min-w-[240px] flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
@@ -115,14 +115,14 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="جستجوی شماره دستور (MO)، کد یا عنوان قطعه..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white border border-slate-200 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
           >
             <option value="ALL">همه وضعیت‌ها</option>
             <option value="IN_PROGRESS">در جریان ساخت (In-Progress)</option>
@@ -132,27 +132,27 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
         </div>
 
         <div className="text-xs text-slate-400">
-          تعداد دستورها: <strong className="text-white font-mono">{toPersianDigits(filteredOrders.length)}</strong>
+          تعداد دستورها: <strong className="text-slate-900 font-mono">{toPersianDigits(filteredOrders.length)}</strong>
         </div>
       </div>
 
       {/* Orders List & Interactive Operations */}
       <div className="space-y-4">
         {filteredOrders.length === 0 ? (
-          <div className="p-12 text-center bg-slate-800/40 border border-slate-700/60 rounded-2xl text-slate-400 text-xs">
+          <div className="p-12 text-center bg-slate-100 border border-slate-200 rounded-2xl text-slate-400 text-xs">
             هیچ دستور کاری با فیلترهای انتخابی یافت نشد.
           </div>
         ) : (
           filteredOrders.map(mo => {
             const isExpanded = expandedMoId === mo.id;
             const completedOpsCount = mo.operations.filter(o => o.status === 'COMPLETED').length;
-            const statusInfo = statusBadges[mo.status] || { label: mo.status, color: 'bg-slate-700 text-slate-300' };
+            const statusInfo = statusBadges[mo.status] || { label: mo.status, color: 'bg-slate-700 text-slate-700' };
 
             return (
               <div
                 key={mo.id}
-                className={`bg-slate-800/60 rounded-2xl border transition-all ${
-                  isExpanded ? 'border-indigo-500/60 shadow-xl shadow-black/20' : 'border-slate-700/60 hover:border-slate-600'
+                className={`bg-slate-100 rounded-2xl border transition-all ${
+                  isExpanded ? 'border-indigo-500/60 shadow-xl shadow-black/20' : 'border-slate-200 hover:border-slate-600'
                 }`}
               >
                 {/* Header Row */}
@@ -167,16 +167,16 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusInfo.color}`}>
                           {statusInfo.label}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-700 text-slate-300">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-700 text-slate-700">
                           نسخه مسیر {mo.routingVersion}
                         </span>
-                        <span className="text-xs font-bold text-white mr-1">{mo.partName}</span>
+                        <span className="text-xs font-bold text-slate-900 mr-1">{mo.partName}</span>
                       </div>
                       <div className="text-xs text-slate-400 mt-1 flex items-center gap-4 flex-wrap">
-                        <span>کد قطعه: <strong className="font-mono text-slate-300">{mo.partCode}</strong></span>
+                        <span>کد قطعه: <strong className="font-mono text-slate-700">{mo.partCode}</strong></span>
                         <span>هدف ساخت: <strong className="font-mono text-emerald-400">{formatNumber(mo.targetQuantity)} PCS</strong></span>
                         <span>ورودی شیت: <strong className="font-mono text-cyan-400">{formatNumber(mo.initialInputQuantity)} PCS</strong></span>
-                        <span>تکمیل نهایی: <strong className="font-mono text-white">{formatNumber(mo.completedQuantity)} PCS</strong></span>
+                        <span>تکمیل نهایی: <strong className="font-mono text-slate-900">{formatNumber(mo.completedQuantity)} PCS</strong></span>
                         <span>کل ضایعات: <strong className="font-mono text-rose-400">{formatNumber(mo.totalScrapQuantity)} PCS</strong></span>
                       </div>
                     </div>
@@ -186,7 +186,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
                   <div className="flex items-center gap-2 self-end md:self-center">
                     <button
                       onClick={() => onOpenReconciliation(mo.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer"
                       title="مشاهده گواهی موازنه پایستگی قطعات"
                     >
                       <Scale className="w-3.5 h-3.5" />
@@ -195,7 +195,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
 
                     <button
                       onClick={() => setExpandedMoId(isExpanded ? null : mo.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium cursor-pointer"
                     >
                       <span>{isExpanded ? 'بستن مراحل' : 'مشاهده مراحل'}</span>
                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -205,7 +205,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
 
                 {/* Expanded Operations Timeline & Cards */}
                 {isExpanded && (
-                  <div className="border-t border-slate-700/60 p-4 bg-slate-900/50 rounded-b-2xl space-y-4">
+                  <div className="border-t border-slate-200 p-4 bg-white rounded-b-2xl space-y-4">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                       <div>
                         مراحل فرآیند ساخت ({toPersianDigits(completedOpsCount)} از {toPersianDigits(mo.operations.length)} تکمیل‌شده)
@@ -234,7 +234,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
                                 ? 'bg-emerald-950/20 border-emerald-500/40'
                                 : hasWaiting
                                 ? 'bg-amber-950/20 border-amber-500/40'
-                                : 'bg-slate-800/40 border-slate-700/60 opacity-80'
+                                : 'bg-slate-100 border-slate-200 opacity-80'
                             }`}
                           >
                             {/* Card Top */}
@@ -244,22 +244,22 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
                                   <span className="font-mono text-xs font-bold text-amber-400">
                                     {op.stepCode}
                                   </span>
-                                  <h4 className="text-xs font-bold text-white mt-0.5 line-clamp-1" title={op.stepName}>
+                                  <h4 className="text-xs font-bold text-slate-900 mt-0.5 line-clamp-1" title={op.stepName}>
                                     {op.stepName}
                                   </h4>
                                 </div>
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-300 font-mono">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 font-mono">
                                   گام {toPersianDigits(idx + 1)}
                                 </span>
                               </div>
 
                               <div className="mt-1 text-[10px] text-slate-400 flex items-center justify-between">
-                                <span className="font-mono text-cyan-300">{op.warehouseLocation}</span>
+                                <span className="font-mono text-cyan-700">{op.warehouseLocation}</span>
                                 {op.machineName && <span className="truncate max-w-[120px]">{op.machineName}</span>}
                               </div>
 
                               {/* Quantitative Breakdown */}
-                              <div className="mt-3 pt-2.5 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-[11px]">
+                              <div className="mt-3 pt-2.5 border-t border-slate-200 grid grid-cols-2 gap-2 text-[11px]">
                                 <div>
                                   <span className="text-slate-500 block text-[10px]">در صف ورودی:</span>
                                   <span className={`font-mono font-bold ${op.waitingInputQty > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
@@ -288,7 +288,7 @@ export const ManufacturingOrdersView: React.FC<ManufacturingOrdersViewProps> = (
                             </div>
 
                             {/* Card Action Buttons */}
-                            <div className="pt-2 border-t border-slate-700/60 flex items-center gap-1.5 flex-wrap">
+                            <div className="pt-2 border-t border-slate-200 flex items-center gap-1.5 flex-wrap">
                               {hasWaiting && (
                                 <button
                                   onClick={() => onOpenInput(op)}

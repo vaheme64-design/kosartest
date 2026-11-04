@@ -178,17 +178,17 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
   return (
     <div className="space-y-5">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 text-slate-900 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
             <Gauge className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base lg:text-lg font-bold text-white">
+              <h2 className="text-base lg:text-lg font-bold text-slate-900">
                 ماژول جامع اثربخشی کلی تجهیزات (OEE) و تحلیل ۶ ضایعه بزرگ (TPM)
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-700 border border-emerald-500/30">
                 IATF 16949 / SAPCO Grade A
               </span>
             </div>
@@ -212,7 +212,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
             type="button"
             onClick={loadOeeData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
             <span>بروزرسانی</span>
@@ -221,7 +221,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           <button
             type="button"
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>خروجی اکسل</span>
@@ -230,7 +230,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-slate-400" />
             <span>چاپ رسمی</span>
@@ -239,7 +239,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       </div>
 
       {notice && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-700 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             <span>{notice}</span>
@@ -249,7 +249,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       )}
 
       {/* Filter Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-slate-400 font-medium">تفکیک شیفت کاری:</span>
           {[
@@ -265,7 +265,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                 shiftFilter === s.id
                   ? 'bg-emerald-600 text-white font-bold'
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
               }`}
             >
               {s.label}
@@ -278,7 +278,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           <select
             value={hallFilter}
             onChange={e => setHallFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
           >
             <option value="ALL">همه سالن‌های کارخانه</option>
             <option value="پرس">سالن پرس سنگین و متوسط</option>
@@ -296,9 +296,9 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       {/* Top Formula & 6 KPI Cards */}
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-emerald-500/40 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-emerald-400 font-bold block">شاخص کل OEE کارخانه</span>
-            <div className="text-2xl font-black text-white font-mono tabular-nums mt-1">
+            <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1">
               {toPersianDigits(data.plantOeePercent)}٪
             </div>
             <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5 font-mono tabular-nums">
@@ -309,41 +309,41 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-cyan-400 font-bold block">۱. دسترس‌پذیری (Availability)</span>
-            <div className="text-xl font-black text-cyan-300 font-mono tabular-nums mt-1">
+            <div className="text-xl font-black text-cyan-700 font-mono tabular-nums mt-1">
               {toPersianDigits(data.plantAvailabilityPercent)}٪
             </div>
             <span className="text-[10px] text-slate-400 mt-1.5 block">کسر خرابی و تعویض قالب (هدف ≥ ۹۰٪)</span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-amber-400 font-bold block">۲. عملکرد سرعت (Performance)</span>
-            <div className="text-xl font-black text-amber-300 font-mono tabular-nums mt-1">
+            <div className="text-xl font-black text-amber-800 font-mono tabular-nums mt-1">
               {toPersianDigits(data.plantPerformancePercent)}٪
             </div>
             <span className="text-[10px] text-slate-400 mt-1.5 block">ضرب واقعی به اسمی SPM (هدف ≥ ۹۵٪)</span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-purple-400 font-bold block">۳. نرخ کیفیت (Quality / FPY)</span>
-            <div className="text-xl font-black text-purple-300 font-mono tabular-nums mt-1">
+            <div className="text-xl font-black text-purple-700 font-mono tabular-nums mt-1">
               {toPersianDigits(data.plantQualityPercent)}٪
             </div>
             <span className="text-[10px] text-slate-400 mt-1.5 block">نسبت قطعه سالم به کل ضرب (هدف ≥ ۹۹٪)</span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-slate-300 font-bold block">قابلیت اطمینان (MTBF / MTTR)</span>
-            <div className="text-base font-black text-slate-100 font-mono tabular-nums mt-1">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 text-right">
+            <span className="text-[11px] text-slate-700 font-bold block">قابلیت اطمینان (MTBF / MTTR)</span>
+            <div className="text-base font-black text-slate-900 font-mono tabular-nums mt-1">
               {toPersianDigits(data.avgMtbfHours)}h <span className="text-slate-500">/</span> {toPersianDigits(data.avgMttrMinutes)}m
             </div>
             <span className="text-[10px] text-slate-400 mt-1.5 block">میانگین فاصله خرابی / زمان تعمیر</span>
           </div>
 
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-xl p-3.5 text-right">
+          <div className="bg-white border border-indigo-500/30 rounded-xl p-3.5 text-right">
             <span className="text-[11px] text-indigo-400 font-bold block">ظرفیت پنهان قابل آزادسازی</span>
-            <div className="text-lg font-black text-indigo-300 font-mono tabular-nums mt-1">
+            <div className="text-lg font-black text-indigo-700 font-mono tabular-nums mt-1">
               +{formatNumber(data.totalHiddenCapacityPiecesPerMonth)} <span className="text-[10px] font-sans font-normal">قطعه/ماه</span>
             </div>
             <span className="text-[10px] text-slate-400 mt-1.5 block">در صورت ارتقای OEE به ۸۵٪</span>
@@ -353,31 +353,31 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
       {/* Interactive Clickable Charts Section (نمودارهای تعاملی قابل کلیک برای مشاهده پنل کشویی ریز توقفات) */}
       {data && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200 pb-3.5">
             <div>
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-slate-900">
                   نمودارهای تعاملی بهره‌وری OEE و تفکیک توقفات ماشین‌آلات (Interactive Drill-Down Charts)
                 </h3>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
                   قابل کلیک روی هر دستگاه
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                روی ستون یا نوار هر دستگاه در نمودار کلیک کنید تا <strong className="text-emerald-300">پنل کشویی جزئیات ریزِ توقفات (برنامه‌ریزی‌نشده، خرابی اضطراری، تعویض قالب SMED و افت سرعت)</strong> باز شود.
+                روی ستون یا نوار هر دستگاه در نمودار کلیک کنید تا <strong className="text-emerald-700">پنل کشویی جزئیات ریزِ توقفات (برنامه‌ریزی‌نشده، خرابی اضطراری، تعویض قالب SMED و افت سرعت)</strong> باز شود.
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 self-start">
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 self-start">
               <button
                 type="button"
                 onClick={() => setChartViewMode('OEE_FACTORS')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                   chartViewMode === 'OEE_FACTORS'
                     ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-400 hover:text-slate-900'
                 }`}
               >
                 نمودار مقایسه OEE و ۳ شاخص (A×P×Q)
@@ -388,7 +388,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                   chartViewMode === 'DOWNTIME_STACK'
                     ? 'bg-rose-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-400 hover:text-slate-900'
                 }`}
               >
                 نمودار انباشته ریزِ توقفات (دقیقه)
@@ -399,7 +399,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           {chartViewMode === 'OEE_FACTORS' ? (
             <div className="space-y-4">
               {/* Legend */}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-700 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200">
                 <div className="flex flex-wrap items-center gap-4">
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-xs bg-emerald-500 inline-block" />
@@ -441,25 +441,25 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       }}
                       className={`group relative rounded-xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected
-                          ? 'bg-slate-800/90 border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg'
-                          : 'bg-slate-950 border-slate-800/90 hover:bg-slate-900 hover:border-emerald-500/50'
+                          ? 'bg-slate-100 border-emerald-500 ring-2 ring-emerald-500/30 shadow-lg'
+                          : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-emerald-500/50'
                       }`}
                     >
                       {/* Machine Header */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div>
                           <span className="text-[10px] font-mono text-slate-400 block">{m.machineCode}</span>
-                          <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-300 transition line-clamp-1">
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition line-clamp-1">
                             {m.machineName}
                           </h4>
                         </div>
                         <span
                           className={`px-2 py-0.5 rounded-md text-xs font-mono font-black tabular-nums ${
                             m.oeePercent >= 75
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              ? 'bg-emerald-500/20 text-emerald-700 border border-emerald-500/30'
                               : m.oeePercent >= 60
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              ? 'bg-amber-500/20 text-amber-800 border border-amber-500/30'
+                              : 'bg-rose-500/20 text-rose-700 border border-rose-500/30'
                           }`}
                         >
                           {toPersianDigits(m.oeePercent)}٪
@@ -467,28 +467,28 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       </div>
 
                       {/* Vertical Bars Visual */}
-                      <div className="relative h-36 bg-slate-900/90 rounded-lg border border-slate-800/80 px-3 pt-5 pb-2 flex items-end justify-around gap-2">
+                      <div className="relative h-36 bg-white rounded-lg border border-slate-200 px-3 pt-5 pb-2 flex items-end justify-around gap-2">
                         {/* 85% World-Class Benchmark Dashed Line */}
                         <div
                           className="absolute inset-x-0 border-t border-dashed border-emerald-400/50 pointer-events-none flex justify-end px-1.5"
                           style={{ bottom: '85%' }}
                         >
-                          <span className="text-[9px] font-mono text-emerald-400/90 -mt-3.5 bg-slate-900/90 px-1 rounded">
+                          <span className="text-[9px] font-mono text-emerald-400/90 -mt-3.5 bg-white px-1 rounded">
                             ۸۵٪
                           </span>
                         </div>
 
                         {[
-                          { label: 'OEE', val: m.oeePercent, color: 'bg-emerald-500 group-hover:bg-emerald-400', text: 'text-emerald-300' },
-                          { label: 'A', val: m.availabilityPercent, color: 'bg-cyan-400 group-hover:bg-cyan-300', text: 'text-cyan-300' },
-                          { label: 'P', val: m.performancePercent, color: 'bg-amber-400 group-hover:bg-amber-300', text: 'text-amber-300' },
-                          { label: 'Q', val: m.qualityPercent, color: 'bg-purple-400 group-hover:bg-purple-300', text: 'text-purple-300' },
+                          { label: 'OEE', val: m.oeePercent, color: 'bg-emerald-500 group-hover:bg-emerald-400', text: 'text-emerald-700' },
+                          { label: 'A', val: m.availabilityPercent, color: 'bg-cyan-400 group-hover:bg-cyan-300', text: 'text-cyan-700' },
+                          { label: 'P', val: m.performancePercent, color: 'bg-amber-400 group-hover:bg-amber-300', text: 'text-amber-800' },
+                          { label: 'Q', val: m.qualityPercent, color: 'bg-purple-400 group-hover:bg-purple-300', text: 'text-purple-700' },
                         ].map(bar => (
                           <div key={bar.label} className="flex flex-col items-center flex-1 h-full justify-end">
                             <span className={`text-[9px] font-mono font-bold mb-1 tabular-nums ${bar.text}`}>
                               {toPersianDigits(Math.round(bar.val))}٪
                             </span>
-                            <div className="w-full max-w-[22px] bg-slate-800 rounded-t-md h-24 flex items-end overflow-hidden">
+                            <div className="w-full max-w-[22px] bg-slate-100 rounded-t-md h-24 flex items-end overflow-hidden">
                               <div
                                 className={`w-full rounded-t-md transition-all duration-300 ${bar.color}`}
                                 style={{ height: `${Math.min(100, Math.max(8, bar.val))}%` }}
@@ -500,14 +500,14 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       </div>
 
                       {/* Quick Downtime Summary Footer inside Chart Card */}
-                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 space-y-1.5 text-[10px]">
+                      <div className="mt-3 pt-2.5 border-t border-slate-200 space-y-1.5 text-[10px]">
                         <div className="flex items-center justify-between font-mono">
                           <span className="text-rose-400">توقف اضطراری/خرابی:</span>
-                          <span className="font-bold text-rose-300">{formatNumber(unplannedMin)} دقیقه</span>
+                          <span className="font-bold text-rose-700">{formatNumber(unplannedMin)} دقیقه</span>
                         </div>
                         <div className="flex items-center justify-between font-mono">
                           <span className="text-amber-400">تعویض قالب/برنامه‌ای:</span>
-                          <span className="font-bold text-amber-300">{formatNumber(plannedMin)} دقیقه</span>
+                          <span className="font-bold text-amber-800">{formatNumber(plannedMin)} دقیقه</span>
                         </div>
                         <div className="pt-1 flex items-center justify-between text-emerald-400 font-bold group-hover:translate-x-[-2px] transition-transform">
                           <span>مشاهده پنل ریز توقفات</span>
@@ -522,7 +522,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           ) : (
             /* Chart Mode 2: Interactive Stacked Downtime Breakdown Bars per Machine */
             <div className="space-y-3.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-700 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200">
                 <div className="flex flex-wrap items-center gap-4">
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-xs bg-rose-500 inline-block" />
@@ -561,16 +561,16 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       onClick={() => openMachineDrawer(m, 'ALL')}
                       className={`p-3.5 rounded-xl border transition cursor-pointer ${
                         isSelected
-                          ? 'bg-slate-800/90 border-rose-500 ring-2 ring-rose-500/30'
-                          : 'bg-slate-950 border-slate-800/90 hover:bg-slate-900 hover:border-slate-700'
+                          ? 'bg-slate-100 border-rose-500 ring-2 ring-rose-500/30'
+                          : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-200'
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] font-bold">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-bold">
                             {m.machineCode}
                           </span>
-                          <span className="text-xs font-bold text-white">{m.machineName}</span>
+                          <span className="text-xs font-bold text-slate-900">{m.machineName}</span>
                           <span className="text-[11px] text-slate-400 hidden md:inline">({m.activePartName})</span>
                         </div>
                         <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums">
@@ -583,14 +583,14 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                           <span className="text-cyan-400">
                             توقف جزئی/سرعت: <strong>{formatNumber(speedMin)}m</strong>
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold">
+                          <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 border border-rose-500/30 font-bold">
                             کل اتلاف: {formatNumber(totalLossMin)} دقیقه
                           </span>
                         </div>
                       </div>
 
                       {/* Interactive Stacked Horizontal Bar */}
-                      <div className="w-full h-5 bg-slate-900 rounded-lg overflow-hidden flex border border-slate-800 p-0.5 gap-0.5">
+                      <div className="w-full h-5 bg-white rounded-lg overflow-hidden flex border border-slate-200 p-0.5 gap-0.5">
                         <div
                           onClick={e => {
                             e.stopPropagation();
@@ -645,10 +645,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
       {/* Six Big Losses Analysis (تحلیل شش ضایعه بزرگ استاندارد TPM) */}
       {data && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
                 تحلیل پارتو شش ضایعه بزرگ تجهیزات (Six Big Losses Breakdown - TPM)
               </h3>
@@ -665,10 +665,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
             {data.sixBigLossesAggregate.map(loss => {
               const badgeColor =
                 loss.oeeFactor === 'AVAILABILITY_LOSS'
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                  ? 'bg-cyan-500/15 text-cyan-700 border-cyan-500/30'
                   : loss.oeeFactor === 'PERFORMANCE_LOSS'
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                  : 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+                  ? 'bg-amber-500/15 text-amber-800 border-amber-500/30'
+                  : 'bg-purple-500/15 text-purple-700 border-purple-500/30';
 
               const barColor =
                 loss.oeeFactor === 'AVAILABILITY_LOSS'
@@ -697,7 +697,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                     })[0];
                     if (topMachine) openMachineDrawer(topMachine, targetCat);
                   }}
-                  className="bg-slate-950 border border-slate-800/90 hover:border-slate-600 rounded-xl p-3.5 flex flex-col justify-between space-y-2.5 cursor-pointer transition group"
+                  className="bg-slate-50 border border-slate-200 hover:border-slate-600 rounded-xl p-3.5 flex flex-col justify-between space-y-2.5 cursor-pointer transition group"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
@@ -708,20 +708,20 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         {toPersianDigits(loss.shareOfTotalLossPercent)}٪ از کل اتلاف
                       </span>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-300 transition mt-2">
+                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition mt-2">
                       {loss.lossTitleFa}
                     </h4>
                     <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      <strong className="text-slate-300">مصداق کارگاهی:</strong> {loss.rootCauseExampleFa}
+                      <strong className="text-slate-700">مصداق کارگاهی:</strong> {loss.rootCauseExampleFa}
                     </p>
                   </div>
 
                   <div className="space-y-1.5 pt-2 border-t border-slate-900">
                     <div className="flex items-center justify-between text-[11px] font-mono tabular-nums">
-                      <span className="text-slate-300">زمان تلف‌شده: <strong>{formatNumber(loss.lostTimeMinutes)} دقیقه</strong></span>
+                      <span className="text-slate-700">زمان تلف‌شده: <strong>{formatNumber(loss.lostTimeMinutes)} دقیقه</strong></span>
                       <span className="text-amber-400">معادل: <strong>{formatNumber(loss.lostPiecesEquivalent)} قطعه</strong></span>
                     </div>
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                       <div
                         className={`${barColor} h-full rounded-full`}
                         style={{ width: `${Math.min(100, loss.shareOfTotalLossPercent)}%` }}
@@ -740,9 +740,9 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
       {/* Per-Machine OEE Matrix Table */}
       {data && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white flex items-center gap-2">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
               جدول تحلیلی OEE به تفکیک دستگاه‌های پرس و خطوط جوشکاری ({toPersianDigits(data.machines.length)} دستگاه)
             </h3>
@@ -751,7 +751,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+              <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
                 <tr>
                   <th className="py-3 px-3">کد و نام دستگاه</th>
                   <th className="py-3 px-3">قطعه فعال روی خط</th>
@@ -766,7 +766,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   <th className="py-3 px-3 text-center">پنل توقفات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono tabular-nums">
+              <tbody className="divide-y divide-slate-100 font-mono tabular-nums">
                 {data.machines.map(m => (
                   <tr
                     key={m.machineId}
@@ -774,15 +774,15 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                     className={`transition cursor-pointer ${
                       selectedMachine?.machineId === m.machineId
                         ? 'bg-emerald-950/30 hover:bg-emerald-950/40'
-                        : 'hover:bg-slate-800/50'
+                        : 'hover:bg-slate-100'
                     }`}
                   >
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-100">{m.machineName}</div>
+                      <div className="font-bold text-slate-900">{m.machineName}</div>
                       <div className="text-[11px] text-slate-400 font-mono">{m.machineCode} • {m.hallName}</div>
                     </td>
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-medium text-slate-200">{m.activePartName}</div>
+                      <div className="font-medium text-slate-900">{m.activePartName}</div>
                       <div className="text-[10px] text-slate-400 font-mono">{m.processType} • {toPersianDigits(m.tonnage)}T</div>
                     </td>
                     <td className="py-3 px-3 text-center font-bold text-cyan-400">
@@ -799,10 +799,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         {toPersianDigits(m.oeePercent)}٪
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-center text-slate-300">
+                    <td className="py-3 px-3 text-center text-slate-700">
                       {toPersianDigits(m.teepPercent)}٪
                     </td>
-                    <td className="py-3 px-3 text-center text-[11px] text-slate-300">
+                    <td className="py-3 px-3 text-center text-[11px] text-slate-700">
                       {toPersianDigits(m.actualCycleTimeSeconds)}s / <span className="text-slate-500">{toPersianDigits(m.idealCycleTimeSeconds)}s</span>
                     </td>
                     <td className="py-3 px-3 text-center">
@@ -812,28 +812,28 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                     </td>
                     <td className="py-3 px-3 text-center font-sans">
                       {m.gradeClass === 'WORLD_CLASS_A' && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 border border-emerald-500/30">
                           کلاس جهانی A
                         </span>
                       )}
                       {m.gradeClass === 'ACCEPTABLE_B' && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-700 border border-cyan-500/30">
                           مطلوب B
                         </span>
                       )}
                       {m.gradeClass === 'NEEDS_IMPROVEMENT_C' && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-800 border border-amber-500/30">
                           نیازمند بهبود C
                         </span>
                       )}
                       {m.gradeClass === 'CRITICAL_D' && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-700 border border-rose-500/30">
                           بحرانی D
                         </span>
                       )}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-sans font-bold">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 text-[10px] font-sans font-bold">
                         <Eye className="w-3.5 h-3.5" />
                         ریز توقفات
                       </span>
@@ -850,8 +850,8 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       {data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Shift OEE Comparison */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3.5">
-            <h3 className="text-xs font-bold text-white flex items-center gap-2">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3.5">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
               <Clock className="w-4 h-4 text-cyan-400" />
               مقایسه شاخص OEE به تفکیک شیفت‌های کاری کارخانه
             </h3>
@@ -859,12 +859,12 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               {data.shiftComparison.map(sh => (
                 <div
                   key={sh.shiftCode}
-                  className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                 >
                   <div>
-                    <div className="text-xs font-bold text-slate-200">{sh.shiftNameFa}</div>
+                    <div className="text-xs font-bold text-slate-900">{sh.shiftNameFa}</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      سرپرست شیفت: {sh.supervisorName} • تیراژ سالم: <span className="font-mono text-slate-200">{formatNumber(sh.totalPieces)}</span> قطعه
+                      سرپرست شیفت: {sh.supervisorName} • تیراژ سالم: <span className="font-mono text-slate-900">{formatNumber(sh.totalPieces)}</span> قطعه
                     </div>
                   </div>
                   <div className="flex items-center gap-3 font-mono text-xs tabular-nums">
@@ -880,7 +880,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       <span className="text-[10px] text-slate-500 block font-sans">کیفیت</span>
                       <span className="text-purple-400 font-bold">{toPersianDigits(sh.qualityPercent)}٪</span>
                     </div>
-                    <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-black">
+                    <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 font-black">
                       OEE: {toPersianDigits(sh.oeePercent)}٪
                     </div>
                   </div>
@@ -890,20 +890,20 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           </div>
 
           {/* Interactive OEE Improvement Simulator */}
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-5 space-y-4">
+          <div className="bg-white border border-indigo-500/30 rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-white flex items-center gap-2">
+              <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
                 شبیه‌ساز تعاملی ارتقای OEE و محاسبه تیراژ آزادشده (What-If)
               </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 tabular-nums">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-black bg-indigo-500/20 text-indigo-700 border border-indigo-500/30 tabular-nums">
                 OEE شبیه‌سازی: {toPersianDigits(simOee)}٪
               </span>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <div className="flex justify-between text-slate-300 mb-1">
+                <div className="flex justify-between text-slate-700 mb-1">
                   <span>کاهش توقفات تعویض قالب (SMED) و افزایش دسترس‌پذیری:</span>
                   <span className="font-mono font-bold text-cyan-400 tabular-nums">+{toPersianDigits(simAvailBoost)}٪ (به {toPersianDigits(simA)}٪)</span>
                 </div>
@@ -919,7 +919,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               </div>
 
               <div>
-                <div className="flex justify-between text-slate-300 mb-1">
+                <div className="flex justify-between text-slate-700 mb-1">
                   <span>حذف توقفات جزئی فیدر و بهبود سرعت ضرب (Performance):</span>
                   <span className="font-mono font-bold text-amber-400 tabular-nums">+{toPersianDigits(simPerfBoost)}٪ (به {toPersianDigits(simP)}٪)</span>
                 </div>
@@ -935,7 +935,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               </div>
 
               <div>
-                <div className="flex justify-between text-slate-300 mb-1">
+                <div className="flex justify-between text-slate-700 mb-1">
                   <span>کاهش ضایعات کشش و بهبود نرخ کیفیت (Quality):</span>
                   <span className="font-mono font-bold text-purple-400 tabular-nums">+{toPersianDigits(simQualBoost)}٪ (به {toPersianDigits(simQ)}٪)</span>
                 </div>
@@ -960,7 +960,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               </div>
               <div className="text-left font-mono tabular-nums">
                 <span className="text-xl font-black text-emerald-400">+{formatNumber(extraMonthlyParts)}</span>
-                <span className="block text-[10px] text-slate-300 font-sans">قطعه خودرویی / ماه</span>
+                <span className="block text-[10px] text-slate-700 font-sans">قطعه خودرویی / ماه</span>
               </div>
             </div>
           </div>
@@ -970,27 +970,27 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
       {/* Slide-Over Drawer Panel for Machine Granular Downtimes (پنل کشویی جزئیات ریز توقفات و کالبدشکافی دستگاه) */}
       {selectedMachine && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex justify-end"
+          className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-xs flex justify-end"
           onClick={() => setSelectedMachine(null)}
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="bg-slate-900 border-r border-slate-700 w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden"
+            className="bg-white border-r border-slate-200 w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden"
           >
             {/* Sticky Drawer Header */}
-            <div className="p-5 bg-slate-950 border-b border-slate-800 space-y-3 shrink-0">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 space-y-3 shrink-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 font-mono text-xs font-bold">
                       {selectedMachine.machineCode}
                     </span>
-                    <h3 className="text-base font-black text-white">
+                    <h3 className="text-base font-black text-slate-900">
                       پنل کشویی جزئیات ریزِ توقفات: {selectedMachine.machineName}
                     </h3>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    {selectedMachine.hallName} • قطعه فعال: <strong className="text-slate-200">{selectedMachine.activePartName}</strong> • ظرفیت: {toPersianDigits(selectedMachine.tonnage)} تن
+                    {selectedMachine.hallName} • قطعه فعال: <strong className="text-slate-900">{selectedMachine.activePartName}</strong> • ظرفیت: {toPersianDigits(selectedMachine.tonnage)} تن
                   </p>
                 </div>
 
@@ -1010,7 +1010,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   <button
                     type="button"
                     onClick={() => setSelectedMachine(null)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-100 text-slate-700 hover:text-slate-900 cursor-pointer transition"
                     title="بستن پنل کشویی"
                   >
                     <X className="w-4 h-4" />
@@ -1030,7 +1030,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition cursor-pointer shrink-0 ${
                         m.machineId === selectedMachine.machineId
                           ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800'
+                          : 'bg-white hover:bg-slate-100 text-slate-400 border border-slate-200'
                       }`}
                     >
                       {m.machineCode} ({toPersianDigits(m.oeePercent)}٪)
@@ -1044,7 +1044,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* 4 Compact OEE KPI Gauges for Selected Machine */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-right">
+                <div className="bg-slate-50 border border-emerald-500/30 rounded-xl p-3 text-right">
                   <span className="text-[10px] text-emerald-400 font-bold block">شاخص کل OEE دستگاه</span>
                   <div className="text-xl font-black text-emerald-400 font-mono tabular-nums mt-0.5">
                     {toPersianDigits(selectedMachine.oeePercent)}٪
@@ -1054,7 +1054,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-3 text-right">
+                <div className="bg-slate-50 border border-cyan-500/30 rounded-xl p-3 text-right">
                   <span className="text-[10px] text-cyan-400 font-bold block">۱. دسترس‌پذیری (A)</span>
                   <div className="text-xl font-black text-cyan-400 font-mono tabular-nums mt-0.5">
                     {toPersianDigits(selectedMachine.availabilityPercent)}٪
@@ -1064,7 +1064,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-right">
+                <div className="bg-slate-50 border border-amber-500/30 rounded-xl p-3 text-right">
                   <span className="text-[10px] text-amber-400 font-bold block">۲. عملکرد سرعت (P)</span>
                   <div className="text-xl font-black text-amber-400 font-mono tabular-nums mt-0.5">
                     {toPersianDigits(selectedMachine.performancePercent)}٪
@@ -1074,7 +1074,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-950 border border-purple-500/30 rounded-xl p-3 text-right">
+                <div className="bg-slate-50 border border-purple-500/30 rounded-xl p-3 text-right">
                   <span className="text-[10px] text-purple-400 font-bold block">۳. کیفیت تولید (Q)</span>
                   <div className="text-xl font-black text-purple-400 font-mono tabular-nums mt-0.5">
                     {toPersianDigits(selectedMachine.qualityPercent)}٪
@@ -1154,7 +1154,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                 return (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                         <Filter className="w-3.5 h-3.5 text-rose-400" />
                         تفکیک دسته‌بندی توقفات دستگاه (برای فیلتر روی هر کارت کلیک کنید):
                       </h4>
@@ -1180,16 +1180,16 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         className={`p-3 rounded-xl border text-right transition cursor-pointer ${
                           drawerCategoryFilter === 'UNPLANNED_BREAKDOWN'
                             ? 'bg-rose-950/50 border-rose-500 ring-2 ring-rose-500/30'
-                            : 'bg-slate-950 border-slate-800 hover:border-rose-500/40'
+                            : 'bg-slate-50 border-slate-200 hover:border-rose-500/40'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-rose-400">توقفات برنامه‌ریزی‌نشده و خرابی</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-700 font-mono text-[10px]">
                             {toPersianDigits(unplannedLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
                           </span>
                         </div>
-                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                        <div className="text-lg font-black text-slate-900 font-mono mt-1 tabular-nums">
                           {formatNumber(unplannedTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
                         </div>
                         <span className="text-[10px] text-slate-400 block mt-0.5">
@@ -1207,16 +1207,16 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         className={`p-3 rounded-xl border text-right transition cursor-pointer ${
                           drawerCategoryFilter === 'PLANNED_SETUP'
                             ? 'bg-amber-950/50 border-amber-500 ring-2 ring-amber-500/30'
-                            : 'bg-slate-950 border-slate-800 hover:border-amber-500/40'
+                            : 'bg-slate-50 border-slate-200 hover:border-amber-500/40'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-amber-400">تعویض قالب (SMED) و برنامه‌ای</span>
-                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-800 font-mono text-[10px]">
                             {toPersianDigits(plannedLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
                           </span>
                         </div>
-                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                        <div className="text-lg font-black text-slate-900 font-mono mt-1 tabular-nums">
                           {formatNumber(plannedTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
                         </div>
                         <span className="text-[10px] text-slate-400 block mt-0.5">
@@ -1234,16 +1234,16 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         className={`p-3 rounded-xl border text-right transition cursor-pointer ${
                           drawerCategoryFilter === 'MINOR_STOP'
                             ? 'bg-cyan-950/50 border-cyan-500 ring-2 ring-cyan-500/30'
-                            : 'bg-slate-950 border-slate-800 hover:border-cyan-500/40'
+                            : 'bg-slate-50 border-slate-200 hover:border-cyan-500/40'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-cyan-400">توقفات جزئی و افت سرعت</span>
-                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-700 font-mono text-[10px]">
                             {toPersianDigits(minorLogs.reduce((s, l) => s + l.occurrencesCount, 0))} رخداد
                           </span>
                         </div>
-                        <div className="text-lg font-black text-white font-mono mt-1 tabular-nums">
+                        <div className="text-lg font-black text-slate-900 font-mono mt-1 tabular-nums">
                           {formatNumber(minorTotalMin)} <span className="text-xs font-normal text-slate-400">دقیقه</span>
                         </div>
                         <span className="text-[10px] text-slate-400 block mt-0.5">
@@ -1253,9 +1253,9 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                     </div>
 
                     {/* Granular Downtime Events List */}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                           <Wrench className="w-3.5 h-3.5 text-amber-400" />
                           لیست ریزِ توقفات ثبت‌شده دستگاه ({toPersianDigits(filteredLogs.length)} ردیف)
                         </span>
@@ -1268,10 +1268,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                         {filteredLogs.map(item => {
                           const catBadge =
                             item.category === 'UNPLANNED_BREAKDOWN'
-                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              ? 'bg-rose-500/15 text-rose-700 border-rose-500/30'
                               : item.category === 'PLANNED_SETUP'
-                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+                              ? 'bg-amber-500/15 text-amber-800 border-amber-500/30'
+                              : 'bg-cyan-500/15 text-cyan-700 border-cyan-500/30';
 
                           const barColor =
                             item.category === 'UNPLANNED_BREAKDOWN'
@@ -1283,11 +1283,11 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                           return (
                             <div
                               key={item.id}
-                              className="p-3.5 rounded-xl bg-slate-900 border border-slate-800/90 space-y-2"
+                              className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] font-bold">
+                                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">
                                     {item.reasonCode}
                                   </span>
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${catBadge}`}>
@@ -1298,30 +1298,30 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                                   <span className="text-slate-400 text-[11px]">
                                     {toPersianDigits(item.occurrencesCount)} مرتبه
                                   </span>
-                                  <span className="px-2.5 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 font-black">
+                                  <span className="px-2.5 py-0.5 rounded-md bg-rose-500/20 text-rose-700 border border-rose-500/30 font-black">
                                     {formatNumber(item.durationMinutes)} دقیقه
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="text-xs font-bold text-slate-100">{item.reasonTitleFa}</div>
+                              <div className="text-xs font-bold text-slate-900">{item.reasonTitleFa}</div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                                 <div>
-                                  <strong className="text-slate-300">بازه زمانی و شیفت:</strong> {item.timeRangeFa}
+                                  <strong className="text-slate-700">بازه زمانی و شیفت:</strong> {item.timeRangeFa}
                                 </div>
                                 <div>
-                                  <strong className="text-slate-300">مسئول رسیدگی:</strong> {item.operatorOrTechName}
+                                  <strong className="text-slate-700">مسئول رسیدگی:</strong> {item.operatorOrTechName}
                                 </div>
                                 <div className="sm:col-span-2">
-                                  <strong className="text-rose-300">علت ریشه‌ای (Root Cause):</strong> {item.rootCauseFa}
+                                  <strong className="text-rose-700">علت ریشه‌ای (Root Cause):</strong> {item.rootCauseFa}
                                 </div>
                                 <div className="sm:col-span-2 text-emerald-400">
                                   <strong>اقدام اصلاحی و پیشگیرانه:</strong> {item.correctiveActionFa}
                                 </div>
                               </div>
 
-                              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                 <div
                                   className={`${barColor} h-full rounded-full`}
                                   style={{ width: `${Math.min(100, Math.max(6, item.sharePercent))}%` }}
@@ -1337,8 +1337,8 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               })()}
 
               {/* Time Waterfall Bars */}
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5 text-xs">
-                <div className="text-slate-200 font-bold">آبشار تبدیل زمان برنامه‌ریزی‌شده به زمان خالص ارزش‌آفرین (دقیقه):</div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 text-xs">
+                <div className="text-slate-900 font-bold">آبشار تبدیل زمان برنامه‌ریزی‌شده به زمان خالص ارزش‌آفرین (دقیقه):</div>
                 {[
                   { label: '۱. زمان برنامه‌ریزی‌شده تولید (Planned Production Time)', val: selectedMachine.plannedProductionMinutes, color: 'bg-slate-600' },
                   { label: '۲. زمان کارکرد واقعی پس از کسر توقفات (Run Time)', val: selectedMachine.operatingRunMinutes, color: 'bg-cyan-500' },
@@ -1349,10 +1349,10 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   return (
                     <div key={idx} className="space-y-1">
                       <div className="flex justify-between text-[11px]">
-                        <span className="text-slate-300">{row.label}</span>
-                        <span className="font-mono font-bold text-white tabular-nums">{formatNumber(row.val)} دقیقه ({toPersianDigits(pct)}٪)</span>
+                        <span className="text-slate-700">{row.label}</span>
+                        <span className="font-mono font-bold text-slate-900 tabular-nums">{formatNumber(row.val)} دقیقه ({toPersianDigits(pct)}٪)</span>
                       </div>
-                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div className={`${row.color} h-full rounded-full`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
@@ -1361,12 +1361,12 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               </div>
 
               {/* Machine Six Big Losses */}
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
-                <div className="text-xs font-bold text-slate-200">تفکیک ۶ ضایعه بزرگ استاندارد TPM در این دستگاه:</div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
+                <div className="text-xs font-bold text-slate-900">تفکیک ۶ ضایعه بزرگ استاندارد TPM در این دستگاه:</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {selectedMachine.sixBigLosses.map(l => (
-                    <div key={l.lossNumber} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                      <div className="flex justify-between font-bold text-slate-200">
+                    <div key={l.lossNumber} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs">
+                      <div className="flex justify-between font-bold text-slate-900">
                         <span>{l.lossTitleFa}</span>
                         <span className="font-mono text-rose-400 tabular-nums">{formatNumber(l.lostTimeMinutes)} دقیقه</span>
                       </div>
@@ -1382,22 +1382,22 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
       {/* Log Shift OEE Modal */}
       {isLogModalOpen && data && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">ثبت آمار کارکرد شیفت و بروزرسانی OEE</h3>
-              <button onClick={() => setIsLogModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">ثبت آمار کارکرد شیفت و بروزرسانی OEE</h3>
+              <button onClick={() => setIsLogModalOpen(false)} className="text-slate-400 hover:text-slate-900 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleLogSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">انتخاب دستگاه پرس / ایستگاه:</label>
+                <label className="block text-slate-700 font-medium mb-1">انتخاب دستگاه پرس / ایستگاه:</label>
                 <select
                   value={logMachineId}
                   onChange={e => setLogMachineId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
                 >
                   {data.machines.map(m => (
                     <option key={m.machineId} value={m.machineId}>
@@ -1408,11 +1408,11 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">نوع رویداد شیفت:</label>
+                <label className="block text-slate-700 font-medium mb-1">نوع رویداد شیفت:</label>
                 <select
                   value={logEventType}
                   onChange={e => setLogEventType(e.target.value as any)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
                 >
                   <option value="PRODUCTION_RUN">ثبت ضرب تولید و قطعه سالم شیفت</option>
                   <option value="PLANNED_DOWNTIME">توقف برنامه‌ریزی‌شده (تعویض قالب SMED / نت PM)</option>
@@ -1423,51 +1423,51 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
               {logEventType === 'PRODUCTION_RUN' ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">تعداد ضرب ثبت‌شده:</label>
+                    <label className="block text-slate-700 font-medium mb-1">تعداد ضرب ثبت‌شده:</label>
                     <input
                       type="number"
                       value={logStrokes}
                       onChange={e => setLogStrokes(Number(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">تعداد ضایعات:</label>
+                    <label className="block text-slate-700 font-medium mb-1">تعداد ضایعات:</label>
                     <input
                       type="number"
                       value={logScrap}
                       onChange={e => setLogScrap(Number(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                     />
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">مدت زمان توقف (دقیقه):</label>
+                  <label className="block text-slate-700 font-medium mb-1">مدت زمان توقف (دقیقه):</label>
                   <input
                     type="number"
                     value={logDurationMin}
                     onChange={e => setLogDurationMin(Number(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">شرح عملیات یا علت توقف:</label>
+                <label className="block text-slate-700 font-medium mb-1">شرح عملیات یا علت توقف:</label>
                 <input
                   type="text"
                   value={logReason}
                   onChange={e => setLogReason(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsLogModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 cursor-pointer"
                 >
                   انصراف
                 </button>

@@ -237,9 +237,9 @@ export const CustomReportsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5 text-right text-slate-100" dir="rtl">
+    <div className="space-y-5 text-right text-slate-900" dir="rtl">
       {/* Report Type Selector & Action Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-slate-400 font-medium">نوع گزارش تحلیلی:</span>
           {[
@@ -255,7 +255,7 @@ export const CustomReportsView: React.FC = () => {
               className={`px-3 py-1.5 rounded font-medium transition-colors ${
                 reportType === type.id
                   ? 'bg-blue-600 text-white font-bold shadow-sm'
-                  : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
               }`}
             >
               {type.label}
@@ -266,7 +266,7 @@ export const CustomReportsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 rounded text-xs font-medium transition-colors"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>خروجی اکسل امن (CSV)</span>
@@ -275,7 +275,7 @@ export const CustomReportsView: React.FC = () => {
       </div>
 
       {/* Filter Ribbon */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4 space-y-3">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
           {/* Material Grade */}
           <div>
@@ -286,7 +286,7 @@ export const CustomReportsView: React.FC = () => {
                 setMaterialGrade(e.target.value);
                 setCoilPackNumber(''); // Reset pack on grade change so dynamic list reflects accurately
               }}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value="">همه گریدها</option>
               <option value="DC04">DC04 (کشش عمیق)</option>
@@ -306,7 +306,7 @@ export const CustomReportsView: React.FC = () => {
             <select
               value={coilPackNumber}
               onChange={e => setCoilPackNumber(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
             >
               <option value="">همه کویل‌پک‌ها ({toPersianDigits(matchingCoilPacks.length)})</option>
               {matchingCoilPacks.map(p => (
@@ -323,7 +323,7 @@ export const CustomReportsView: React.FC = () => {
             <select
               value={contractId}
               onChange={e => setContractId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
             >
               <option value="">همه قراردادها</option>
               {contractsList.map(c => (
@@ -340,7 +340,7 @@ export const CustomReportsView: React.FC = () => {
             <select
               value={warehouseId}
               onChange={e => setWarehouseId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value="">همه انبارها</option>
               <option value="WH-RAW">انبار مرکزی رول و ورق ساپکو</option>
@@ -356,7 +356,7 @@ export const CustomReportsView: React.FC = () => {
             <select
               value={ownership}
               onChange={e => setOwnership(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value="">همه انواع مالکیت</option>
               <option value="SAPCO_SUPPLIER_OWNED">امانی ساپکو</option>
@@ -381,7 +381,7 @@ export const CustomReportsView: React.FC = () => {
 
         {/* Dynamic Quick Tag Selection for Coil Packs */}
         {matchingCoilPacks.length > 0 && (
-          <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2 flex-wrap">
+          <div className="pt-2 border-t border-slate-200 flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-slate-400 flex items-center gap-1">
               <Tag className="w-3 h-3 text-blue-400" />
               کویل‌پک‌های متناظر با جنس انتخاب‌شده:
@@ -394,7 +394,7 @@ export const CustomReportsView: React.FC = () => {
                 className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors border ${
                   coilPackNumber === p.pack
                     ? 'bg-blue-600 text-white border-blue-500'
-                    : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-200'
                 }`}
               >
                 {p.pack} ({formatNumber(p.remainingKg)} kg)
@@ -405,11 +405,11 @@ export const CustomReportsView: React.FC = () => {
       </div>
 
       {/* SPEC-BASED AGGREGATION SUMMARY CARD: "کلا من چند تا کویل با چه مشخصات کالایی دارم" */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
           <div className="flex items-center gap-2">
             <Boxes className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-xs font-bold text-slate-200">
+            <h3 className="text-xs font-bold text-slate-900">
               تجمیع موجودی کلاف‌ها بر اساس مشخصات کالا (گرید، ضخامت، عرض و پکینگ)
             </h3>
           </div>
@@ -420,7 +420,7 @@ export const CustomReportsView: React.FC = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-right">
-            <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-medium">
+            <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-medium">
               <tr>
                 <th className="py-2 px-3">گرید ورق فولادی</th>
                 <th className="py-2 px-3">ضخامت</th>
@@ -431,7 +431,7 @@ export const CustomReportsView: React.FC = () => {
                 <th className="py-2 px-3 text-left font-mono">مانده فعلی در انبار (kg)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {aggregatedSpecs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-4 text-center text-slate-500">
@@ -440,19 +440,19 @@ export const CustomReportsView: React.FC = () => {
                 </tr>
               ) : (
                 aggregatedSpecs.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/30 font-sans">
-                    <td className="py-2 px-3 font-bold text-blue-300">{item.grade}</td>
+                  <tr key={idx} className="hover:bg-slate-100 font-sans">
+                    <td className="py-2 px-3 font-bold text-blue-700">{item.grade}</td>
                     <td className="py-2 px-3 font-mono">{item.thicknessMm} mm</td>
                     <td className="py-2 px-3 font-mono">{item.widthMm} mm</td>
                     <td className="py-2 px-3 text-center">
-                      <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 text-blue-300 rounded font-mono font-bold">
+                      <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 text-blue-700 rounded font-mono font-bold">
                         {toPersianDigits(item.coilCount)} کلاف
                       </span>
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 flex-wrap">
                         {item.packs.map(p => (
-                          <span key={p} className="px-1.5 py-0.2 bg-slate-950 border border-slate-700 text-[10px] font-mono rounded text-slate-300">
+                          <span key={p} className="px-1.5 py-0.2 bg-slate-50 border border-slate-200 text-[10px] font-mono rounded text-slate-700">
                             {p}
                           </span>
                         ))}
@@ -474,12 +474,12 @@ export const CustomReportsView: React.FC = () => {
 
       {/* Summary KPI Badges */}
       {reportData.summary && Object.keys(reportData.summary).length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center gap-6 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-6 text-xs">
           <div className="text-slate-400 font-medium">خلاصه تراز فیلترشده:</div>
           {reportData.summary.totalCoils !== undefined && (
             <div>
               <span className="text-slate-400">تعداد کلاف: </span>
-              <span className="font-bold font-mono text-white">{toPersianDigits(reportData.summary.totalCoils)}</span>
+              <span className="font-bold font-mono text-slate-900">{toPersianDigits(reportData.summary.totalCoils)}</span>
             </div>
           )}
           {reportData.summary.totalWeightKg !== undefined && (
@@ -498,10 +498,10 @@ export const CustomReportsView: React.FC = () => {
       )}
 
       {/* Dynamic Data Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-medium">
+            <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-medium">
               <tr>
                 {reportData.columns.map((col, idx) => (
                   <th key={idx} className="py-2.5 px-3">
@@ -510,7 +510,7 @@ export const CustomReportsView: React.FC = () => {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {reportData.rows.length === 0 ? (
                 <tr>
                   <td colSpan={reportData.columns.length || 6} className="py-8 text-center text-slate-500">
@@ -519,7 +519,7 @@ export const CustomReportsView: React.FC = () => {
                 </tr>
               ) : (
                 reportData.rows.map((row, rowIdx) => (
-                  <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={rowIdx} className="hover:bg-slate-100 transition-colors">
                     {Object.values(row).map((val: any, valIdx) => (
                       <td key={valIdx} className="py-2.5 px-3">
                         {typeof val === 'number' ? (

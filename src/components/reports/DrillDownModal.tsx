@@ -25,17 +25,17 @@ export const DrillDownModal: React.FC<DrillDownModalProps> = ({
   if (!isOpen || !data) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-start justify-between border-b border-slate-200 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-100">{data.title}</h3>
+                <h3 className="text-base font-bold text-slate-900">{data.title}</h3>
                 {data.badge && (
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${data.badge.color}`}>
                     {data.badge.text}
@@ -50,7 +50,7 @@ export const DrillDownModal: React.FC<DrillDownModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -63,15 +63,15 @@ export const DrillDownModal: React.FC<DrillDownModalProps> = ({
               key={idx}
               className={`p-3 rounded-xl border text-xs ${
                 f.isHighlight
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-300'
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-800'
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
               }`}
             >
               <div className="text-[11px] text-slate-400 mb-1">{f.label}</div>
               <div
                 className={`font-bold ${
                   f.isMono ? 'font-mono' : ''
-                } ${f.isHighlight ? 'text-amber-400 text-sm' : 'text-slate-100'}`}
+                } ${f.isHighlight ? 'text-amber-400 text-sm' : 'text-slate-900'}`}
               >
                 {typeof f.value === 'number' ? formatNumber(f.value) : f.value}
               </div>
@@ -82,19 +82,19 @@ export const DrillDownModal: React.FC<DrillDownModalProps> = ({
         {/* Additional Details List if present */}
         {data.detailsList && data.detailsList.length > 0 && (
           <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-bold text-slate-300">اقلام و مراحل سند مبدأ:</h4>
+            <h4 className="text-xs font-bold text-slate-700">اقلام و مراحل سند مبدأ:</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {data.detailsList.map((item, idx) => (
                 <div
                   key={idx}
-                  className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs space-y-1"
+                  className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1"
                 >
-                  <div className="font-bold text-slate-200">{item.title}</div>
+                  <div className="font-bold text-slate-900">{item.title}</div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-400 text-[11px]">
                     {item.lines.map((l, li) => (
                       <span key={li}>
                         {l.label}:{' '}
-                        <strong className="text-slate-200 font-mono">
+                        <strong className="text-slate-900 font-mono">
                           {typeof l.value === 'number' ? formatNumber(l.value) : l.value}
                         </strong>
                       </span>
@@ -107,10 +107,10 @@ export const DrillDownModal: React.FC<DrillDownModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end pt-3 border-t border-slate-200">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-900 rounded-lg text-xs font-bold transition"
           >
             بستن
           </button>

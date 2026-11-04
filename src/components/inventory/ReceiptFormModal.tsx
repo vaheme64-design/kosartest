@@ -642,7 +642,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-white backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200 w-full max-w-4xl rounded-2xl shadow-xl overflow-hidden my-6">
         {/* Header */}
         <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
@@ -692,7 +692,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
               <span
                 className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
                   step === s.num
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-white text-slate-900'
                     : step > s.num
                     ? 'bg-emerald-600 text-white'
                     : 'bg-slate-100 text-slate-500'
@@ -747,12 +747,12 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                         onClick={() => setReceiptSubType(rt.id)}
                         className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                           active
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                            ? 'bg-white text-slate-900 border-slate-900 shadow-xs'
                             : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                         }`}
                       >
                         <div className="font-bold text-xs">{rt.title}</div>
-                        <div className={`text-[11px] mt-1 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                        <div className={`text-[11px] mt-1 ${active ? 'text-slate-700' : 'text-slate-500'}`}>
                           {rt.subtitle}
                         </div>
                       </button>
@@ -921,7 +921,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                         onClick={() => setCoilEntryMode('SINGLE')}
                         className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           coilEntryMode === 'SINGLE'
-                            ? 'bg-slate-900 text-white shadow-xs'
+                            ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
@@ -1374,7 +1374,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="px-5 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>ادامه: انتخاب کالا و مقدار</span>
                   <ArrowLeft className="w-4 h-4" />
@@ -1385,7 +1385,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                 <button
                   type="button"
                   onClick={handleProceedToReview}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="px-5 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>پیش‌نمایش سند</span>
                   <ArrowLeft className="w-4 h-4" />
@@ -1420,7 +1420,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
 
       {/* QUICK CONTRACT CREATION MODAL */}
       {isQuickContractOpen && (
-        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-white backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -1447,7 +1447,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="مثلاً CNT-1403-SAPCO-12"
                   value={qContractNumber}
                   onChange={e => setQContractNumber(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1460,7 +1460,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="ساپکو / شرکت سازه‌گستر..."
                   value={qContractCustomer}
                   onChange={e => setQContractCustomer(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1509,7 +1509,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
 
       {/* QUICK PART CREATION MODAL */}
       {isQuickPartOpen && (
-        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-white backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -1536,7 +1536,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="مثلاً PRT-RAW-DC04-08"
                   value={qPartCode}
                   onChange={e => setQPartCode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1550,7 +1550,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="ورق رول DC04 ضخامت ۰.۸ میلیمتر عرض ۱۲۵۰"
                   value={qPartName}
                   onChange={e => setQPartName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1637,7 +1637,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
 
       {/* QUICK WAREHOUSE CREATION MODAL */}
       {isQuickWarehouseOpen && (
-        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-white backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -1664,7 +1664,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="مثلاً WH-RAW-NEW"
                   value={qWhCode}
                   onChange={e => setQWhCode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1678,7 +1678,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="مثلاً انبار مرکزی رول و ورق شماره ۲"
                   value={qWhName}
                   onChange={e => setQWhName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 
@@ -1691,7 +1691,7 @@ export const ReceiptFormModal: React.FC<ReceiptFormModalProps> = ({
                   placeholder="LOC-A1, LOC-A2, LOC-B1"
                   value={qWhLocations}
                   onChange={e => setQWhLocations(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-800 focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:border-slate-200 focus:bg-white focus:outline-none"
                 />
               </div>
 

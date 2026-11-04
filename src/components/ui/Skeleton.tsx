@@ -21,12 +21,8 @@ export interface SkeletonProps {
 export const Skeleton: React.FC<SkeletonProps> = ({
   className = '',
   variant = 'block',
-  theme = 'light',
 }) => {
-  const baseTone =
-    theme === 'dark'
-      ? 'bg-slate-800/80 border border-slate-700/40'
-      : 'bg-slate-200/75 border border-slate-200/60';
+  const baseTone = 'bg-slate-200/75 border border-slate-200/60';
 
   const variantClasses =
     variant === 'circle' || variant === 'circular'
@@ -58,7 +54,6 @@ export interface KpiCardsSkeletonProps {
 export const KpiCardsSkeleton: React.FC<KpiCardsSkeletonProps> = ({
   count = 4,
   columns = 4,
-  theme = 'light',
 }) => {
   const gridCols =
     columns === 6
@@ -67,27 +62,20 @@ export const KpiCardsSkeleton: React.FC<KpiCardsSkeletonProps> = ({
       ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
       : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4';
 
-  const cardSurface =
-    theme === 'dark'
-      ? 'bg-slate-900 border border-slate-800'
-      : 'bg-white border border-slate-200/90 shadow-2xs';
+  const cardSurface = 'bg-white border border-slate-200/90 shadow-2xs';
 
   return (
     <div className={`grid ${gridCols} gap-3.5`}>
       {Array.from({ length: count }).map((_, idx) => (
         <div key={idx} className={`${cardSurface} rounded-xl p-4 space-y-3`}>
           <div className="flex items-center justify-between">
-            <Skeleton theme={theme} variant="text" className="w-28 h-3" />
-            <Skeleton theme={theme} variant="circle" className="w-6 h-6" />
+            <Skeleton variant="text" className="w-28 h-3" />
+            <Skeleton variant="circle" className="w-6 h-6" />
           </div>
-          <Skeleton theme={theme} variant="block" className="w-24 h-7" />
-          <div
-            className={`pt-2.5 border-t ${
-              theme === 'dark' ? 'border-slate-800/60' : 'border-slate-100'
-            } flex items-center justify-between`}
-          >
-            <Skeleton theme={theme} variant="text" className="w-24 h-2.5" />
-            <Skeleton theme={theme} variant="text" className="w-12 h-2.5" />
+          <Skeleton variant="block" className="w-24 h-7" />
+          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
+            <Skeleton variant="text" className="w-24 h-2.5" />
+            <Skeleton variant="text" className="w-12 h-2.5" />
           </div>
         </div>
       ))}
@@ -105,37 +93,25 @@ export interface ChartSkeletonProps {
  */
 export const ChartSkeleton: React.FC<ChartSkeletonProps> = ({
   rows = 5,
-  theme = 'light',
 }) => {
-  const cardSurface =
-    theme === 'dark'
-      ? 'bg-slate-900 border border-slate-800'
-      : 'bg-white border border-slate-200/90 shadow-2xs';
-
-  const rowSurface =
-    theme === 'dark'
-      ? 'bg-slate-950 border border-slate-800/80'
-      : 'bg-slate-50/70 border border-slate-200/70';
+  const cardSurface = 'bg-white border border-slate-200/90 shadow-2xs';
+  const rowSurface = 'bg-slate-50/70 border border-slate-200/70';
 
   const widthClasses = ['w-11/12', 'w-4/5', 'w-3/4', 'w-2/3', 'w-5/6', 'w-1/2'];
 
   return (
     <div className={`${cardSurface} rounded-xl p-5 space-y-4`}>
-      <div
-        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ${
-          theme === 'dark' ? 'border-slate-800/60' : 'border-slate-100'
-        }`}
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-slate-100">
         <div className="flex items-center gap-3">
-          <Skeleton theme={theme} variant="circle" className="w-8 h-8" />
+          <Skeleton variant="circle" className="w-8 h-8" />
           <div className="space-y-2">
-            <Skeleton theme={theme} variant="text" className="w-56 h-4" />
-            <Skeleton theme={theme} variant="text" className="w-40 h-3" />
+            <Skeleton variant="text" className="w-56 h-4" />
+            <Skeleton variant="text" className="w-40 h-3" />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton theme={theme} variant="block" className="w-24 h-7" />
-          <Skeleton theme={theme} variant="block" className="w-24 h-7" />
+          <Skeleton variant="block" className="w-24 h-7" />
+          <Skeleton variant="block" className="w-24 h-7" />
         </div>
       </div>
 
@@ -144,16 +120,15 @@ export const ChartSkeleton: React.FC<ChartSkeletonProps> = ({
           <div key={idx} className={`${rowSurface} rounded-lg p-3.5 space-y-2.5`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Skeleton theme={theme} variant="circle" className="w-5 h-5" />
-                <Skeleton theme={theme} variant="text" className="w-36 h-3.5" />
+                <Skeleton variant="circle" className="w-5 h-5" />
+                <Skeleton variant="text" className="w-36 h-3.5" />
               </div>
               <div className="flex items-center gap-2">
-                <Skeleton theme={theme} variant="text" className="w-16 h-3.5" />
-                <Skeleton theme={theme} variant="block" className="w-12 h-5" />
+                <Skeleton variant="text" className="w-16 h-3.5" />
+                <Skeleton variant="block" className="w-12 h-5" />
               </div>
             </div>
             <Skeleton
-              theme={theme}
               variant="block"
               className={`h-2.5 ${widthClasses[idx % widthClasses.length]}`}
             />
@@ -176,34 +151,22 @@ export interface TableSkeletonProps {
 export const TableSkeleton: React.FC<TableSkeletonProps> = ({
   rows = 6,
   columns = 6,
-  theme = 'light',
 }) => {
-  const containerSurface =
-    theme === 'dark'
-      ? 'bg-slate-900 border border-slate-800'
-      : 'bg-white border border-slate-200/90 shadow-2xs';
-
-  const headerSurface =
-    theme === 'dark'
-      ? 'bg-slate-950 border-b border-slate-800'
-      : 'bg-slate-50/80 border-b border-slate-200/80';
+  const containerSurface = 'bg-white border border-slate-200/90 shadow-2xs';
+  const headerSurface = 'bg-slate-50/80 border-b border-slate-200/80';
 
   return (
     <div className={`${containerSurface} rounded-xl overflow-hidden`}>
       {/* Filter / Search Toolbar Skeleton */}
-      <div
-        className={`px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${
-          theme === 'dark' ? 'border-slate-800/60' : 'border-slate-100'
-        }`}
-      >
+      <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 flex-1">
-          <Skeleton theme={theme} variant="block" className="w-64 h-8" />
-          <Skeleton theme={theme} variant="block" className="w-28 h-8" />
-          <Skeleton theme={theme} variant="block" className="w-28 h-8" />
+          <Skeleton variant="block" className="w-64 h-8" />
+          <Skeleton variant="block" className="w-28 h-8" />
+          <Skeleton variant="block" className="w-28 h-8" />
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton theme={theme} variant="circle" className="w-7 h-7" />
-          <Skeleton theme={theme} variant="block" className="w-24 h-8" />
+          <Skeleton variant="circle" className="w-7 h-7" />
+          <Skeleton variant="block" className="w-24 h-8" />
         </div>
       </div>
 
@@ -213,16 +176,12 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: columns }).map((_, colIdx) => (
-          <Skeleton key={colIdx} theme={theme} variant="text" className="h-3 w-3/4" />
+          <Skeleton key={colIdx} variant="text" className="h-3 w-3/4" />
         ))}
       </div>
 
       {/* Data Rows */}
-      <div
-        className={`divide-y ${
-          theme === 'dark' ? 'divide-slate-800/40' : 'divide-slate-100'
-        }`}
-      >
+      <div className="divide-y divide-slate-100">
         {Array.from({ length: rows }).map((_, rowIdx) => (
           <div
             key={rowIdx}
@@ -232,10 +191,9 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
             {Array.from({ length: columns }).map((__, colIdx) => (
               <div key={colIdx} className="flex items-center gap-2">
                 {colIdx === 0 && (
-                  <Skeleton theme={theme} variant="circle" className="w-4 h-4" />
+                  <Skeleton variant="circle" className="w-4 h-4" />
                 )}
                 <Skeleton
-                  theme={theme}
                   variant="text"
                   className={`h-3.5 ${
                     colIdx === 0

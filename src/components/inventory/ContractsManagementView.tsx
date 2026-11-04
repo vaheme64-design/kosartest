@@ -188,17 +188,17 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
   };
 
   const contractTypeBadges: Record<string, { label: string; color: string }> = {
-    HYBRID: { label: 'دوطرفه (دریافت مواد + تحویل محصول)', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30' },
-    SAPCO_CONSIGNMENT: { label: 'امانی ورق ساپکو', color: 'bg-blue-500/10 text-blue-300 border-blue-500/30' },
-    CUSTOMER_SUPPLIED: { label: 'تأمین قطعات مشتری (پیچ/لاستیک)', color: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-    PRODUCT_DELIVERY: { label: 'تعهد تحویل محصول نهایی', color: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
+    HYBRID: { label: 'دوطرفه (دریافت مواد + تحویل محصول)', color: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/30' },
+    SAPCO_CONSIGNMENT: { label: 'امانی ورق ساپکو', color: 'bg-blue-500/10 text-blue-700 border-blue-500/30' },
+    CUSTOMER_SUPPLIED: { label: 'تأمین قطعات مشتری (پیچ/لاستیک)', color: 'bg-amber-500/10 text-amber-800 border-amber-500/30' },
+    PRODUCT_DELIVERY: { label: 'تعهد تحویل محصول نهایی', color: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' },
   };
 
   return (
-    <div className="space-y-6 text-slate-100" dir="rtl">
+    <div className="space-y-6 text-slate-900" dir="rtl">
       {/* KPI Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+        <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400 font-medium">قراردادهای فعال</span>
             <div className="p-2 bg-blue-500/10 text-blue-400 rounded">
@@ -206,14 +206,14 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-slate-100">
+            <span className="text-2xl font-bold font-mono text-slate-900">
               {toPersianDigits(contracts.filter(c => c.status === 'ACTIVE').length)}
             </span>
             <span className="text-xs text-slate-500">از کل {toPersianDigits(contracts.length)} قرارداد</span>
           </div>
         </div>
 
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+        <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400 font-medium">سهمیه کل ورق قراردادها</span>
             <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded">
@@ -221,14 +221,14 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-indigo-300">
+            <span className="text-2xl font-bold font-mono text-indigo-700">
               {formatNumber(Math.round(totalAllocatedKg / 1000))}
             </span>
             <span className="text-xs text-slate-400">تن ({formatNumber(totalAllocatedKg)} kg)</span>
           </div>
         </div>
 
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+        <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400 font-medium">مانده ورق در انبار کارخانه</span>
             <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded">
@@ -243,7 +243,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
           </div>
         </div>
 
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg shadow-sm">
+        <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400 font-medium">تعهدات تحویل قطعه نهایی</span>
             <div className="p-2 bg-purple-500/10 text-purple-400 rounded">
@@ -251,7 +251,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-purple-300">
+            <span className="text-2xl font-bold font-mono text-purple-700">
               {formatNumber(totalCommittedProducts)}
             </span>
             <span className="text-xs text-slate-400">عدد ({formatNumber(totalDeliveredProducts)} تحویل شده)</span>
@@ -260,7 +260,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
       </div>
 
       {/* Action & Filter Toolbar */}
-      <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className="p-4 bg-white border border-slate-200 rounded-lg flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2 flex-wrap">
           <div className="relative min-w-[220px] flex-1 max-w-sm">
             <Search className="w-4 h-4 absolute right-3 top-2.5 text-slate-500" />
@@ -269,14 +269,14 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
               placeholder="جستجو در قرارداد، طرف حساب، گرید، قطعه..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pr-9 pl-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              className="w-full pr-9 pl-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
           </div>
 
           <select
             value={selectedCustomer}
             onChange={e => setSelectedCustomer(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">تمام طرف‌های حساب</option>
             {customers.map(c => (
@@ -289,7 +289,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
           <select
             value={selectedType}
             onChange={e => setSelectedType(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">تمام انواع قراردادها</option>
             <option value="HYBRID">دوطرفه (مواد + محصول)</option>
@@ -301,7 +301,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
           <select
             value={selectedStatus}
             onChange={e => setSelectedStatus(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">تمام وضعیت‌ها</option>
             <option value="ACTIVE">فعال</option>
@@ -313,7 +313,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportContractsCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs rounded transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
             خروجی اکسل
@@ -321,7 +321,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded transition-colors"
+            className="p-2 bg-slate-100 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded transition-colors"
             title="بروزرسانی داده‌ها"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -339,7 +339,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
       {/* Contracts List / Cards */}
       <div className="space-y-4">
         {filteredContracts.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 border border-slate-800 rounded-lg">
+          <div className="p-8 text-center text-slate-500 text-xs bg-white border border-slate-200 rounded-lg">
             قراردادی با شرایط فیلتر انتخاب شده یافت نشد.
           </div>
         ) : (
@@ -358,26 +358,26 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
             return (
               <div
                 key={contract.id}
-                className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden shadow-sm transition-all"
+                className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm transition-all"
               >
                 {/* Contract Summary Bar */}
-                <div className="p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-800/80">
+                <div className="p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-200">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-950 border border-slate-700 text-blue-400 rounded">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-50 border border-slate-200 text-blue-400 rounded">
                         {contract.contractNumber}
                       </span>
-                      <h3 className="text-sm font-bold text-slate-100">{contract.title}</h3>
+                      <h3 className="text-sm font-bold text-slate-900">{contract.title}</h3>
                       <span className={`px-2 py-0.5 text-[10px] font-medium border rounded ${badge.color}`}>
                         {badge.label}
                       </span>
                       <span
                         className={`px-2 py-0.5 text-[10px] font-medium rounded ${
                           contract.status === 'ACTIVE'
-                            ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                            ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/30'
                             : contract.status === 'FULFILLED'
-                            ? 'bg-blue-500/10 text-blue-300'
-                            : 'bg-amber-500/10 text-amber-300'
+                            ? 'bg-blue-500/10 text-blue-700'
+                            : 'bg-amber-500/10 text-amber-800'
                         }`}
                       >
                         {contract.status === 'ACTIVE'
@@ -412,7 +412,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       <div className="text-[11px] text-slate-400">
                         مانده سهمیه: {formatNumber(contract.closingBalanceKg)} / {formatNumber(contract.allocatedWeightKg)} kg
                       </div>
-                      <div className="w-36 h-2 bg-slate-950 border border-slate-800 rounded-full mt-1 overflow-hidden">
+                      <div className="w-36 h-2 bg-slate-50 border border-slate-200 rounded-full mt-1 overflow-hidden">
                         <div
                           className="h-full bg-blue-500 rounded-full"
                           style={{ width: `${quotaProgress}%` }}
@@ -426,7 +426,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                           setAllocatingContract(contract);
                           setAllocateWeight(1000);
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 rounded transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-100 border border-slate-200 text-xs text-slate-700 rounded transition-colors"
                         title="تخصیص کلاف یا رول جدید به این قرارداد"
                       >
                         <LinkIcon className="w-3.5 h-3.5 text-blue-400" />
@@ -436,7 +436,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       {onViewContractLedger && (
                         <button
                           onClick={() => onViewContractLedger(contract.id)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 rounded transition-colors"
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-100 border border-slate-200 text-xs text-slate-700 rounded transition-colors"
                           title="مشاهده کاردکس و گردش اسناد این قرارداد"
                         >
                           <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
@@ -446,7 +446,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
 
                       <button
                         onClick={() => setExpandedContractId(isExpanded ? null : contract.id)}
-                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                        className="p-1.5 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded transition-colors"
                       >
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
@@ -456,11 +456,11 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
 
                 {/* Expanded Details Sections */}
                 {isExpanded && (
-                  <div className="p-5 bg-slate-950/50 space-y-5 border-t border-slate-800/60">
+                  <div className="p-5 bg-slate-50 space-y-5 border-t border-slate-200">
                     {/* SECTION 1: INCOMING MATERIALS */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                           <Package className="w-4 h-4 text-blue-400" />
                           مواد و قطعات دریافتی از مشتری / تأمین‌کننده (سهمیه ورق، پیچ و مهره، لاستیک)
                         </h4>
@@ -470,13 +470,13 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       </div>
 
                       {incomingMaterials.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-slate-500 bg-slate-900/50 border border-slate-800/80 rounded">
+                        <div className="p-3 text-center text-xs text-slate-500 bg-white border border-slate-200 rounded">
                           ردیف تفکیک شده ماده‌ای برای این قرارداد ثبت نشده است (سهمیه کلی: {formatNumber(contract.allocatedWeightKg)} kg).
                         </div>
                       ) : (
-                        <div className="overflow-x-auto border border-slate-800 rounded">
+                        <div className="overflow-x-auto border border-slate-200 rounded">
                           <table className="w-full text-xs text-right">
-                            <thead className="bg-slate-900/90 text-slate-400">
+                            <thead className="bg-white text-slate-400">
                               <tr>
                                 <th className="px-3 py-2">کد قطعه/ماده</th>
                                 <th className="px-3 py-2">شرح کالا</th>
@@ -487,13 +487,13 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                                 <th className="px-3 py-2">توضیحات</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800/60">
+                            <tbody className="divide-y divide-slate-100">
                               {incomingMaterials.map(mat => (
-                                <tr key={mat.id} className="hover:bg-slate-900/40">
-                                  <td className="px-3 py-2 font-mono text-slate-300">{mat.partCode}</td>
-                                  <td className="px-3 py-2 font-medium text-slate-200">{mat.partName}</td>
+                                <tr key={mat.id} className="hover:bg-white">
+                                  <td className="px-3 py-2 font-mono text-slate-700">{mat.partCode}</td>
+                                  <td className="px-3 py-2 font-medium text-slate-900">{mat.partName}</td>
                                   <td className="px-3 py-2 text-slate-400">{mat.unit === 'KG' ? 'کیلوگرم' : 'عدد'}</td>
-                                  <td className="px-3 py-2 text-left font-mono text-slate-200 font-bold">
+                                  <td className="px-3 py-2 text-left font-mono text-slate-900 font-bold">
                                     {formatNumber(mat.contractQty)}
                                   </td>
                                   <td className="px-3 py-2 text-left font-mono text-emerald-400">
@@ -514,7 +514,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                     {/* SECTION 2: PRODUCT DELIVERY COMMITMENTS */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                           <PackageCheck className="w-4 h-4 text-emerald-400" />
                           تعهدات تجاری تحویل محصول نهایی به مشتری (ارسال جنس طبق قرارداد)
                         </h4>
@@ -524,13 +524,13 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       </div>
 
                       {productDeliveries.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-slate-500 bg-slate-900/50 border border-slate-800/80 rounded">
+                        <div className="p-3 text-center text-xs text-slate-500 bg-white border border-slate-200 rounded">
                           تعهد محصول نهایی به صورت مجزا در این قرارداد درج نشده است.
                         </div>
                       ) : (
-                        <div className="overflow-x-auto border border-slate-800 rounded">
+                        <div className="overflow-x-auto border border-slate-200 rounded">
                           <table className="w-full text-xs text-right">
-                            <thead className="bg-slate-900/90 text-slate-400">
+                            <thead className="bg-white text-slate-400">
                               <tr>
                                 <th className="px-3 py-2">کد محصول</th>
                                 <th className="px-3 py-2">عنوان قطعه نهایی</th>
@@ -541,28 +541,28 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                                 <th className="px-3 py-2">ملاحظات تحویل</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800/60">
+                            <tbody className="divide-y divide-slate-100">
                               {productDeliveries.map(prod => {
                                 const progress = prod.contractQty > 0
                                   ? Math.min(100, Math.round(((prod.deliveredOrReceivedQty || 0) / prod.contractQty) * 100))
                                   : 0;
 
                                 return (
-                                  <tr key={prod.id} className="hover:bg-slate-900/40">
-                                    <td className="px-3 py-2 font-mono text-slate-300">{prod.partCode}</td>
-                                    <td className="px-3 py-2 font-medium text-slate-200">{prod.partName}</td>
-                                    <td className="px-3 py-2 text-left font-mono text-slate-200 font-bold">
+                                  <tr key={prod.id} className="hover:bg-white">
+                                    <td className="px-3 py-2 font-mono text-slate-700">{prod.partCode}</td>
+                                    <td className="px-3 py-2 font-medium text-slate-900">{prod.partName}</td>
+                                    <td className="px-3 py-2 text-left font-mono text-slate-900 font-bold">
                                       {formatNumber(prod.contractQty)} عدد
                                     </td>
                                     <td className="px-3 py-2 text-left font-mono text-emerald-400 font-bold">
                                       {formatNumber(prod.deliveredOrReceivedQty || 0)} عدد
                                     </td>
-                                    <td className="px-3 py-2 text-left font-mono text-purple-300 font-bold">
+                                    <td className="px-3 py-2 text-left font-mono text-purple-700 font-bold">
                                       {formatNumber(prod.remainingQty || prod.contractQty)} عدد
                                     </td>
                                     <td className="px-3 py-2 text-center">
                                       <div className="flex items-center justify-center gap-1.5 font-mono text-[11px]">
-                                        <div className="w-16 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+                                        <div className="w-16 h-1.5 bg-white rounded-full overflow-hidden border border-slate-200">
                                           <div
                                             className="h-full bg-emerald-500 rounded-full"
                                             style={{ width: `${progress}%` }}
@@ -584,7 +584,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                     {/* SECTION 3: CONNECTED COILS & PACKS */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                           <Layers className="w-4 h-4 text-indigo-400" />
                           کلاف‌های ورق و کویل‌پک‌های متصل به این قرارداد
                         </h4>
@@ -594,7 +594,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       </div>
 
                       {connectedCoils.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-slate-500 bg-slate-900/50 border border-slate-800/80 rounded">
+                        <div className="p-3 text-center text-xs text-slate-500 bg-white border border-slate-200 rounded">
                           کلافی به صورت مستقیم به این قرارداد لینک نشده است. با دکمه «تخصیص کلاف» می‌توانید کلاف‌های موجود در انبار را متصل کنید.
                         </div>
                       ) : (
@@ -602,11 +602,11 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                           {connectedCoils.map((coil, idx) => (
                             <div
                               key={idx}
-                              className="p-3 bg-slate-900 border border-slate-800 rounded flex flex-col justify-between gap-2"
+                              className="p-3 bg-white border border-slate-200 rounded flex flex-col justify-between gap-2"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-mono text-xs font-bold text-blue-400">{coil.coilId}</span>
-                                <span className="px-1.5 py-0.5 bg-slate-950 border border-slate-700 text-[10px] text-slate-300 font-mono rounded">
+                                <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-200 text-[10px] text-slate-700 font-mono rounded">
                                   پکینگ: {coil.coilPackNumber || '—'}
                                 </span>
                               </div>
@@ -614,9 +614,9 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                                 <div>گرید: {coil.materialGrade || contract.materialGrade}</div>
                                 {coil.thicknessMm && <div>ضخامت: {coil.thicknessMm}mm | عرض: {coil.widthMm}mm</div>}
                               </div>
-                              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                              <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs font-mono">
                                 <span className="text-slate-400">سهم تخصیصی:</span>
-                                <span className="font-bold text-slate-200">{formatNumber(coil.allocatedWeightKg)} kg</span>
+                                <span className="font-bold text-slate-900">{formatNumber(coil.allocatedWeightKg)} kg</span>
                               </div>
                             </div>
                           ))}
@@ -646,29 +646,29 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
       {/* Quick Allocate Coil Modal */}
       {allocatingContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" dir="rtl">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-lg p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-lg p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <h3 className="text-xs font-bold text-slate-100">تخصیص کلاف به قرارداد</h3>
+                <h3 className="text-xs font-bold text-slate-900">تخصیص کلاف به قرارداد</h3>
                 <span className="text-[11px] font-mono text-blue-400">{allocatingContract.contractNumber}</span>
               </div>
               <button
                 onClick={() => setAllocatingContract(null)}
-                className="text-slate-400 hover:text-slate-200"
+                className="text-slate-400 hover:text-slate-900"
               >
                 ✕
               </button>
             </div>
 
             {allocateError && (
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded">
+              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs rounded">
                 {allocateError}
               </div>
             )}
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">انتخاب کلاف موجود در انبار</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">انتخاب کلاف موجود در انبار</label>
                 <select
                   value={selectedCoilToAllocate}
                   onChange={e => {
@@ -678,7 +678,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                       setAllocateWeight(selected.remainingWeightKg);
                     }
                   }}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                 >
                   <option value="">-- انتخاب کلاف و کویل‌پک --</option>
                   {coils.map(c => (
@@ -690,7 +690,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
                   وزن تخصیصی به این قرارداد (کیلوگرم)
                 </label>
                 <input
@@ -698,7 +698,7 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
                   min="1"
                   value={allocateWeight}
                   onChange={e => setAllocateWeight(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200 font-mono text-left focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-mono text-left focus:outline-none focus:border-blue-500"
                   dir="ltr"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">
@@ -707,11 +707,11 @@ export const ContractsManagementView: React.FC<ContractsManagementViewProps> = (
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setAllocatingContract(null)}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-100 text-slate-700 text-xs rounded"
               >
                 انصراف
               </button>

@@ -249,215 +249,192 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
 
   return (
     <div className="space-y-5 print:space-y-3">
-      {/* Header Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+      {/* Unified Light Header & Dropdown List Selector */}
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 shrink-0">
               <Calculator className="w-5 h-5" />
             </span>
             <div>
-              <h1 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <h1 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                 پیش‌بینی نیازمندی مواد و موازنه کلاف (MRP)
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Phases 8 & 9
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  ATP & BOM Explosion
                 </span>
               </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 انفجار درخت محصول (BOM)، کسر موجودی آزاد ملکی و امانی ساپکو، حذف قرنطینه و پیش‌بینی پوشش قراردادها
               </p>
             </div>
           </div>
+
+          <div className="flex items-center flex-wrap gap-2">
+            {mrpData && (
+              <div className="text-[11px] text-slate-500 font-mono hidden lg:flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                <span>آخرین محاسبه:</span>
+                <span className="text-slate-900 font-bold">{mrpData.ranAtFa}</span>
+              </div>
+            )}
+
+            <button
+              onClick={() => loadMrp()}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
+              <span>محاسبه مجدد</span>
+            </button>
+
+            <button
+              onClick={handleExportCsv}
+              disabled={!mrpData}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 border border-slate-200 transition cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>خروجی اکسل</span>
+            </button>
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white transition cursor-pointer shadow-2xs"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>چاپ رسمی</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2.5">
-          {mrpData && (
-            <div className="text-[11px] text-slate-400 font-mono hidden lg:flex items-center gap-1.5 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800">
-              <Clock className="w-3.5 h-3.5 text-indigo-400" />
-              <span>آخرین محاسبه:</span>
-              <span className="text-slate-200 font-bold">{mrpData.ranAtFa}</span>
+        {/* Unified Dropdown List Selector + Quick Chips */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-[11px] font-semibold text-slate-500">زیربخش MRP:</span>
+              <select
+                value={activeTab}
+                onChange={e => setActiveTab(e.target.value as any)}
+                className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer pr-1 pl-4 py-0.5"
+              >
+                <option value="materials">۱. موازنه و کسری مواد اولیه و کلاف‌ها ({toPersianDigits(mrpData?.materials.length || 0)})</option>
+                <option value="pre_issue">۲. بررسی پیش از حواله دستور کار (Pre-Issue ATP)</option>
+                <option value="parts">۳. موازنه تقاضای قطعات خودرویی ({toPersianDigits(mrpData?.parts.length || 0)})</option>
+                <option value="simulation">۴. شبیه‌ساز سناریوی تقاضا (What-If)</option>
+              </select>
             </div>
-          )}
 
-          <button
-            onClick={() => loadMrp()}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
-            <span>محاسبه مجدد</span>
-          </button>
-
-          <button
-            onClick={handleExportCsv}
-            disabled={!mrpData}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span>خروجی اکسل</span>
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition cursor-pointer shadow-md shadow-indigo-600/20"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>چاپ رسمی</span>
-          </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: 'materials', label: 'موازنه کلاف‌ها' },
+                { id: 'pre_issue', label: 'کنترل پیش از حواله (ATP)' },
+                { id: 'parts', label: 'تقاضای قطعات' },
+                { id: 'simulation', label: 'شبیه‌ساز What-If' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id as any)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer border ${
+                    activeTab === t.id
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-bold'
+                      : 'bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Error & Notice Banners */}
       {error && (
-        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{error}</span>
           </div>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-200 text-xs cursor-pointer">بستن</button>
+          <button onClick={() => setError(null)} className="text-rose-600 hover:text-rose-800 text-xs cursor-pointer">بستن</button>
         </div>
       )}
 
       {notice && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
             <span>{notice}</span>
           </div>
-          <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-emerald-200 text-xs cursor-pointer">بستن</button>
+          <button onClick={() => setNotice(null)} className="text-emerald-600 hover:text-emerald-800 text-xs cursor-pointer">بستن</button>
         </div>
       )}
 
       {/* Skeleton Loading State */}
       {loading && !mrpData && (
-        <ReportModuleSkeleton kpiCount={6} showChart={false} tableRows={6} tableColumns={9} />
+        <ReportModuleSkeleton kpiCount={6} showChart={false} tableRows={6} tableColumns={9} theme="light" />
       )}
 
       {/* KPI Cards Summary */}
       {mrpData && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-slate-400 block font-sans">تعداد مواد و کلاف‌ها</span>
-            <div className="text-xl font-black text-slate-100 font-mono mt-1">
+          <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-slate-500 font-semibold block font-sans">تعداد مواد و کلاف‌ها</span>
+            <div className="text-xl font-black text-slate-900 font-mono mt-1">
               {toPersianDigits(mrpData.summary.materialsConsidered)}
             </div>
             <span className="text-[10px] text-slate-500 mt-1 block">اقلام فعال در BOM</span>
           </div>
 
-          <div className="bg-slate-900 border border-emerald-900/40 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-emerald-400 block font-sans flex items-center gap-1">
+          <div className="bg-white border border-emerald-200 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-emerald-700 font-semibold block font-sans flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
               پوشش کامل با موجودی
             </span>
-            <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+            <div className="text-xl font-black text-emerald-700 font-mono mt-1">
               {toPersianDigits(mrpData.summary.ok)}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">تأمین تضمین‌شده</span>
+            <span className="text-[10px] text-slate-500 mt-1 block">تأمین تضمین‌شده</span>
           </div>
 
-          <div className="bg-slate-900 border border-amber-900/40 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-amber-400 block font-sans flex items-center gap-1">
+          <div className="bg-white border border-amber-200 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-amber-700 font-semibold block font-sans flex items-center gap-1">
               <Info className="w-3.5 h-3.5" />
               پوشش با قرارداد باز
             </span>
-            <div className="text-xl font-black text-amber-400 font-mono mt-1">
+            <div className="text-xl font-black text-amber-700 font-mono mt-1">
               {toPersianDigits(mrpData.summary.contractCovered)}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">در انتظار تحویل سهمیه</span>
+            <span className="text-[10px] text-slate-500 mt-1 block">در انتظار تحویل سهمیه</span>
           </div>
 
-          <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-rose-400 block font-sans flex items-center gap-1">
+          <div className="bg-white border border-rose-200 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-rose-700 font-semibold block font-sans flex items-center gap-1">
               <ShieldAlert className="w-3.5 h-3.5" />
               کسری قطعی مواد
             </span>
-            <div className="text-xl font-black text-rose-400 font-mono mt-1">
+            <div className="text-xl font-black text-rose-600 font-mono mt-1">
               {toPersianDigits(mrpData.summary.hardShortages)}
             </div>
-            <span className="text-[10px] text-rose-400/80 mt-1 block font-bold">هشدار توقف پرس</span>
+            <span className="text-[10px] text-rose-600 mt-1 block font-bold">هشدار توقف پرس</span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-slate-400 block font-sans">کل وزن ناخالص مواد</span>
-            <div className="text-lg font-black text-slate-200 font-mono mt-1">
-              {formatNumber(mrpData.summary.totalGrossWeightKg)} <span className="text-xs font-normal text-slate-400">kg</span>
+          <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-slate-500 font-semibold block font-sans">کل وزن ناخالص مواد</span>
+            <div className="text-lg font-black text-slate-900 font-mono mt-1">
+              {formatNumber(mrpData.summary.totalGrossWeightKg)} <span className="text-xs font-normal text-slate-500">kg</span>
             </div>
             <span className="text-[10px] text-slate-500 mt-1 block">شامل نرم ضایعات</span>
           </div>
 
-          <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-3.5 text-right">
-            <span className="text-[11px] text-rose-400 block font-sans">کسری وزنی کل کلاف‌ها</span>
-            <div className="text-lg font-black text-rose-400 font-mono mt-1">
-              {formatNumber(mrpData.summary.totalShortageWeightKg)} <span className="text-xs font-normal text-rose-400/70">kg</span>
+          <div className="bg-white border border-rose-200 rounded-xl p-3.5 text-right shadow-2xs">
+            <span className="text-[11px] text-rose-700 font-semibold block font-sans">کسری وزنی کل کلاف‌ها</span>
+            <div className="text-lg font-black text-rose-600 font-mono mt-1">
+              {formatNumber(mrpData.summary.totalShortageWeightKg)} <span className="text-xs font-normal text-rose-600">kg</span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">نیاز به خرید / حواله</span>
+            <span className="text-[10px] text-slate-500 mt-1 block">نیاز به خرید / حواله</span>
           </div>
         </div>
       )}
-
-      {/* Main Navigation Subtabs */}
-      <div className="border-b border-slate-800 flex items-center gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('materials')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'materials'
-              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>موازنه و کسری مواد اولیه و کلاف‌ها</span>
-          {mrpData && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300">
-              {toPersianDigits(mrpData.materials.length)}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('pre_issue')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'pre_issue'
-              ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <ClipboardCheck className="w-4 h-4" />
-          <span>بررسی پیش از حواله دستور کار (Pre-Issue)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-900/50 text-emerald-300 border border-emerald-700/50">
-            ATP
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('parts')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'parts'
-              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Boxes className="w-4 h-4" />
-          <span>موازنه تقاضای قطعات خودرویی</span>
-          {mrpData && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300">
-              {toPersianDigits(mrpData.parts.length)}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('simulation')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'simulation'
-              ? 'border-purple-500 text-purple-400 bg-purple-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>شبیه‌ساز سناریوی تقاضا (What-If)</span>
-        </button>
-      </div>
 
       {/* =========================================================================
           TAB 1: MATERIALS NETTING MATRIX
@@ -465,7 +442,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
       {activeTab === 'materials' && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
@@ -474,14 +451,14 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                   placeholder="جستجو در کد، نام کلاف یا گرید..."
                   value={materialSearch}
                   onChange={e => setMaterialSearch(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pr-9 pl-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pr-9 pl-3 py-1.5 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <select
                 value={gradeFilter}
                 onChange={e => setGradeFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500"
               >
                 <option value="ALL">همه گریدها</option>
                 <option value="DC04">DC04 (کشش عمیق)</option>
@@ -497,8 +474,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 onClick={() => setSeverityFilter('ALL')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition ${
                   severityFilter === 'ALL'
-                    ? 'bg-slate-700 text-white font-bold'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-slate-700 text-slate-900 font-bold'
+                    : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
                 }`}
               >
                 همه ({toPersianDigits(mrpData?.materials.length || 0)})
@@ -509,7 +486,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'HARD_SHORTAGE'
                     ? 'bg-rose-500 text-white font-bold'
-                    : 'bg-slate-950 text-rose-400 hover:bg-rose-950/40 border border-rose-900/40'
+                    : 'bg-slate-50 text-rose-400 hover:bg-rose-950/40 border border-rose-900/40'
                 }`}
               >
                 <ShieldAlert className="w-3 h-3" />
@@ -521,7 +498,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'SHORTAGE_COVERED_BY_CONTRACT'
                     ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-slate-950 text-amber-400 hover:bg-amber-950/40 border border-amber-900/40'
+                    : 'bg-slate-50 text-amber-400 hover:bg-amber-950/40 border border-amber-900/40'
                 }`}
               >
                 <Info className="w-3 h-3" />
@@ -533,7 +510,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1 ${
                   severityFilter === 'OK'
                     ? 'bg-emerald-600 text-white font-bold'
-                    : 'bg-slate-950 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/40'
+                    : 'bg-slate-50 text-emerald-400 hover:bg-emerald-950/40 border border-emerald-900/40'
                 }`}
               >
                 <CheckCircle2 className="w-3 h-3" />
@@ -543,37 +520,37 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           </div>
 
           {/* Table */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
                   <tr>
                     <th className="py-3 px-3">کد و عنوان ماده اولیه</th>
                     <th className="py-3 px-3 text-center">گرید و ضخامت</th>
                     <th className="py-3 px-3 text-center text-indigo-400 font-bold">نیاز کل (kg)</th>
-                    <th className="py-3 px-3 text-center text-slate-300">موجودی ملکی</th>
+                    <th className="py-3 px-3 text-center text-slate-700">موجودی ملکی</th>
                     <th className="py-3 px-3 text-center text-emerald-400">امانی ساپکو</th>
                     <th className="py-3 px-3 text-center text-rose-400/80">قرنطینه</th>
                     <th className="py-3 px-3 text-center text-amber-400">رزرو فعال</th>
-                    <th className="py-3 px-3 text-center text-emerald-300 font-bold">موجودی آزاد (ATP)</th>
-                    <th className="py-3 px-3 text-center text-indigo-300">قرارداد باز</th>
+                    <th className="py-3 px-3 text-center text-emerald-700 font-bold">موجودی آزاد (ATP)</th>
+                    <th className="py-3 px-3 text-center text-indigo-700">قرارداد باز</th>
                     <th className="py-3 px-3 text-center text-rose-400 font-black">کسری قطعی</th>
                     <th className="py-3 px-3 text-center">وضعیت تأمین</th>
                     <th className="py-3 px-3 text-center">قطعات متقاضی</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 font-mono">
+                <tbody className="divide-y divide-slate-100 font-mono">
                   {filteredMaterials.map(m => {
                     const isExpanded = expandedMaterialCode === m.materialCode;
                     return (
                       <React.Fragment key={m.materialId}>
-                        <tr className="hover:bg-slate-800/40 transition">
+                        <tr className="hover:bg-slate-100 transition">
                           <td className="py-3 px-3 font-sans">
-                            <div className="font-bold text-slate-200">{m.materialName}</div>
+                            <div className="font-bold text-slate-900">{m.materialName}</div>
                             <div className="text-[11px] text-slate-400 font-mono">{m.materialCode}</div>
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[11px]">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[11px]">
                               {m.materialGrade}
                             </span>
                             {m.thicknessMm > 0 && (
@@ -585,7 +562,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                           <td className="py-3 px-3 text-center text-indigo-400 font-bold text-sm">
                             {formatNumber(m.requiredWeightKg)}
                           </td>
-                          <td className="py-3 px-3 text-center text-slate-300">
+                          <td className="py-3 px-3 text-center text-slate-700">
                             {formatNumber(m.onHandOwned)}
                           </td>
                           <td className="py-3 px-3 text-center text-emerald-400 font-bold">
@@ -603,10 +580,10 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                           <td className="py-3 px-3 text-center text-amber-400">
                             {formatNumber(m.reservedActive)}
                           </td>
-                          <td className="py-3 px-3 text-center text-emerald-300 font-bold text-sm bg-emerald-950/20">
+                          <td className="py-3 px-3 text-center text-emerald-700 font-bold text-sm bg-emerald-950/20">
                             {formatNumber(m.netAvailable)}
                           </td>
-                          <td className="py-3 px-3 text-center text-indigo-300">
+                          <td className="py-3 px-3 text-center text-indigo-700">
                             {formatNumber(m.openContractQuantity)}
                           </td>
                           <td className="py-3 px-3 text-center font-black text-sm">
@@ -641,7 +618,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                           <td className="py-3 px-3 text-center">
                             <button
                               onClick={() => setExpandedMaterialCode(isExpanded ? null : m.materialCode)}
-                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-sans inline-flex items-center gap-1 cursor-pointer transition"
+                              className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-100 text-slate-700 text-[11px] font-sans inline-flex items-center gap-1 cursor-pointer transition"
                             >
                               <span>{toPersianDigits(m.demandedByParts.length)} قطعه</span>
                               {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -651,12 +628,12 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
 
                         {/* Expanded Drawer for Demanded Parts & Matching Coils */}
                         {isExpanded && (
-                          <tr className="bg-slate-950/70 border-b border-slate-800 font-sans">
+                          <tr className="bg-slate-50 border-b border-slate-200 font-sans">
                             <td colSpan={12} className="p-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                                 {/* Demanded by Parts */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-                                  <h4 className="font-bold text-slate-200 mb-2 flex items-center gap-2">
+                                <div className="bg-white border border-slate-200 rounded-xl p-3">
+                                  <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                                     <Boxes className="w-4 h-4 text-indigo-400" />
                                     قطعات متقاضی این متریال در برنامه:
                                   </h4>
@@ -664,10 +641,10 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                                     {m.demandedByParts.map((dp, idx) => (
                                       <div
                                         key={idx}
-                                        className="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800/80"
+                                        className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200"
                                       >
                                         <div>
-                                          <div className="font-bold text-slate-300">{dp.partName}</div>
+                                          <div className="font-bold text-slate-700">{dp.partName}</div>
                                           <div className="text-[10px] text-slate-500 font-mono">{dp.partCode}</div>
                                         </div>
                                         <div className="text-left font-mono">
@@ -684,8 +661,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                                 </div>
 
                                 {/* Physical Matching Coils in Plant */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-                                  <h4 className="font-bold text-slate-200 mb-2 flex items-center gap-2">
+                                <div className="bg-white border border-slate-200 rounded-xl p-3">
+                                  <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                                     <Layers className="w-4 h-4 text-emerald-400" />
                                     کلاف‌ها و رول‌های فیزیکی منطبق پای پرس:
                                   </h4>
@@ -694,10 +671,10 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                                       {m.matchingCoils.map((c, idx) => (
                                         <div
                                           key={idx}
-                                          className="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800/80"
+                                          className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200"
                                         >
                                           <div>
-                                            <div className="font-bold text-slate-300 font-mono">{c.coilNumber}</div>
+                                            <div className="font-bold text-slate-700 font-mono">{c.coilNumber}</div>
                                             <div className="text-[10px] text-slate-500">
                                               {c.ownership === 'SAPCO_CONSIGNMENT' ? 'امانی ساپکو' : 'ملکی کارخانه'} • {c.warehouseLocation}
                                             </div>
@@ -714,7 +691,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                                       ))}
                                     </div>
                                   ) : (
-                                    <div className="text-slate-500 text-[11px] p-3 text-center bg-slate-950 rounded-lg">
+                                    <div className="text-slate-500 text-[11px] p-3 text-center bg-slate-50 rounded-lg">
                                       هیچ رول فیزیکی با این مشخصات در انبار ثبت نشده است.
                                     </div>
                                   )}
@@ -739,17 +716,17 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
       {activeTab === 'pre_issue' && (
         <div className="space-y-5">
           {/* MO Selector & ATP Status Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex-1">
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   انتخاب دستور کار ساخت (MO) جهت بررسی موجودی مواد پیش از صدور حواله:
                 </label>
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedMoId}
                     onChange={e => setSelectedMoId(e.target.value)}
-                    className="flex-1 max-w-xl bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-medium focus:outline-none focus:border-emerald-500"
+                    className="flex-1 max-w-xl bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-500"
                   >
                     {moList.map(mo => (
                       <option key={mo.id} value={mo.id}>
@@ -761,7 +738,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                   <button
                     onClick={() => runMoCheck(selectedMoId)}
                     disabled={checkingMo}
-                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-100 text-xs font-bold text-slate-900 border border-slate-200 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${checkingMo ? 'animate-spin text-emerald-400' : ''}`} />
                     <span>بررسی در لحظه</span>
@@ -773,8 +750,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 <div className="flex items-center gap-3">
                   <div className={`p-4 rounded-xl border ${
                     moCheckResult.readyToIssue
-                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                      : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-700'
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-700'
                   }`}>
                     <div className="flex items-center gap-2 font-bold text-sm">
                       {moCheckResult.readyToIssue ? (
@@ -816,11 +793,11 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
 
           {/* BOM Materials Availability Table */}
           {moCheckResult && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileCheck className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-xs font-bold text-slate-200">
+                  <h3 className="text-xs font-bold text-slate-900">
                     جدول موازنه اقلام BOM دستور کار {moCheckResult.moNumber} ({moCheckResult.partName})
                   </h3>
                 </div>
@@ -831,26 +808,26 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
 
               <div className="overflow-x-auto">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                  <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
                     <tr>
                       <th className="py-3 px-3">کد و عنوان قطعه / ماده در BOM</th>
                       <th className="py-3 px-3 text-center">واحد</th>
                       <th className="py-3 px-3 text-center text-indigo-400">کل نیاز سفارش</th>
                       <th className="py-3 px-3 text-center text-slate-400">حواله شده قبلی</th>
-                      <th className="py-3 px-3 text-center text-slate-200 font-bold">باقیمانده نیاز</th>
-                      <th className="py-3 px-3 text-center text-slate-300">موجودی انبار</th>
+                      <th className="py-3 px-3 text-center text-slate-900 font-bold">باقیمانده نیاز</th>
+                      <th className="py-3 px-3 text-center text-slate-700">موجودی انبار</th>
                       <th className="py-3 px-3 text-center text-amber-400">رزرو همین MO</th>
                       <th className="py-3 px-3 text-center text-rose-400/80">رزرو سایر MOها</th>
-                      <th className="py-3 px-3 text-center text-emerald-300 font-bold">آزاد برای این MO</th>
+                      <th className="py-3 px-3 text-center text-emerald-700 font-bold">آزاد برای این MO</th>
                       <th className="py-3 px-3 text-center text-rose-400 font-black">کسری</th>
                       <th className="py-3 px-3 text-center">وضعیت ردیف</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                  <tbody className="divide-y divide-slate-100 font-mono">
                     {moCheckResult.lines.map((l, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/40 transition">
+                      <tr key={idx} className="hover:bg-slate-100 transition">
                         <td className="py-3 px-3 font-sans">
-                          <div className="font-bold text-slate-200">{l.materialName}</div>
+                          <div className="font-bold text-slate-900">{l.materialName}</div>
                           <div className="text-[11px] text-slate-400 font-mono">{l.materialCode}</div>
                           {l.notes.length > 0 && (
                             <div className="text-[10px] text-slate-500 mt-0.5">{l.notes.join(' • ')}</div>
@@ -859,11 +836,11 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                         <td className="py-3 px-3 text-center text-slate-400">{l.unitCode}</td>
                         <td className="py-3 px-3 text-center text-indigo-400 font-bold">{formatNumber(l.requiredQuantity)}</td>
                         <td className="py-3 px-3 text-center text-slate-400">{formatNumber(l.alreadyIssuedQuantity)}</td>
-                        <td className="py-3 px-3 text-center text-slate-200 font-bold">{formatNumber(l.remainingRequired)}</td>
-                        <td className="py-3 px-3 text-center text-slate-300">{formatNumber(l.onHandApproved)}</td>
+                        <td className="py-3 px-3 text-center text-slate-900 font-bold">{formatNumber(l.remainingRequired)}</td>
+                        <td className="py-3 px-3 text-center text-slate-700">{formatNumber(l.onHandApproved)}</td>
                         <td className="py-3 px-3 text-center text-amber-400 font-bold">{formatNumber(l.reservedForThisMo)}</td>
                         <td className="py-3 px-3 text-center text-rose-400/80">{formatNumber(l.reservedForOthers)}</td>
-                        <td className="py-3 px-3 text-center text-emerald-300 font-bold text-sm bg-emerald-950/20">
+                        <td className="py-3 px-3 text-center text-emerald-700 font-bold text-sm bg-emerald-950/20">
                           {formatNumber(l.availableForThisMo)}
                         </td>
                         <td className="py-3 px-3 text-center font-black">
@@ -889,7 +866,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                             </span>
                           )}
                           {l.status === 'NOT_REQUIRED' && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-400 border border-slate-200">
                               تأمین کامل شده
                             </span>
                           )}
@@ -908,9 +885,9 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           TAB 3: PARTS DEMAND NETTING (موازنه تقاضای قطعات)
           ========================================================================= */}
       {activeTab === 'parts' && mrpData && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
               <Boxes className="w-4 h-4 text-indigo-400" />
               موازنه تیراژ قطعات نهایی خودرویی (تقاضای باز مشتریان نسبت به موجودی و WIP)
             </h3>
@@ -921,7 +898,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
 
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+              <thead className="bg-slate-50 text-slate-400 border-b border-slate-200 font-mono text-[11px]">
                 <tr>
                   <th className="py-3 px-3">کد و نام قطعه خودرویی</th>
                   <th className="py-3 px-3">خودرو</th>
@@ -934,14 +911,14 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                   <th className="py-3 px-3 text-center">وضعیت مستندات فنی</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono">
                 {mrpData.parts.map(p => (
-                  <tr key={p.partId} className="hover:bg-slate-800/40 transition">
+                  <tr key={p.partId} className="hover:bg-slate-100 transition">
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-200">{p.partName}</div>
+                      <div className="font-bold text-slate-900">{p.partName}</div>
                       <div className="text-[11px] text-slate-400 font-mono">{p.partCode}</div>
                     </td>
-                    <td className="py-3 px-3 font-sans text-slate-300">{p.carModel || '-'}</td>
+                    <td className="py-3 px-3 font-sans text-slate-700">{p.carModel || '-'}</td>
                     <td className="py-3 px-3 text-center text-indigo-400 font-bold text-sm">
                       {formatNumber(p.grossDemand)}
                     </td>
@@ -996,9 +973,9 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           TAB 4: DEMAND SIMULATION (شبیه‌ساز سناریوی تقاضا)
           ========================================================================= */}
       {activeTab === 'simulation' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xl space-y-6">
           <div>
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-400" />
               شبیه‌ساز پیش‌بینی نیازمندی مواد و سناریوی رشد تقاضا (What-If Simulation)
             </h3>
@@ -1008,8 +985,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-              <label className="block text-xs font-bold text-slate-300 mb-2">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <label className="block text-xs font-bold text-slate-700 mb-2">
                 درصد رشد تقاضای سفارشات:
               </label>
               <div className="flex items-center gap-2">
@@ -1020,7 +997,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                       simGrowth === pct
                         ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                        : 'bg-white text-slate-400 hover:text-slate-900 border border-slate-200'
                     }`}
                   >
                     {pct === 0 ? 'مبنا (۰٪)' : `+${toPersianDigits(pct)}٪`}
@@ -1029,8 +1006,8 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
               </div>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-              <label className="block text-xs font-bold text-slate-300 mb-2">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <label className="block text-xs font-bold text-slate-700 mb-2">
                 افق زمانی برنامه‌ریزی:
               </label>
               <div className="flex items-center gap-2">
@@ -1041,7 +1018,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                       simHorizon === days
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                        : 'bg-white text-slate-400 hover:text-slate-900 border border-slate-200'
                     }`}
                   >
                     {toPersianDigits(days)} روزه
@@ -1050,12 +1027,12 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
               </div>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
-              <label className="block text-xs font-bold text-slate-300 mb-2">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+              <label className="block text-xs font-bold text-slate-700 mb-2">
                 ملاحظات چرخه ساخت و موجودی:
               </label>
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={simIncludeWip}
@@ -1064,7 +1041,7 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                   />
                   <span>لحاظ کردن موجودی کار در جریان (WIP)</span>
                 </label>
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={simIncludeConsignment}
