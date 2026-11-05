@@ -55,6 +55,7 @@ interface MachinesViewProps {
   onSaveOperator?: (op: Partial<Operator>) => Promise<{ success: boolean; message?: string; error?: string }>;
   onDeleteOperator?: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   onSaveHall?: (hall: Partial<FactoryHall>) => Promise<{ success: boolean; message?: string; error?: string }>;
+  initialSubTab?: 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
 }
 
 export const MachinesView: React.FC<MachinesViewProps> = ({
@@ -69,9 +70,16 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   onSaveOperator,
   onDeleteOperator,
   onSaveHall,
+  initialSubTab = 'machines',
 }) => {
   type SubTab = 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('machines');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');

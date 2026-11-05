@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   GitFork,
   Clock,
@@ -23,6 +23,9 @@ import {
   Tag,
   HelpCircle,
   Filter,
+  Check,
+  AlertCircle,
+  FileText,
 } from 'lucide-react';
 import {
   Routing,
@@ -32,10 +35,12 @@ import {
   DieMold,
   ProcessType,
   PROCESS_DEFINITIONS,
+  CarModel,
 } from '../types/inventory';
 import { toPersianDigits, formatNumber } from '../utils/formatters';
 import { MasterDataDifferenceGuideModal } from './common/MasterDataDifferenceGuideModal';
 import { TraceabilityTagModal } from './wip/TraceabilityTagModal';
+import { SearchableSelect } from './common/SearchableSelect';
 
 interface RoutingsViewProps {
   routings: Routing[];
@@ -58,22 +63,42 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
 }) => {
   const [selectedRoutingId, setSelectedRoutingId] = useState<string>(routings[0]?.id || '');
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  const [viewMode, setViewMode] = useState<'DIRECTORY' | 'STEPPER'>('STEPPER');
+
+  // Dynamic Car Models from API
+  const [carModelsList, setCarModelsList] = useState<CarModel[]>([]);
+  const [selectedCarModel, setSelectedCarModel] = useState<string>('ALL');
+
+  useEffect(() => {
+    fetch('/api/car-models')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          setCarModelsList(data.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Search & Filtering State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCarModel, setSelectedCarModel] = useState<string>('ALL');
 
   // Modals
   const [isNewRoutingModalOpen, setIsNewRoutingModalOpen] = useState(false);
+  const [isEditRoutingModalOpen, setIsEditRoutingModalOpen] = useState(false);
   const [isStepModalOpen, setIsStepModalOpen] = useState(false);
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
 
-  // New Routing State
+  // New Routing Form State
   const [newRoutingPartId, setNewRoutingPartId] = useState('');
   const [newRoutingVersion, setNewRoutingVersion] = useState('V1.0');
   const [newRoutingNotes, setNewRoutingNotes] = useState('');
+
+  // Edit Routing Form State
+  const [editVersion, setEditVersion] = useState('V1.0');
+  const [editNotes, setEditNotes] = useState('');
 
   // Step Form State
   const [stepData, setStepData] = useState<Partial<OperationStep>>({
@@ -88,21 +113,28 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
     standardCycleTimeSec: 10,
     scrapNormPercent: 1.0,
     description: '',
+    isSharedOperation: false,
+    sharedPartId: '',
+    sharedPartCode: '',
+    sharedPartName: '',
+    sharedYieldRatio: 1,
+    sharedOperationNotes: '',
   });
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Filtered Routings by Search Query & Car Model
+  // Filtered Routings
   const filteredRoutings = useMemo(() => {
     return routings.filter(r => {
       const part = parts.find(p => p.id === r.partId || p.code === r.partCode);
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        !searchQuery.trim() ||
-        r.partCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.partName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (part?.carModel && part.carModel.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        r.operations.some(op => op.stepName.toLowerCase().includes(searchQuery.toLowerCase()));
+        !q ||
+        r.partCode.toLowerCase().includes(q) ||
+        r.partName.toLowerCase().includes(q) ||
+        (part?.carModel && part.carModel.toLowerCase().includes(q)) ||
+        r.operations.some(op => op.stepName.toLowerCase().includes(q));
 
       const matchesCar =
         selectedCarModel === 'ALL' ||
@@ -120,10 +152,6 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
     }
     return filteredRoutings[0] || routings[0] || null;
   }, [routings, selectedRoutingId, filteredRoutings]);
-
-  const toggleStep = (stepNumber: number) => {
-    setExpandedSteps(prev => ({ ...prev, [stepNumber]: !prev[stepNumber] }));
-  };
 
   // Open Step Modal for Add or Edit
   const handleOpenAddStep = () => {
@@ -159,10 +187,36 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
 
   const handleDeleteStep = async (index: number) => {
     if (!activeRouting) return;
+    if (!confirm('آیا از حذف این گام عملیاتی اطمینان دارید؟')) return;
     const updatedOps = activeRouting.operations.filter((_, i) => i !== index);
     await onSaveRouting({
       ...activeRouting,
       operations: updatedOps,
+    });
+  };
+
+  const handleMoveStep = async (index: number, direction: 'UP' | 'DOWN') => {
+    if (!activeRouting) return;
+    const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= activeRouting.operations.length) return;
+
+    const newOps = [...activeRouting.operations];
+    const temp = newOps[index];
+    newOps[index] = newOps[targetIndex];
+    newOps[targetIndex] = temp;
+
+    const renumberedOps = newOps.map((op, i) => {
+      const newStepNum = (i + 1) * 10;
+      return {
+        ...op,
+        stepNumber: newStepNum,
+        stepCode: op.stepCode.replace(/OP\d+/i, `OP${newStepNum}`),
+      };
+    });
+
+    await onSaveRouting({
+      ...activeRouting,
+      operations: renumberedOps,
     });
   };
 
@@ -195,6 +249,12 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
         standardCycleTimeSec: Number(stepData.standardCycleTimeSec) || 10,
         scrapNormPercent: Number(stepData.scrapNormPercent) || 1,
         description: stepData.description || '',
+        isSharedOperation: stepData.isSharedOperation || false,
+        sharedPartId: stepData.sharedPartId,
+        sharedPartCode: stepData.sharedPartCode,
+        sharedPartName: stepData.sharedPartName,
+        sharedYieldRatio: Number(stepData.sharedYieldRatio) || 1,
+        sharedOperationNotes: stepData.sharedOperationNotes || '',
       };
 
       let newOps = [...activeRouting.operations];
@@ -204,7 +264,6 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
         newOps.push(normalizedStep);
       }
 
-      // Sort steps by stepNumber
       newOps.sort((a, b) => a.stepNumber - b.stepNumber);
 
       const res = await onSaveRouting({
@@ -261,6 +320,8 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
 
       if (res.success) {
         setIsNewRoutingModalOpen(false);
+        setNewRoutingPartId('');
+        setViewMode('STEPPER');
       } else {
         setFormError(res.error || 'خطا در ایجاد مسیر تولید');
       }
@@ -271,42 +332,68 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
     }
   };
 
+  const handleOpenEditRouting = () => {
+    if (!activeRouting) return;
+    setEditVersion(activeRouting.version || 'V1.0');
+    setEditNotes(activeRouting.notes || '');
+    setIsEditRoutingModalOpen(true);
+  };
+
+  const handleSaveEditRouting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRouting) return;
+
+    try {
+      const res = await onSaveRouting({
+        ...activeRouting,
+        version: editVersion,
+        notes: editNotes,
+      });
+      if (res.success) {
+        setIsEditRoutingModalOpen(false);
+      }
+    } catch {
+      alert('خطا در ذخیره ویرایش');
+    }
+  };
+
+  const handleDeleteRouting = async () => {
+    if (!activeRouting) return;
+    if (!confirm(`آیا از حذف کامل مسیر تولید برای قطعه [${activeRouting.partCode}] ${activeRouting.partName} اطمینان دارید؟`)) {
+      return;
+    }
+    if (onDeleteRouting) {
+      await onDeleteRouting(activeRouting.id);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-slate-850 p-5 sm:p-6 rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-slate-900 shadow-xl space-y-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base lg:text-lg font-bold text-slate-900 flex items-center gap-2">
-              <GitFork className="w-5 h-5 text-indigo-400" />
-              مرکز مهندسی تولید و ترتیب عملیات قطعات خودرو (BOM & Routing)
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              تعریف گام‌به‌گام فرایندهای تولید هر محصول (از ورق خام، بلنکینگ، کشش، خم، پانچ تا جوشکاری و رنگ) و اتصال قالب‌ها و پرس‌ها
-            </p>
+    <div className="space-y-5 font-sans text-right">
+      {/* Grafana-Inspired Header Banner */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
+              <GitFork className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base lg:text-lg font-bold text-slate-900">
+                  مدیریت مسیرهای مهندسی تولید (Manufacturing Routings)
+                </h2>
+                <span className="text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-mono font-bold">
+                  {toPersianDigits(routings.length)} مسیر فعال
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                تعیین توالی ایستگاه‌های کاری (OP10 برش، OP20 کشش، OP30 پانچ و...)، انتساب پرس، قالب و زمان‌های استاندارد
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {/* Guide Button */}
+          <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
             <button
-              onClick={() => setIsGuideModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-100 text-indigo-700 border border-indigo-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
-            >
-              <HelpCircle className="w-4 h-4 text-indigo-400" />
-              <span>راهنمای کاتالوگ و کویل</span>
-            </button>
-
-            {/* Traceability Tag Button */}
-            <button
-              onClick={() => setIsTraceabilityModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
-            >
-              <Tag className="w-4 h-4 text-purple-400" />
-              <span>صدور کارت رهگیری بچ</span>
-            </button>
-
-            {/* New Routing Button */}
-            <button
+              type="button"
               onClick={() => {
                 setNewRoutingPartId('');
                 setNewRoutingVersion('V1.0');
@@ -314,383 +401,480 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                 setFormError(null);
                 setIsNewRoutingModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-slate-900 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-900/30 whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>تعریف مسیر تولید جدید</span>
+              <Plus className="w-4 h-4 text-orange-400" />
+              <span>تعریف مسیر تولید برای قطعه جدید</span>
             </button>
+
+            <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('STEPPER')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+                  viewMode === 'STEPPER' ? 'bg-white shadow-2xs font-bold text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                نمای مراحل عملیات
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('DIRECTORY')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+                  viewMode === 'DIRECTORY' ? 'bg-white shadow-2xs font-bold text-slate-900' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                کاتالوگ کلیه قطعات ({toPersianDigits(parts.length)})
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Advanced Search & Car Model Filter Toolbar */}
-        <div className="pt-3 border-t border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs">
-          {/* Instant Search Input */}
-          <div className="md:col-span-5 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="جستجوی سریع بر اساس کد فنی، نام قطعه، مرحله یا مدل خودرو..."
-              className="w-full bg-white border border-slate-200 rounded-xl pr-9 pl-8 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+        {/* Filter and Search Bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Instant Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="جستجو در کد فنی، نام قطعه یا گام عملیات..."
+                className="bg-slate-50 border border-slate-200 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-900 w-64 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
 
-          {/* Car Model Quick Filter Pills */}
-          <div className="md:col-span-4 flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-[11px]">
-            {[
-              { id: 'ALL', label: 'همه' },
-              { id: 'پژو ۲۰۶', label: '۲۰۶' },
-              { id: '۲۰۷', label: '۲۰۷' },
-              { id: 'تارا', label: 'تارا' },
-              { id: 'دنا', label: 'دنا پلاس' },
-              { id: 'شاهین', label: 'شاهین' },
-              { id: 'کوییک', label: 'کوییک' },
-            ].map(m => (
+            {/* Dynamic Car Model Filter Chips */}
+            <div className="flex items-center gap-1 overflow-x-auto">
               <button
-                key={m.id}
                 type="button"
-                onClick={() => setSelectedCarModel(m.id)}
-                className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap cursor-pointer ${
-                  selectedCarModel === m.id
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-100'
+                onClick={() => setSelectedCarModel('ALL')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer border ${
+                  selectedCarModel === 'ALL'
+                    ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {m.label}
+                همه مدل‌ها
               </button>
-            ))}
+              {carModelsList.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setSelectedCarModel(m.name)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer border whitespace-nowrap ${
+                    selectedCarModel === m.name
+                      ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Search Result Selector */}
-          <div className="md:col-span-3 flex items-center gap-2">
+          {/* Quick Routing Selector Dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-[11px]">انتخاب مسیر جاری:</span>
             <select
               value={activeRouting?.id || ''}
-              onChange={e => setSelectedRoutingId(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-amber-800 focus:outline-none focus:border-indigo-500 font-bold cursor-pointer"
+              onChange={e => {
+                setSelectedRoutingId(e.target.value);
+                setViewMode('STEPPER');
+              }}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              {filteredRoutings.length === 0 ? (
-                <option value="">هیچ موردی با این فیلتر یافت نشد</option>
-              ) : (
-                filteredRoutings.map(r => (
-                  <option key={r.id} value={r.id}>
-                    [{r.partCode}] {r.partName} ({toPersianDigits(r.operations.length)} مرحله)
-                  </option>
-                ))
-              )}
+              {filteredRoutings.map(r => (
+                <option key={r.id} value={r.id}>
+                  [{r.partCode}] {r.partName} ({toPersianDigits(r.operations.length)} مرحله)
+                </option>
+              ))}
             </select>
           </div>
         </div>
-
-        {/* Counter Badge */}
-        <div className="text-[11px] text-slate-400 flex items-center justify-between">
-          <span>
-            نمایش <strong>{toPersianDigits(filteredRoutings.length)}</strong> از مجموع <strong>{toPersianDigits(routings.length)}</strong> مسیر مهندسی
-          </span>
-          {activeRouting && (
-            <span className="text-indigo-700 font-mono">
-              محصول انتخابی: [{activeRouting.partCode}] {activeRouting.partName}
-            </span>
-          )}
-        </div>
       </div>
 
-      {activeRouting ? (
-        <div className="space-y-5">
-          {/* Routing Summary Banner & Part Link */}
-          <div className="bg-gradient-to-l from-slate-900 via-slate-800/90 to-slate-900 p-5 rounded-2xl border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-700 border border-indigo-500/30 font-mono font-bold">
-                  نسخه مهندسی: {activeRouting.version}
-                </span>
-                <span className="text-xs text-amber-400 font-mono font-bold">
-                  {activeRouting.partCode}
-                </span>
-                <span className="text-xs text-emerald-400 font-medium">
-                  (محصول نهایی تحویل مشتری)
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-slate-900 mt-1.5">
-                {activeRouting.partName}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                توالی ساخت: {toPersianDigits(activeRouting.operations.length)} ایستگاه عملیاتی متوالی
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 text-left sm:text-right">
-                <span className="text-[11px] text-slate-400 block">مجموع زمان چرخه ساخت (Lead Time):</span>
-                <span className="text-xs font-bold text-emerald-400 font-mono">
-                  {toPersianDigits(activeRouting.operations.reduce((s, op) => s + op.standardCycleTimeSec, 0))} ثانیه
-                </span>
-              </div>
-              <button
-                onClick={handleOpenAddStep}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-amber-500/20"
-              >
-                <Plus className="w-4 h-4" />
-                <span>افزودن مرحله جدید (OP)</span>
-              </button>
-            </div>
+      {/* VIEW MODE 1: ALL PARTS DIRECTORY */}
+      {viewMode === 'DIRECTORY' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-orange-600" />
+              <span>وضعیت تخصیص مسیر تولید به قطعات کاتالوگ کارخانه:</span>
+            </h3>
+            <span className="text-xs text-slate-500">
+              {toPersianDigits(parts.length)} قطعه در کاتالوگ • {toPersianDigits(routings.length)} دارای مسیر ساخت
+            </span>
           </div>
 
-          {/* VISUAL PROCESS FLOW STEPPER */}
-          <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 overflow-hidden">
-            <h4 className="text-xs font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              <span>جریان تصویری تبدیل مواد و توالی فرآیندها:</span>
-            </h4>
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs shrink-0 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" />
-                <span>کویل ورق ساپکو</span>
-              </div>
-              {activeRouting.operations.map((op, idx) => (
-                <React.Fragment key={op.stepNumber}>
-                  <ArrowLeft className="w-4 h-4 text-slate-600 shrink-0" />
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs shrink-0 min-w-[130px] hover:border-indigo-500 transition-colors">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                      <span>{op.stepCode}</span>
-                      <span className="text-indigo-400 font-bold">{op.processType}</span>
-                    </div>
-                    <div className="text-slate-900 font-medium truncate mt-1 text-[11px]">{op.stepName}</div>
-                    <div className="text-[10px] text-slate-400 mt-1 truncate">
-                      {op.dieMoldName ? `قالب: ${op.dieMoldName.slice(0, 16)}...` : op.machineName || 'پرس خط'}
-                    </div>
-                  </div>
-                </React.Fragment>
-              ))}
-              <ArrowLeft className="w-4 h-4 text-slate-600 shrink-0" />
-              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-xs shrink-0 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>انبار محصول نهایی</span>
-              </div>
-            </div>
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                <tr>
+                  <th className="py-3 px-3.5">کد قطعه</th>
+                  <th className="py-3 px-3.5">عنوان قطعه در خط</th>
+                  <th className="py-3 px-3.5">نوع کالا</th>
+                  <th className="py-3 px-3.5">مدل خودرو</th>
+                  <th className="py-3 px-3.5">وضعیت مسیر ساخت</th>
+                  <th className="py-3 px-3.5">تعداد مراحل (OP)</th>
+                  <th className="py-3 px-3.5 text-center">عملیات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {parts.map(p => {
+                  const r = routings.find(rt => rt.partId === p.id || rt.partCode === p.code);
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-slate-900">{p.code}</td>
+                      <td className="py-3 px-3.5 font-medium text-slate-900">{p.name}</td>
+                      <td className="py-3 px-3.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          p.category === 'FINISHED_GOOD' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          p.category === 'WIP_PART' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {p.category === 'FINISHED_GOOD' ? 'محصول نهایی' : p.category === 'WIP_PART' ? 'نیمه‌ساخته' : 'ماده اولیه'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3.5 text-slate-600">{p.carModel || 'مشترک'}</td>
+                      <td className="py-3 px-3.5">
+                        {r ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>دارای مسیر (نسخه {r.version})</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-medium">فاقد مسیر تولید</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3.5 font-mono">
+                        {r ? `${toPersianDigits(r.operations.length)} ایستگاه` : '—'}
+                      </td>
+                      <td className="py-3 px-3.5 text-center">
+                        {r ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRoutingId(r.id);
+                              setViewMode('STEPPER');
+                            }}
+                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          >
+                            مشاهده و ویرایش مراحل ←
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewRoutingPartId(p.id);
+                              setNewRoutingVersion('V1.0');
+                              setNewRoutingNotes('');
+                              setIsNewRoutingModalOpen(true);
+                            }}
+                            className="px-3 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                          >
+                            + ایجاد مسیر برای این قطعه
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-
-          {/* Sequential Operations Detailed List */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                گام‌های تفصیلی عملیات و پارامترهای فنی
-              </h4>
-              <span className="text-xs text-slate-400">
-                {toPersianDigits(activeRouting.operations.length)} عملیات تعریف شده
-              </span>
-            </div>
-
-            {activeRouting.operations.map((op, idx) => {
-              const isExpanded = expandedSteps[op.stepNumber] !== false; // Default open
-              const machine = machines.find(m => m.id === op.machineId);
-              const die = dies.find(d => d.id === op.dieMoldId);
-
-              return (
-                <div
-                  key={op.stepNumber}
-                  className="bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden transition-all hover:border-slate-600"
-                >
-                  <div className="p-4 flex items-center justify-between bg-white">
-                    <div
-                      onClick={() => toggleStep(op.stepNumber)}
-                      className="flex items-center gap-3 cursor-pointer flex-1"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-400 font-bold font-mono text-xs flex items-center justify-center">
-                        OP{op.stepNumber}
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                          <span>{op.stepName}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-indigo-700 font-mono border border-slate-200">
-                            {op.stepCode}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3 mt-1">
-                          <span className="flex items-center gap-1 text-cyan-700">
-                            <Cpu className="w-3 h-3 text-cyan-400" />
-                            {op.machineName || machine?.name || 'پرس خط'}
-                          </span>
-                          {op.dieMoldName && (
-                            <span className="flex items-center gap-1 text-amber-800">
-                              <Wrench className="w-3 h-3 text-amber-400" />
-                              {op.dieMoldName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {onDirectProduce && (
-                        <button
-                          type="button"
-                          onClick={() => onDirectProduce(activeRouting.partId, op.machineId)}
-                          className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 border border-cyan-500/30 rounded-lg text-xs font-medium transition-colors"
-                          title="ثبت مستقیم برگه تولید سالم در این مرحله"
-                        >
-                          <PlayCircle className="w-3.5 h-3.5" />
-                          <span>ثبت تولید</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditStep(op, idx)}
-                        className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                        title="ویرایش این گام"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteStep(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors"
-                        title="حذف این گام"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleStep(op.stepNumber)}
-                        className="p-1 text-slate-400"
-                      >
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="p-4 pt-2 border-t border-slate-200 text-xs text-slate-700 space-y-2.5 bg-slate-50">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[11px] text-slate-400 block">نوع فرآیند تولید:</span>
-                          <span className="font-semibold text-amber-400 mt-0.5 block">{op.processType}</span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[11px] text-slate-400 block">قالب پرس اختصاصی:</span>
-                          <span className="font-semibold text-slate-900 mt-0.5 block truncate">
-                            {die ? `${die.name} (${die.code})` : op.dieMoldName || 'فاقد قالب (فیکسچر)'}
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[11px] text-slate-400 block">زمان سیکل و تعویض قالب:</span>
-                          <span className="font-semibold text-cyan-400 mt-0.5 block">
-                            سیکل: {toPersianDigits(op.standardCycleTimeSec)}s | ستاپ: {toPersianDigits(op.setupTimeMin || 0)}m
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[11px] text-slate-400 block">نرم مجاز ضایعات ساپکو:</span>
-                          <span className="font-semibold text-rose-400 mt-0.5 block">
-                            حداکثر {toPersianDigits(op.scrapNormPercent)}٪ در شیفت
-                          </span>
-                        </div>
-                      </div>
-
-                      {op.description && (
-                        <p className="text-[11px] text-slate-400 bg-white p-2.5 rounded-xl border border-slate-200 leading-relaxed">
-                          <strong>دستورالعمل کنترل ابعادی و بازرسی QC:</strong> {op.description}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="bg-slate-100 p-12 text-center text-slate-400 rounded-2xl border border-slate-200 text-xs">
-          هیچ مسیر تولیدی تعریف نشده است. لطفاً روی دکمه «تعریف مسیر تولید جدید» کلیک کنید.
         </div>
       )}
 
-      {/* MODAL: CREATE NEW ROUTING FOR ANY PART */}
+      {/* VIEW MODE 2: STEPPER & PROCESS DETAILS */}
+      {viewMode === 'STEPPER' && activeRouting && (
+        <div className="space-y-5">
+          {/* Active Routing Summary Card */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs px-2.5 py-0.5 rounded-lg bg-slate-900 text-white font-mono font-bold">
+                    {activeRouting.partCode}
+                  </span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
+                    نسخه {activeRouting.version}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    توالی: <strong>{toPersianDigits(activeRouting.operations.length)} ایستگاه عملیاتی</strong>
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 mt-2">
+                  {activeRouting.partName}
+                </h3>
+                {activeRouting.notes && (
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    الزامات کیفی و یادداشت‌ها: {activeRouting.notes}
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons for Active Routing */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-left sm:text-right">
+                  <span className="text-[10px] text-slate-400 block">زمان چرخه کل ساخت:</span>
+                  <span className="text-xs font-bold text-emerald-700 font-mono">
+                    {toPersianDigits(activeRouting.operations.reduce((s, op) => s + op.standardCycleTimeSec, 0))} ثانیه
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddStep}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ افزودن مرحله عملیاتی جدید (OP)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenEditRouting}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5 inline mr-1" />
+                  ویرایش سند
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDeleteRouting}
+                  className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition cursor-pointer border border-rose-200"
+                  title="حذف این مسیر"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Process Flow Horizontal Stepper */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">گردش متوالی فرآیند ساخت:</span>
+              <div className="flex items-center gap-2 overflow-x-auto py-2">
+                {activeRouting.operations.map((op, idx) => (
+                  <React.Fragment key={op.stepNumber || idx}>
+                    <div className="flex-1 min-w-[150px] p-3 rounded-xl bg-slate-50 border border-slate-200 text-right space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          {op.stepCode}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {toPersianDigits(op.standardCycleTimeSec)}s
+                        </span>
+                      </div>
+                      <div className="font-bold text-xs text-slate-900 line-clamp-1 mt-1">{op.stepName}</div>
+                      {op.isSharedOperation && (
+                        <span className="text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 block mt-1">
+                          ✨ قالب ۲ کویته ({op.sharedPartCode || 'هم‌تولید'})
+                        </span>
+                      )}
+                      <div className="text-[11px] text-slate-500 line-clamp-1">{op.machineName || 'پرس دستی'}</div>
+                    </div>
+                    {idx < activeRouting.operations.length - 1 && (
+                      <ArrowLeft className="w-4 h-4 text-slate-300 shrink-0" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* Operations Breakdown Table */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-bold text-slate-800">
+                جزئیات مهندسی ایستگاه‌ها، قالب‌ها و پارامترهای کنترل فرآیند:
+              </h4>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-3.5">شماره گام</th>
+                      <th className="py-3 px-3.5">کد و عنوان عملیات</th>
+                      <th className="py-3 px-3.5">نوع فرآیند</th>
+                      <th className="py-3 px-3.5">پرس / دستگاه انتسابی</th>
+                      <th className="py-3 px-3.5">قالب متصل</th>
+                      <th className="py-3 px-3.5 text-center">تناژ لازم</th>
+                      <th className="py-3 px-3.5 text-center">زمان سیکل (ثانیه)</th>
+                      <th className="py-3 px-3.5 text-center">ستاپ (دقیقه)</th>
+                      <th className="py-3 px-3.5 text-center">ضایعات مجاز</th>
+                      <th className="py-3 px-3.5 text-center">عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {activeRouting.operations.map((step, idx) => (
+                      <tr key={step.stepNumber || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3.5 font-mono font-bold text-indigo-700">
+                          {step.stepCode}
+                        </td>
+                        <td className="py-3 px-3.5 font-bold text-slate-900">
+                          {step.stepName}
+                          {step.isSharedOperation && (
+                            <span className="mt-1 block text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md w-fit">
+                              ✨ عملیات مشترک: خروجی همزمان {step.sharedPartCode ? `[${step.sharedPartCode}]` : ''} ({toPersianDigits(step.sharedYieldRatio || 1)} عدد در هر ضرب)
+                            </span>
+                          )}
+                          {step.description && (
+                            <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
+                              {step.description}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3.5">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-medium border border-slate-200">
+                            {step.processType}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3.5 text-slate-800 font-medium">
+                          {step.machineName || 'پرس مشترک سالن'}
+                        </td>
+                        <td className="py-3 px-3.5 font-mono text-purple-700 text-[11px]">
+                          {step.dieMoldName || 'فاقد قالب'}
+                        </td>
+                        <td className="py-3 px-3.5 text-center font-mono font-bold text-slate-800">
+                          {step.requiredTonnage ? `${toPersianDigits(step.requiredTonnage)}T` : '—'}
+                        </td>
+                        <td className="py-3 px-3.5 text-center font-mono font-bold text-slate-900">
+                          {toPersianDigits(step.standardCycleTimeSec)}
+                        </td>
+                        <td className="py-3 px-3.5 text-center font-mono text-slate-600">
+                          {toPersianDigits(step.setupTimeMin || 0)}
+                        </td>
+                        <td className="py-3 px-3.5 text-center font-mono text-amber-700 font-bold">
+                          {toPersianDigits(step.scrapNormPercent)}%
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMoveStep(idx, 'UP')}
+                              className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 rounded transition cursor-pointer"
+                              title="انتقال به گام قبلی (تغییر توالی)"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === activeRouting.operations.length - 1}
+                              onClick={() => handleMoveStep(idx, 'DOWN')}
+                              className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 rounded transition cursor-pointer"
+                              title="انتقال به گام بعدی (تغییر توالی)"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditStep(step, idx)}
+                              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                              title="ویرایش گام"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStep(idx)}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="حذف گام"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: CREATE NEW ROUTING */}
       {isNewRoutingModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <GitFork className="w-4 h-4 text-indigo-400" />
-                <span>تعریف مسیر مهندسی تولید برای قطعه جدید</span>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-5 shadow-xl space-y-4 text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <GitFork className="w-4 h-4 text-indigo-600" />
+                <span>تعریف مسیر تولید مهندسی برای قطعه جدید</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setIsNewRoutingModalOpen(false)}
-                className="text-slate-400 hover:text-slate-900 transition-colors"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {formError && (
-              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleCreateNewRouting} className="mt-4 space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-slate-700 font-medium">انتخاب قطعه از کاتالوگ ۵۲ گانه *</label>
-                <select
+            <form onSubmit={handleCreateNewRouting} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">
+                  انتخاب قطعه خودرویی از کاتالوگ *
+                </label>
+                <SearchableSelect
                   value={newRoutingPartId}
-                  onChange={e => setNewRoutingPartId(e.target.value)}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
-                  required
-                >
-                  <option value="">-- انتخاب قطعه مورد نظر برای تولید --</option>
-                  {parts.map(p => (
-                    <option key={p.id} value={p.id}>
-                      [{p.code}] {p.name} ({p.carModel || 'مشترک'})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-400 pt-0.5">
-                  برای هر محصول نهایی یا مجموعه نیمه‌ساخته می‌توانید توالی ایستگاه‌ها و قالب‌ها را تنظیم کنید.
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-slate-700 font-medium">نسخه مهندسی نقشه ساخت *</label>
-                <input
-                  type="text"
-                  value={newRoutingVersion}
-                  onChange={e => setNewRoutingVersion(e.target.value)}
-                  placeholder="مثال: V1.0 یا V2.2"
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
+                  onChange={val => setNewRoutingPartId(val)}
+                  placeholder="جستجو و انتخاب قطعه برای ساخت مسیر..."
+                  searchPlaceholder="جستجوی کد یا نام قطعه..."
+                  options={parts.map(p => ({
+                    value: p.id,
+                    label: p.name,
+                    sublabel: `${p.code} • ${p.carModel || 'مشترک'}`,
+                    badge: p.category === 'FINISHED_GOOD' ? 'محصول' : p.category === 'WIP_PART' ? 'نیمه‌ساخته' : 'ماده اولیه',
+                  }))}
                   required
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-700 font-medium">یادداشت‌ها و الزامات کیفی قرارداد</label>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">نسخه مهندسی نقشه ساخت *</label>
+                <input
+                  type="text"
+                  required
+                  value={newRoutingVersion}
+                  onChange={e => setNewRoutingVersion(e.target.value)}
+                  placeholder="V1.0 یا V2.1"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">یادداشت‌ها و الزامات قرارداد ساپکو</label>
                 <textarea
                   rows={2}
                   value={newRoutingNotes}
                   onChange={e => setNewRoutingNotes(e.target.value)}
-                  placeholder="مثلاً: تست گشتاور مهره حداقل 45Nm، تست سالت اسپری ۵۰۰ ساعت ساپکو..."
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  placeholder="الزامات ابعادی، تلرانس‌های مجاز، نوع روانکاری ورق و کنترل پلیسه..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsNewRoutingModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl font-medium transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md shadow-indigo-900/30"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
                   {loading ? 'در حال ایجاد...' : 'ایجاد مسیر تولید'}
                 </button>
@@ -700,77 +884,133 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADD / EDIT OPERATION STEP */}
+      {/* MODAL 2: EDIT ACTIVE ROUTING */}
+      {isEditRoutingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4 text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900">ویرایش مشخصات سند مسیر تولید</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditRoutingModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRouting} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">نسخه مهندسی مسیر</label>
+                <input
+                  type="text"
+                  required
+                  value={editVersion}
+                  onChange={e => setEditVersion(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">یادداشت‌ها و الزامات نقشه</label>
+                <textarea
+                  rows={3}
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditRoutingModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  ثبت تغییرات
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: ADD / EDIT OPERATION STEP */}
       {isStepModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Settings className="w-4 h-4 text-amber-400" />
-                <span>
-                  {editingStepIndex !== null ? 'ویرایش گام عملیات' : 'افزودن گام عملیاتی OP جدید'}
-                </span>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-5 shadow-xl space-y-4 text-right max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Settings className="w-4 h-4 text-orange-600" />
+                <span>{editingStepIndex !== null ? 'ویرایش گام عملیات' : 'افزودن گام عملیاتی OP جدید'}</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setIsStepModalOpen(false)}
-                className="text-slate-400 hover:text-slate-900 transition-colors"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {formError && (
-              <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleSaveStep} className="mt-4 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">شماره گام متوالی *</label>
+            <form onSubmit={handleSaveStep} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">شماره گام (Step Number) *</label>
                   <input
                     type="number"
-                    step="10"
+                    step={10}
+                    required
                     value={stepData.stepNumber || 10}
                     onChange={e => setStepData({ ...stepData, stepNumber: parseInt(e.target.value, 10) || 10 })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
-                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
-                  <span className="text-[10px] text-slate-500">معمولاً با مضارب ۱۰ (OP10, OP20...)</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">معمولاً به صورت مضارب ۱۰ (OP10, OP20, OP30)</span>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">کد فنی گام *</label>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">کد فنی گام *</label>
                   <input
                     type="text"
+                    required
                     value={stepData.stepCode || ''}
                     onChange={e => setStepData({ ...stepData, stepCode: e.target.value })}
-                    placeholder="OP20_BLNK"
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
-                    required
+                    placeholder="OP20_DRAW"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-700 font-medium">عنوان کامل عملیات *</label>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">عنوان کامل عملیات *</label>
                 <input
                   type="text"
+                  required
                   value={stepData.stepName || ''}
                   onChange={e => setStepData({ ...stepData, stepName: e.target.value })}
-                  placeholder="مثلاً: کشش عمیق پوسته در پرس ۸۰۰ تن با بلانک‌هولدر"
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
-                  required
+                  placeholder="مثال: کشش عمیق پوسته و فرم‌دهی در پرس ۸۰۰ تن"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">نوع فرآیند *</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">نوع فرآیند *</label>
                   <select
                     value={stepData.processType}
                     onChange={e => setStepData({ ...stepData, processType: e.target.value as ProcessType })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
                   >
                     {PROCESS_DEFINITIONS.map(p => (
                       <option key={p.code} value={p.code}>
@@ -779,31 +1019,30 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                     ))}
                   </select>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">ماشین‌آلات / پرس پیشنهادی</label>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">پرس / دستگاه انتسابی</label>
                   <select
                     value={stepData.machineId || ''}
                     onChange={e => setStepData({ ...stepData, machineId: e.target.value })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">-- بدون انتساب / دستی --</option>
                     {machines.map(m => (
                       <option key={m.id} value={m.id}>
-                        [{m.code}] {m.name} ({m.tonnage ? `${m.tonnage}T` : m.processType})
+                        [{m.code}] {m.name} ({m.tonnage}T)
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">قالب پرس متصل به این مرحله</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">قالب پرس متصل به این مرحله</label>
                   <select
                     value={stepData.dieMoldId || ''}
                     onChange={e => setStepData({ ...stepData, dieMoldId: e.target.value })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">-- بدون قالب اختصاصی --</option>
                     {dies.map(d => (
@@ -813,79 +1052,145 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                     ))}
                   </select>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">تناژ مورد نیاز پرس (تن)</label>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">تناژ اسمی مورد نیاز (تن)</label>
                   <input
                     type="number"
                     value={stepData.requiredTonnage || 0}
                     onChange={e => setStepData({ ...stepData, requiredTonnage: parseFloat(e.target.value) || 0 })}
-                    placeholder="مثلاً: 400"
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
+                    placeholder="400"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">زمان سیکل استاندارد (ثانیه)</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">زمان چرخه (ثانیه) *</label>
                   <input
                     type="number"
                     step="0.5"
+                    required
                     value={stepData.standardCycleTimeSec || 10}
                     onChange={e => setStepData({ ...stepData, standardCycleTimeSec: parseFloat(e.target.value) || 10 })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
-                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">زمان ستاپ قالب (دقیقه)</label>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">زمان ستاپ قالب (دقیقه)</label>
                   <input
                     type="number"
                     value={stepData.setupTimeMin || 0}
                     onChange={e => setStepData({ ...stepData, setupTimeMin: parseFloat(e.target.value) || 0 })}
-                    placeholder="25"
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">نرم ضایعات مجاز ساپکو (٪)</label>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">نرم ضایعات مجاز (٪) *</label>
                   <input
                     type="number"
                     step="0.1"
+                    required
                     value={stepData.scrapNormPercent || 1}
                     onChange={e => setStepData({ ...stepData, scrapNormPercent: parseFloat(e.target.value) || 1 })}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500"
-                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-700 font-medium">دستورالعمل کنترل ابعادی و نکات قالب</label>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">دستورالعمل کنترل ابعادی و نکات قالب</label>
                 <textarea
                   rows={2}
                   value={stepData.description || ''}
                   onChange={e => setStepData({ ...stepData, description: e.target.value })}
-                  placeholder="نکات تنظیم لقی سنبه ماتریس، روان‌کاری ورق، کنترل پارگی کشش..."
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:border-amber-500"
+                  placeholder="نکات تنظیم لقی سنبه ماتریس، کنترل چروکیدگی کشش، روغن‌کاری ورق..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
+              {/* Shared Operation / Dual-Output Co-Production Config */}
+              <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isSharedOpCheck"
+                    checked={stepData.isSharedOperation || false}
+                    onChange={e => setStepData({ ...stepData, isSharedOperation: e.target.checked })}
+                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                  />
+                  <label htmlFor="isSharedOpCheck" className="font-bold text-xs text-purple-950 cursor-pointer">
+                    عملیات مشترک / خروجی همزمان دوگانه (قالب ۲ کویته متقارن مانند چپ و راست)
+                  </label>
+                </div>
+
+                {stepData.isSharedOperation && (
+                  <div className="space-y-2.5 pt-1 text-xs">
+                    <div>
+                      <label className="block font-semibold text-purple-900 mb-1">
+                        انتخاب قطعه دوم هم‌تولید (Co-Produced Part) *
+                      </label>
+                      <select
+                        value={stepData.sharedPartId || ''}
+                        onChange={e => {
+                          const pId = e.target.value;
+                          const found = parts.find(p => p.id === pId || p.code === pId);
+                          setStepData({
+                            ...stepData,
+                            sharedPartId: pId,
+                            sharedPartCode: found?.code || '',
+                            sharedPartName: found?.name || '',
+                          });
+                        }}
+                        className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-purple-500 font-medium"
+                      >
+                        <option value="">-- انتخاب قطعه مکمل (مثلاً پشت صندلی راست) --</option>
+                        {parts.map(p => (
+                          <option key={p.id} value={p.id}>
+                            [{p.code}] {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-purple-900 mb-1">کد فنی قطعه دوم</label>
+                        <input
+                          type="text"
+                          value={stepData.sharedPartCode || ''}
+                          onChange={e => setStepData({ ...stepData, sharedPartCode: e.target.value })}
+                          placeholder="SAPCO-ST-BACK-RH"
+                          className="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 font-mono text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-purple-900 mb-1">نسبت خروجی در هر ضرب</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={stepData.sharedYieldRatio || 1}
+                          onChange={e => setStepData({ ...stepData, sharedYieldRatio: parseInt(e.target.value, 10) || 1 })}
+                          className="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 font-mono font-bold text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsStepModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-xl font-medium transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold transition-all shadow-md shadow-amber-500/20"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
                   {loading ? 'در حال ذخیره...' : 'ذخیره گام عملیاتی'}
                 </button>
@@ -895,13 +1200,13 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
         </div>
       )}
 
-      {/* Master Data Difference Guide Modal */}
+      {/* Guide Modal */}
       <MasterDataDifferenceGuideModal
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
       />
 
-      {/* Traceability Lot & Tag Generator Modal */}
+      {/* Traceability Modal */}
       <TraceabilityTagModal
         isOpen={isTraceabilityModalOpen}
         onClose={() => setIsTraceabilityModalOpen(false)}

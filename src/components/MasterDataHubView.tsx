@@ -27,6 +27,8 @@ import {
   Mail,
   Check,
   GitFork,
+  Car,
+  FolderTree,
 } from 'lucide-react';
 import {
   Part,
@@ -40,12 +42,15 @@ import {
   UnitDefinition,
   CustomerDefinition,
   ShiftDefinition,
+  CarModel,
+  OperationDefinition,
 } from '../types/inventory';
 import { ErpColorTheme, ErpLayoutTemplate, COLOR_THEMES } from '../types/theme';
 import { PartsView } from './PartsView';
 import { RoutingsView } from './RoutingsView';
 import { MachinesView } from './MachinesView';
 import { AdvancedBomModuleView } from './bom/AdvancedBomModuleView';
+import { ProductStructureView } from './bom/ProductStructureView';
 import { ParallelProductionFlowView } from './wip/ParallelProductionFlowView';
 import { TraceabilityTagModal } from './wip/TraceabilityTagModal';
 import { toPersianDigits } from '../utils/formatters';
@@ -56,6 +61,7 @@ export type MasterSubSection =
   | 'PARTS'
   | 'RAW_MATERIALS'
   | 'BOM'
+  | 'PRODUCT_STRUCTURE'
   | 'PARALLEL_FLOWS'
   | 'ROUTINGS'
   | 'OPERATIONS'
@@ -65,6 +71,7 @@ export type MasterSubSection =
   | 'CUSTOMERS'
   | 'MACHINES'
   | 'DIES'
+  | 'CAR_MODELS'
   | 'ORDERS';
 
 interface RawSheetSpec {
@@ -271,6 +278,7 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
   const [unitsList, setUnitsList] = useState<UnitDefinition[]>([]);
   const [customersList, setCustomersList] = useState<CustomerDefinition[]>([]);
   const [shiftsList, setShiftsList] = useState<ShiftDefinition[]>([]);
+  const [carModelsList, setCarModelsList] = useState<CarModel[]>([]);
 
   // Sub-modals for Master Data CRUD
   const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
@@ -310,24 +318,61 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
   const [shiftForm, setShiftForm] = useState<Partial<ShiftDefinition>>({
     code: '',
     name: '',
-    startTime: '06:00',
-    endTime: '14:00',
+    startTime: '07:00',
+    endTime: '14:30',
     netWorkMinutes: 450,
     status: 'ACTIVE',
+    hasOvertime: true,
+    overtimeStartTime: '15:00',
+    overtimeEndTime: '17:00',
+    overtimeMinutes: 120,
+    overtimeDaysDescription: 'شنبه تا چهارشنبه',
+    thursdayStatus: 'OVERTIME_15_17',
+  });
+
+  const [isCarModelModalOpen, setIsCarModelModalOpen] = useState(false);
+  const [editingCarModel, setEditingCarModel] = useState<CarModel | null>(null);
+  const [carModelForm, setCarModelForm] = useState<Partial<CarModel>>({
+    code: '',
+    name: '',
+    oem: 'ساپکو (ایران‌خودرو)',
+    description: '',
+    active: true,
+  });
+
+  // Operations CRUD States
+  const [operationsList, setOperationsList] = useState<OperationDefinition[]>([]);
+  const [operationSearch, setOperationSearch] = useState('');
+  const [operationCategoryFilter, setOperationCategoryFilter] = useState<string>('ALL');
+  const [isOperationModalOpen, setIsOperationModalOpen] = useState(false);
+  const [editingOperation, setEditingOperation] = useState<OperationDefinition | null>(null);
+  const [operationForm, setOperationForm] = useState<Partial<OperationDefinition>>({
+    code: '',
+    name: '',
+    stationType: '',
+    cycleTimeSec: 4.5,
+    setupTimeMin: 20,
+    category: 'STAMPING',
+    description: '',
+    active: true,
   });
 
   const loadDynamicMasterData = async () => {
     try {
-      const [wRes, uRes, cRes, sRes] = await Promise.all([
+      const [wRes, uRes, cRes, sRes, cmRes, opRes] = await Promise.all([
         fetch('/api/warehouses').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/units').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/customers').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/shifts').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/car-models').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/operations').then(r => r.json()).catch(() => ({ success: false })),
       ]);
       if (wRes.success && wRes.data) setWarehousesList(wRes.data);
       if (uRes.success && uRes.data) setUnitsList(uRes.data);
       if (cRes.success && cRes.data) setCustomersList(cRes.data);
       if (sRes.success && sRes.data) setShiftsList(sRes.data);
+      if (cmRes.success && cmRes.data) setCarModelsList(cmRes.data);
+      if (opRes.success && opRes.data) setOperationsList(opRes.data);
     } catch (e) {
       console.error('Error loading dynamic master data:', e);
     }
@@ -481,6 +526,78 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
     }
   };
 
+  const handleSaveCarModel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/car-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(carModelForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsCarModelModalOpen(false);
+        setEditingCarModel(null);
+      } else {
+        alert(data.error || 'خطا در ثبت مدل خودرو');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteCarModel = async (id: string) => {
+    if (!confirm('آیا از حذف این مدل خودرو اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/car-models/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف مدل خودرو');
+      }
+    } catch {
+      alert('خطا در حذف مدل خودرو');
+    }
+  };
+
+  const handleSaveOperation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(operationForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+        setIsOperationModalOpen(false);
+        setEditingOperation(null);
+      } else {
+        alert(data.error || 'خطا در ثبت عملیات');
+      }
+    } catch {
+      alert('خطای ارتباط با سرور');
+    }
+  };
+
+  const handleDeleteOperation = async (id: string) => {
+    if (!confirm('آیا از حذف این عملیات استاندارد اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/operations/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadDynamicMasterData();
+      } else {
+        alert(data.error || 'خطا در حذف عملیات');
+      }
+    } catch {
+      alert('خطا در حذف عملیات');
+    }
+  };
+
   // Hub Cards exactly matching Uploaded Image 1 (1_1da4846f.jpg)
   const hubCards: {
     id: MasterSubSection;
@@ -511,6 +628,13 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       countBadge: 'درخت محصول چندسطحی',
     },
     {
+      id: 'PRODUCT_STRUCTURE',
+      title: 'ساختار درختی کالا (Product Structure)',
+      description: 'مدل ساختار بازگشتی کالا، تخصیص زیرمجموعه‌ها و ضرایب مصرف مانند براکت ضدسرقت',
+      icon: FolderTree,
+      countBadge: 'ساختار درختی بازگشتی',
+    },
+    {
       id: 'PARALLEL_FLOWS',
       title: 'تولید موازی و انشعاب',
       description: 'منطق قالب‌های دوگانه چپ/راست، انشعاب ورق و الحاق در جوشکاری',
@@ -529,7 +653,7 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       title: 'عملیات تولید',
       description: 'برش، خالی‌بری، خم، پرس، جوش، رنگ و مونتاژ با زمان‌های استاندارد',
       icon: Settings2,
-      countBadge: '۷ ایستگاه استاندارد',
+      countBadge: `${toPersianDigits(operationsList.length)} ایستگاه و عملیات`,
     },
     {
       id: 'WAREHOUSES',
@@ -566,6 +690,20 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       icon: Wrench,
       countBadge: `${toPersianDigits(machines.length)} دستگاه`,
     },
+    {
+      id: 'DIES',
+      title: 'قالب‌های پرس و فیکسچرها',
+      description: 'شناسنامه قالب، تناژ مورد نیاز، پرس‌های سازگار، کنترل ضرب و وضعیت PM',
+      icon: Wrench,
+      countBadge: `${toPersianDigits(dies.length)} قالب فعال`,
+    },
+    {
+      id: 'CAR_MODELS',
+      title: 'مدل‌های خودرو و خانواده محصول',
+      description: 'پژو ۲۰۶، ۲۰۷، تارا، دنا پلاس، شاهین، کوییک و ارتباط با خودروساز',
+      icon: Car,
+      countBadge: `${toPersianDigits(carModelsList.length)} مدل خودرو`,
+    },
   ];
 
   // Segmented Tabs exactly matching Uploaded Image 2 (2_5080a2ed.jpg)
@@ -573,17 +711,19 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
     { id: 'PARTS', label: 'قطعات' },
     { id: 'RAW_MATERIALS', label: 'ماده اولیه' },
     { id: 'BOM', label: 'درخت محصول (BOM)' },
+    { id: 'PRODUCT_STRUCTURE', label: 'ساختار درختی کالا' },
     { id: 'PARALLEL_FLOWS', label: 'تولید موازی و چپ/راست' },
     { id: 'ROUTINGS', label: 'مسیر تولید' },
     { id: 'OPERATIONS', label: 'عملیات' },
     { id: 'MACHINES', label: 'ماشین‌آلات' },
     { id: 'DIES', label: 'قالب‌ها' },
+    { id: 'CAR_MODELS', label: 'مدل خودرو' },
     { id: 'WAREHOUSES', label: 'انبارها' },
     { id: 'CUSTOMERS', label: 'مشتریان' },
     { id: 'ORDERS', label: 'سفارشات' },
   ];
 
-  const handleSaveSheetSpec = (e: React.FormEvent) => {
+  const handleSaveSheetSpec = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sheetForm.code || !sheetForm.name) return;
 
@@ -611,6 +751,22 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       };
       setRawSheets(prev => [newSpec, ...prev]);
     }
+
+    // Automatically sync with global parts catalog as RAW_MATERIAL
+    try {
+      await onSavePart({
+        code: sheetForm.code,
+        name: sheetForm.name,
+        category: 'RAW_MATERIAL',
+        unit: 'KG',
+        materialGrade: sheetForm.grade || 'ST12',
+        thicknessMm: Number(sheetForm.thicknessMm) || 1.0,
+        weightPerUnitKg: Number(sheetForm.sheetWeightKg) || 24.5,
+      });
+    } catch (err) {
+      console.warn('Could not auto-sync sheet with parts catalog:', err);
+    }
+
     setIsNewSheetModalOpen(false);
   };
 
@@ -702,7 +858,7 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                 }}
                 className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
-                <option value="HUB">پیشخوان همه جداول اطلاعات پایه (۱۱ بخش)</option>
+                <option value="HUB">پیشخوان همه جداول اطلاعات پایه (۱۳ بخش)</option>
                 {segmentedTabs.map(t => (
                   <option key={t.id} value={t.id}>
                     {t.label}
@@ -720,6 +876,8 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                 { id: 'BOM', label: 'درخت محصول (BOM)' },
                 { id: 'ROUTINGS', label: 'مسیر تولید' },
                 { id: 'MACHINES', label: 'ماشین‌آلات' },
+                { id: 'DIES', label: 'قالب‌ها' },
+                { id: 'CAR_MODELS', label: 'مدل‌های خودرو' },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -815,6 +973,28 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       {/* 1. RAW MATERIALS & SHEET SPECS (Matches Table in Image 2: 2_5080a2ed.jpg) */}
       {activeSection === 'RAW_MATERIALS' && (
         <div className="space-y-3">
+          {/* Informative banner addressing user domain question */}
+          <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl flex items-start justify-between gap-3 text-xs">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900">🔗 اتصال و یکپارچگی مواد اولیه با انبار قطعات (Master Item Catalog):</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  {toPersianDigits(parts.filter(p => p.category === 'RAW_MATERIAL').length)} قلم ماده اولیه در انبار کالا
+                </span>
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                در خطوط پرسکاری بدنه خودرو، کلیه اجناس اعم از <strong>مواد اولیه (ورق و رول)</strong>، <strong>قطعات نیمه‌ساخته (WIP)</strong> و <strong>محصول نهایی</strong> دارای هویت واحد به عنوان کالا هستند. این جدول مشخصات مهندسی ابعاد شیت (ضخامت، طول/عرض برش و وزن هر برگ برای موازنه خطوط پرس) را تنظیم می‌کند و هر ردیف آن مستقیماً با کاتالوگ قطعات همگام است.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveSection('PARTS')}
+              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-[11px] whitespace-nowrap cursor-pointer shrink-0"
+            >
+              مشاهده در انبار قطعات ←
+            </button>
+          </div>
+
           {/* Action Row above table matching Image 2 */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
@@ -970,6 +1150,7 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
           operators={operators}
           halls={halls}
           parts={parts}
+          initialSubTab={activeSection === 'DIES' ? 'dies' : 'machines'}
           onSaveMachine={onSaveMachine}
           onSaveDie={onSaveDie}
           onDeleteDie={onDeleteDie}
@@ -986,6 +1167,11 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
         />
       )}
 
+      {/* 5.0. PRODUCT STRUCTURE (ساختار درختی بازگشتی کالا) */}
+      {activeSection === 'PRODUCT_STRUCTURE' && (
+        <ProductStructureView parts={parts} />
+      )}
+
       {/* 5.1. PARALLEL PRODUCTION & CO-PRODUCTION FLOWS */}
       {activeSection === 'PARALLEL_FLOWS' && (
         <ParallelProductionFlowView
@@ -993,68 +1179,212 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
         />
       )}
 
-      {/* 6. OPERATIONS (عملیات تولید استاندارد) */}
+      {/* 6. OPERATIONS (عملیات تولید استاندارد - کاملاً پویا با قابلیت افزودن، ویرایش و حذف) */}
       {activeSection === 'OPERATIONS' && (
         <div
           className={`bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs ${themeMeta.borderAccentClass}`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                ایستگاه‌ها و عملیات استاندارد تولید (Standard Operations)
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  ایستگاه‌ها و عملیات استاندارد تولید (Standard Operations)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {toPersianDigits(operationsList.length)} عملیات تعریف‌شده
+                </span>
+              </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                تعریف مراحل استاندارد برش کویل، بلنکینگ، فرم‌دهی، کشش، پانچ، جوشکاری مقاومتی و کنترل کیفیت
+                بانک اطلاعاتی عملیات استاندارد برش رول، بلنکینگ، کشش، خم، پرس‌جوش مهره، جوش CO2، پوشش الکتروفورز (ED) و بازرسی نهایی
               </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingOperation(null);
+                setOperationForm({
+                  code: `OP-${(operationsList.length + 1) * 10}`,
+                  name: '',
+                  stationType: '',
+                  cycleTimeSec: 4.5,
+                  setupTimeMin: 20,
+                  category: 'STAMPING',
+                  description: '',
+                  active: true,
+                });
+                setIsOperationModalOpen(true);
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer text-white shadow-xs ${themeMeta.buttonPrimaryClass}`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>تعریف عملیات جدید</span>
+            </button>
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="جستجو در کد، نام عملیات، ایستگاه یا توضیحات..."
+                value={operationSearch}
+                onChange={e => setOperationSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 transition-colors"
+              />
+              {operationSearch && (
+                <button
+                  type="button"
+                  onClick={() => setOperationSearch('')}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: 'ALL', label: 'همه دسته‌ها' },
+                { id: 'SHEARING', label: 'برش و نواربری' },
+                { id: 'STAMPING', label: 'پرسکاری و کشش' },
+                { id: 'BENDING', label: 'خم‌کاری' },
+                { id: 'WELDING', label: 'جوش مقاومتی و CO2' },
+                { id: 'SURFACE_FINISH', label: 'رنگ و فسفاته' },
+                { id: 'QC_PACK', label: 'کنترل کیفی و پکینگ' },
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setOperationCategoryFilter(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                    operationCategoryFilter === cat.id
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Operations Table */}
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
                   <th className="py-3 px-4">کد عملیات</th>
                   <th className="py-3 px-4">عنوان عملیات</th>
-                  <th className="py-3 px-4">نوع ایستگاه کاری</th>
-                  <th className="py-3 px-4">زمان چرخه استاندارد (ثانیه)</th>
+                  <th className="py-3 px-4">نوع ایستگاه / تجهیزات</th>
+                  <th className="py-3 px-4">دسته فرآیندی</th>
+                  <th className="py-3 px-4">زمان چرخه (ثانیه)</th>
                   <th className="py-3 px-4">زمان تعویض قالب (دقیقه)</th>
                   <th className="py-3 px-4">وضعیت</th>
+                  <th className="py-3 px-4 text-center">اقدامات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {[
-                  { code: 'OP-10', name: 'برش رول و نواربری (Slitting / Cut-to-Length)', station: 'خط برش کویل', cycle: '۴/۵', setup: '۳۵' },
-                  { code: 'OP-20', name: 'خالی‌بری و بلنکینگ (Blanking)', station: 'پرس ضربه‌ای ۲۵۰ تن', cycle: '۳/۲', setup: '۲۵' },
-                  { code: 'OP-30', name: 'کشش عمیق و فرم‌دهی اولیه (Deep Drawing)', station: 'پرس هیدرولیک ۴۰۰ تن', cycle: '۸/۰', setup: '۴۵' },
-                  { code: 'OP-40', name: 'پانچ و دوربری (Piercing & Trimming)', station: 'پرس ضربه‌ای ۱۶۰ تن', cycle: '۴/۰', setup: '۲۰' },
-                  { code: 'OP-50', name: 'خم‌کاری و لبهزنی (Bending & Flanging)', station: 'پرس خم ۱۲۰ تن', cycle: '۴/۲', setup: '۲۰' },
-                  { code: 'OP-60', name: 'جوشکاری نقطه‌ای و مونتاژ مهره (Spot Projection Weld)', station: 'سالن جوش CO2 و نقطه‌ای', cycle: '۱۲/۰', setup: '۱۵' },
-                  { code: 'OP-70', name: 'کنترل کیفیت نهایی و بسته‌بندی پالت ساپکو', station: 'قرنطینه و QC', cycle: '۵/۰', setup: '۱۰' },
-                ].map(op => (
-                  <tr key={op.code} className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-bold text-slate-900">{op.code}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-800">{op.name}</td>
-                    <td className="py-3 px-4 text-slate-600">{op.station}</td>
-                    <td className="py-3 px-4 tabular-nums font-bold">{op.cycle} ثانیه</td>
-                    <td className="py-3 px-4 tabular-nums">{op.setup} دقیقه</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-600 text-white">
-                        فعال
-                      </span>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {operationsList
+                  .filter(op => {
+                    const matchCat =
+                      operationCategoryFilter === 'ALL' || op.category === operationCategoryFilter;
+                    const q = operationSearch.trim().toLowerCase();
+                    const matchSearch =
+                      !q ||
+                      op.code.toLowerCase().includes(q) ||
+                      op.name.toLowerCase().includes(q) ||
+                      op.stationType.toLowerCase().includes(q) ||
+                      (op.description && op.description.toLowerCase().includes(q));
+                    return matchCat && matchSearch;
+                  })
+                  .map(op => {
+                    const categoryLabels: Record<string, { label: string; color: string }> = {
+                      SHEARING: { label: 'برشکاری', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+                      STAMPING: { label: 'پرسکاری', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                      BENDING: { label: 'خم‌کاری', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+                      WELDING: { label: 'جوشکاری', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+                      SURFACE_FINISH: { label: 'رنگ و پوشش', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                      QC_PACK: { label: 'کنترل و بسته‌بندی', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                    };
+                    const catMeta = categoryLabels[op.category] || { label: op.category, color: 'bg-slate-100 text-slate-700 border-slate-200' };
+
+                    return (
+                      <tr key={op.id || op.code} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{op.code}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-900">{op.name}</div>
+                          {op.description && (
+                            <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{op.description}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium">{op.stationType}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${catMeta.color}`}>
+                            {catMeta.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 tabular-nums font-bold text-slate-900">
+                          {toPersianDigits(op.cycleTimeSec)} ثانیه
+                        </td>
+                        <td className="py-3 px-4 tabular-nums text-slate-700">
+                          {toPersianDigits(op.setupTimeMin)} دقیقه
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              op.active !== false
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {op.active !== false ? 'فعال' : 'غیرفعال'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingOperation(op);
+                                setOperationForm({ ...op });
+                                setIsOperationModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
+                            >
+                              ویرایش
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOperation(op.id || op.code)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                {operationsList.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      عملیاتی یافت نشد. جهت تعریف مرحله جدید دکمه «تعریف عملیات جدید» را بزنید.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* 7. WAREHOUSES, UNITS, SHIFTS, CUSTOMERS, ORDERS */}
+      {/* 7. WAREHOUSES, UNITS, SHIFTS, CUSTOMERS, CAR_MODELS, ORDERS */}
       {(activeSection === 'WAREHOUSES' ||
         activeSection === 'UNITS' ||
         activeSection === 'SHIFTS' ||
         activeSection === 'CUSTOMERS' ||
+        activeSection === 'CAR_MODELS' ||
         activeSection === 'ORDERS') && (
         <div
           className={`bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs ${themeMeta.borderAccentClass}`}
@@ -1157,19 +1487,34 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                 </button>
               </div>
 
+              {/* Informative helper box on conversion factors */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/70 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <span className="font-bold text-amber-700 shrink-0 mt-0.5">💡 راهنمای مهندسی واحدها:</span>
+                <div className="space-y-1 text-[11px] leading-relaxed text-amber-800">
+                  <p>
+                    <strong>ضریب تبدیل به کیلوگرم:</strong> نشان‌دهنده وزن معادل هر یک واحد به کیلوگرم است (مثلاً برای «برگ ورق ST12» برابر با ۲۴/۵ کیلوگرم و برای «رول استاندارد» برابر با ۵,۰۰۰ کیلوگرم). این ضریب در محاسبات موازنه جرم آهن (Mass Balance) و محاسبه کسری کلاف در MRP مبنای تبدیل است.
+                  </p>
+                  <p>
+                    <strong>واحد مبنای سیستم:</strong> واحدی است که تمامی گزارش‌های کاردکس و تراز انبار بر اساس آن همگن‌سازی می‌شوند (کیلوگرم برای مواد وزنی و عدد برای قطعات پرس).
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                 {unitsList.map(u => (
                   <div key={u.id || u.symbol} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5 hover:border-slate-300 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-mono font-bold text-emerald-700">{u.symbol}</div>
                       {u.isBaseUnit && (
-                        <span className="px-2 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">پایه</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">واحد مبنا</span>
                       )}
                     </div>
                     <div className="font-bold text-slate-900">{u.title}</div>
                     <div className="text-slate-500 text-[11px] leading-relaxed">{u.description}</div>
-                    {u.conversionFactorToKg && u.conversionFactorToKg !== 1 && (
-                      <div className="text-[11px] text-slate-600 font-mono">ضریب به کیلوگرم: {u.conversionFactorToKg}</div>
+                    {u.conversionFactorToKg !== undefined && (
+                      <div className="text-[11px] text-slate-700 font-medium bg-white px-2 py-1 rounded border border-slate-200 mt-1">
+                        ضریب به کیلوگرم: <span className="font-mono font-bold text-slate-900">{u.conversionFactorToKg}</span>
+                      </div>
                     )}
                     <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
                       <button
@@ -1201,14 +1546,27 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">شیفت‌های کاری و تقویم ظرفیت تولید</h3>
+                  <h3 className="text-sm font-bold text-slate-900">شیفت‌های کاری، اضافه‌کاری و تقویم ظرفیت تولید</h3>
                   <p className="text-xs text-slate-500 mt-0.5">تعریف ساعات کاری شیفت‌ها، زمان خالص کارکرد و برنامه‌ریزی MRP</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setEditingShift(null);
-                    setShiftForm({ code: `SHIFT-${Date.now().toString().slice(-3)}`, name: '', startTime: '08:00', endTime: '16:00', netWorkMinutes: 450, status: 'ACTIVE' });
+                    setShiftForm({
+                      code: `SHIFT-${Date.now().toString().slice(-3)}`,
+                      name: '',
+                      startTime: '07:00',
+                      endTime: '14:30',
+                      netWorkMinutes: 450,
+                      status: 'ACTIVE',
+                      hasOvertime: true,
+                      overtimeStartTime: '15:00',
+                      overtimeEndTime: '17:00',
+                      overtimeMinutes: 120,
+                      overtimeDaysDescription: 'شنبه تا چهارشنبه',
+                      thursdayStatus: 'OVERTIME_15_17',
+                    });
                     setIsShiftModalOpen(true);
                   }}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
@@ -1218,17 +1576,75 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              {/* Weekly Shift Scenario Banner */}
+              <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-900 text-sm">📅 سناریوی زمان‌بندی و تقویم ظرفیت شیفت کارخانه:</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold">
+                    مجموع ظرفیت هفتگی: ۳۷/۵ ساعت کار عادی + ۱۰ تا ۱۲ ساعت اضافه‌کاری
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-blue-900">
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-blue-100 space-y-1">
+                    <span className="font-bold text-blue-800">۱. شیفت عادی (شنبه تا چهارشنبه):</span>
+                    <p className="text-slate-600">ساعت ۰۷:۰۰ صبح تا ۱۴:۳۰ بعدازظهر (۷ ساعت کار خالص مفید + ۳۰ دقیقه ناهار = ۴۵۰ دقیقه ظرفیت مفید اسمی)</p>
+                  </div>
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-blue-100 space-y-1">
+                    <span className="font-bold text-blue-800">۲. اضافه‌کاری عادی (شنبه تا چهارشنبه):</span>
+                    <p className="text-slate-600">ساعت ۱۵:۰۰ تا ۱۷:۰۰ بعدازظهر (۲ ساعت معادل ۱۲۰ دقیقه اضافه‌کاری خطوط پرس و مونتاژ)</p>
+                  </div>
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-blue-100 space-y-1">
+                    <span className="font-bold text-blue-800">۳. مدیریت منعطف روز پنجشنبه:</span>
+                    <p className="text-slate-600">تنظیم پویا در تقویم: ۱. تعطیل کامل | ۲. فقط اضافه‌کاری ۱۵ الی ۱۷ | ۳. شیفت کامل عادی</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                 {shiftsList.map(sh => (
-                  <div key={sh.id || sh.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
+                  <div key={sh.id || sh.code} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5 hover:border-slate-300 transition-colors">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900 text-sm">{sh.name}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sh.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
                         {sh.status === 'ACTIVE' ? 'فعال' : 'غیرفعال'}
                       </span>
                     </div>
-                    <div className="text-slate-600 font-mono">ساعات: {sh.startTime} الی {sh.endTime}</div>
-                    <div className="text-slate-700 font-semibold text-[11px]">{toPersianDigits(sh.netWorkMinutes)} دقیقه کار مفید</div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1 text-[11px]">
+                      <div className="flex justify-between text-slate-700">
+                        <span>ساعات عادی:</span>
+                        <span className="font-mono font-bold text-slate-900">{sh.startTime} الی {sh.endTime}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-700">
+                        <span>کار مفید عادی:</span>
+                        <span className="font-bold text-emerald-700">{toPersianDigits(sh.netWorkMinutes)} دقیقه (۷ ساعت کار + ۳۰ دقیقه ناهار)</span>
+                      </div>
+                    </div>
+
+                    {sh.hasOvertime && (
+                      <div className="bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/70 space-y-1 text-[11px]">
+                        <div className="flex justify-between text-amber-900 font-semibold">
+                          <span>اضافه‌کاری روزانه:</span>
+                          <span className="font-mono font-bold">{sh.overtimeStartTime || '15:00'} الی {sh.overtimeEndTime || '17:00'}</span>
+                        </div>
+                        <div className="flex justify-between text-amber-800">
+                          <span>روزها:</span>
+                          <span>{sh.overtimeDaysDescription || 'شنبه تا چهارشنبه'} ({toPersianDigits(sh.overtimeMinutes || 120)} دقیقه)</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-[11px] flex items-center justify-between bg-slate-100 p-2 rounded-lg">
+                      <span className="text-slate-600">وضعیت پنجشنبه:</span>
+                      <span className="font-bold text-slate-900">
+                        {sh.thursdayStatus === 'OFF'
+                          ? 'تعطیل کامل'
+                          : sh.thursdayStatus === 'OVERTIME_15_17'
+                          ? 'اضافه‌کاری ۱۵ الی ۱۷'
+                          : 'شیفت کامل کاری'}
+                      </span>
+                    </div>
+
                     <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
                       <button
                         type="button"
@@ -1237,20 +1653,119 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                           setShiftForm({ ...sh });
                           setIsShiftModalOpen(true);
                         }}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors cursor-pointer"
                       >
-                        ویرایش
+                        ویرایش زمان‌بندی
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteShift(sh.id || sh.code)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
                       >
                         حذف
                       </button>
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'CAR_MODELS' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">مدل‌های خودرو و خانواده محصول (Car Models & Platforms)</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    تعریف خانواده محصولات و خودروهای طرف قرارداد (ایران‌خودرو، سایپا و...) جهت انتساب یکپارچه به قطعات، فیلترهای مسیر تولید و سفارشات
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCarModel(null);
+                    setCarModelForm({
+                      code: `MDL-${Date.now().toString().slice(-4)}`,
+                      name: '',
+                      oem: 'ساپکو (ایران‌خودرو)',
+                      description: '',
+                      active: true,
+                    });
+                    setIsCarModelModalOpen(true);
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>تعریف مدل خودرو جدید</span>
+                </button>
+              </div>
+
+              {/* Car Models Table */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                    <tr>
+                      <th className="py-3 px-4">کد شناسه</th>
+                      <th className="py-3 px-4">نام مدل خودرو</th>
+                      <th className="py-3 px-4">خودروساز / OEM</th>
+                      <th className="py-3 px-4">توضیحات و پلتفرم</th>
+                      <th className="py-3 px-4 text-center">قطعات متصل در کاتالوگ</th>
+                      <th className="py-3 px-4 text-center">وضعیت</th>
+                      <th className="py-3 px-4 text-center">عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-800">
+                    {carModelsList.map(m => {
+                      const connectedPartsCount = parts.filter(
+                        p => p.carModel === m.name || p.carModel?.includes(m.name)
+                      ).length;
+                      return (
+                        <tr key={m.id || m.code} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">{m.code}</td>
+                          <td className="py-3 px-4 font-bold text-slate-900">{m.name}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-700">{m.oem}</td>
+                          <td className="py-3 px-4 text-slate-600">{m.description || '—'}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                              {toPersianDigits(connectedPartsCount)} قطعه
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                m.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {m.active ? 'فعال' : 'غیرفعال'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCarModel(m);
+                                  setCarModelForm({ ...m });
+                                  setIsCarModelModalOpen(true);
+                                }}
+                                className="text-slate-600 hover:text-emerald-700 font-semibold cursor-pointer"
+                              >
+                                ویرایش
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCarModel(m.id || m.code)}
+                                className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                              >
+                                حذف
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -1746,10 +2261,10 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
       {/* 11. Shift Modal */}
       {isShiftModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl text-right">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-5 shadow-xl text-right">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <h3 className="text-sm font-bold text-slate-900">
-                {editingShift ? 'ویرایش شیفت کاری' : 'تعریف شیفت کاری جدید'}
+                {editingShift ? 'ویرایش شیفت کاری و زمان‌بندی' : 'تعریف شیفت کاری جدید'}
               </h3>
               <button onClick={() => setIsShiftModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -1775,39 +2290,107 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                     placeholder="شیفت صبح (A)"
                     value={shiftForm.name || ''}
                     onChange={e => setShiftForm({ ...shiftForm, name: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">شروع</label>
-                  <input
-                    type="time"
-                    value={shiftForm.startTime || '06:00'}
-                    onChange={e => setShiftForm({ ...shiftForm, startTime: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
-                  />
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <span className="font-bold text-slate-800">ساعات کاری عادی:</span>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-600 mb-1">ساعت شروع</label>
+                    <input
+                      type="time"
+                      value={shiftForm.startTime || '07:00'}
+                      onChange={e => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 mb-1">ساعت پایان</label>
+                    <input
+                      type="time"
+                      value={shiftForm.endTime || '14:30'}
+                      onChange={e => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 mb-1">کار مفید (دقیقه)</label>
+                    <input
+                      type="number"
+                      value={shiftForm.netWorkMinutes ?? 450}
+                      onChange={e => setShiftForm({ ...shiftForm, netWorkMinutes: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">پایان</label>
-                  <input
-                    type="time"
-                    value={shiftForm.endTime || '14:00'}
-                    onChange={e => setShiftForm({ ...shiftForm, endTime: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
-                  />
+                <p className="text-[11px] text-slate-500">
+                  معادل ۷ ساعت کارکرد خالص به انضمام ۳۰ دقیقه استراحت/ناهار (ساعت ۷:۰۰ صبح تا ۱۴:۳۰).
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/70 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="hasOvertimeCheck"
+                      checked={shiftForm.hasOvertime || false}
+                      onChange={e => setShiftForm({ ...shiftForm, hasOvertime: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <label htmlFor="hasOvertimeCheck" className="text-amber-950 font-bold">
+                      تعریف اضافه‌کاری روزانه ثابت (شنبه تا چهارشنبه)
+                    </label>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">کار مفید (دقیقه)</label>
-                  <input
-                    type="number"
-                    value={shiftForm.netWorkMinutes ?? 450}
-                    onChange={e => setShiftForm({ ...shiftForm, netWorkMinutes: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
-                  />
-                </div>
+
+                {shiftForm.hasOvertime && (
+                  <div className="grid grid-cols-3 gap-2.5 pt-1">
+                    <div>
+                      <label className="block text-slate-600 text-[11px] mb-1">شروع اضافه‌کاری</label>
+                      <input
+                        type="time"
+                        value={shiftForm.overtimeStartTime || '15:00'}
+                        onChange={e => setShiftForm({ ...shiftForm, overtimeStartTime: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 font-mono text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 text-[11px] mb-1">پایان اضافه‌کاری</label>
+                      <input
+                        type="time"
+                        value={shiftForm.overtimeEndTime || '17:00'}
+                        onChange={e => setShiftForm({ ...shiftForm, overtimeEndTime: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 font-mono text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 text-[11px] mb-1">مدت (دقیقه)</label>
+                      <input
+                        type="number"
+                        value={shiftForm.overtimeMinutes ?? 120}
+                        onChange={e => setShiftForm({ ...shiftForm, overtimeMinutes: parseInt(e.target.value) || 0 })}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2 py-1.5 font-mono text-slate-900"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">وضعیت کاری روز پنجشنبه</label>
+                <select
+                  value={shiftForm.thursdayStatus || 'OVERTIME_15_17'}
+                  onChange={e => setShiftForm({ ...shiftForm, thursdayStatus: e.target.value as any })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                >
+                  <option value="OVERTIME_15_17">فقط اضافه‌کاری بعدازظهر (ساعت ۱۵:۰۰ تا ۱۷:۰۰)</option>
+                  <option value="OFF">کلاً تعطیل (روز استراحت)</option>
+                  <option value="FULL_SHIFT">شیفت کامل عادی (ساعت ۰۷:۰۰ تا ۱۴:۳۰)</option>
+                </select>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -1823,6 +2406,253 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                   className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
                 >
                   {editingShift ? 'ثبت تغییرات شیفت' : 'ایجاد شیفت'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 12. Car Model Modal */}
+      {isCarModelModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingCarModel ? 'ویرایش مدل خودرو' : 'تعریف مدل خودرو جدید'}
+              </h3>
+              <button onClick={() => setIsCarModelModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCarModel} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کد شناسه پلتفرم *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثلاً IKCO-206"
+                    value={carModelForm.code || ''}
+                    onChange={e => setCarModelForm({ ...carModelForm, code: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">نام مدل خودرو *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثلاً پژو ۲۰۶"
+                    value={carModelForm.name || ''}
+                    onChange={e => setCarModelForm({ ...carModelForm, name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">خودروساز / شرکت مادر (OEM) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ساپکو (ایران‌خودرو)، سازه‌گستر (سایپا)، بهمن موتور"
+                  value={carModelForm.oem || ''}
+                  onChange={e => setCarModelForm({ ...carModelForm, oem: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">توضیحات و تیپ‌ها</label>
+                <input
+                  type="text"
+                  placeholder="مثلاً هاچ‌بک و صندوق‌دار تیپ ۲ و ۵"
+                  value={carModelForm.description || ''}
+                  onChange={e => setCarModelForm({ ...carModelForm, description: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isCarModelActiveCheck"
+                  checked={carModelForm.active !== false}
+                  onChange={e => setCarModelForm({ ...carModelForm, active: e.target.checked })}
+                  className="w-4 h-4 text-emerald-600 rounded"
+                />
+                <label htmlFor="isCarModelActiveCheck" className="text-slate-800 font-medium">مدل فعال در چرخه تولید</label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCarModelModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingCarModel ? 'ثبت تغییرات مدل' : 'ایجاد مدل خودرو'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 13. Operation Modal */}
+      {isOperationModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-5 shadow-xl text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                {editingOperation ? 'ویرایش عملیات استاندارد تولید' : 'تعریف عملیات استاندارد تولید جدید'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsOperationModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveOperation} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">کد عملیات *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثلاً OP-10 یا OP-WELD-NUT"
+                    value={operationForm.code || ''}
+                    onChange={e => setOperationForm({ ...operationForm, code: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">دسته فرآیندی *</label>
+                  <select
+                    value={operationForm.category || 'STAMPING'}
+                    onChange={e =>
+                      setOperationForm({
+                        ...operationForm,
+                        category: e.target.value as any,
+                      })
+                    }
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
+                  >
+                    <option value="SHEARING">برشکاری و نواربری (Shearing)</option>
+                    <option value="STAMPING">پرسکاری و کشش (Stamping / Drawing)</option>
+                    <option value="BENDING">خم‌کاری و لبه‌زنی (Bending / Flanging)</option>
+                    <option value="WELDING">جوش مقاومتی و CO2 (Welding)</option>
+                    <option value="SURFACE_FINISH">رنگ و پوشش کاتافورز (ED Paint)</option>
+                    <option value="QC_PACK">کنترل کیفی و بسته‌بندی (QC & Pack)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">عنوان کامل عملیات *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثلاً بلنک و سوراخ‌کاری ورق، پرس‌جوش مهره، خم لبه‌ها..."
+                  value={operationForm.name || ''}
+                  onChange={e => setOperationForm({ ...operationForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">نوع ایستگاه کاری / دستگاه مورد استفاده *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثلاً خط برش کویل، پرس ضربه‌ای ۲۵۰ تن، دستگاه پرس‌جوش M6، ایستگاه جوش CO2..."
+                  value={operationForm.stationType || ''}
+                  onChange={e => setOperationForm({ ...operationForm, stationType: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">زمان چرخه استاندارد هر ضرب (ثانیه) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    required
+                    value={operationForm.cycleTimeSec ?? 4.5}
+                    onChange={e =>
+                      setOperationForm({
+                        ...operationForm,
+                        cycleTimeSec: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">زمان ستاپ / تعویض قالب (دقیقه) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={operationForm.setupTimeMin ?? 20}
+                    onChange={e =>
+                      setOperationForm({
+                        ...operationForm,
+                        setupTimeMin: parseInt(e.target.value, 10) || 0,
+                      })
+                    }
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">دستورالعمل و توضیحات فرآیندی</label>
+                <textarea
+                  rows={2}
+                  placeholder="شرح نکات کنترلی، تلرانس ابعادی، فیکسچر مورد استفاده و پارامترهای فنی..."
+                  value={operationForm.description || ''}
+                  onChange={e => setOperationForm({ ...operationForm, description: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="isOperationActiveCheck"
+                  checked={operationForm.active !== false}
+                  onChange={e => setOperationForm({ ...operationForm, active: e.target.checked })}
+                  className="w-4 h-4 text-emerald-600 rounded"
+                />
+                <label htmlFor="isOperationActiveCheck" className="text-slate-800 font-medium">
+                  عملیات فعال در تقویم ظرفیت و مسیرهای تولید
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsOperationModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-white cursor-pointer ${themeMeta.buttonPrimaryClass}`}
+                >
+                  {editingOperation ? 'ثبت تغییرات عملیات' : 'ایجاد عملیات جدید'}
                 </button>
               </div>
             </form>

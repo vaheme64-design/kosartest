@@ -21,21 +21,27 @@ export type JoiningProcessType =
 export interface BomComponentItem {
   id: string;
   bomId: string;
+  parentId?: string;                 // شناسه جزء والد در ساختار درختی چندسطحی (اگر خالی باشد، مستقیماً متصل به محصول نهایی است)
+  parentCode?: string;               // کد قطعه والد (مثلاً WIP-ECU-MAIN-BRK)
+  parentName?: string;               // نام قطعه والد (مثلاً صفحه براکت اصلی)
+  level?: number;                    // سطح درختی (۱ = سطح اول زیر محصول نهایی، ۲ = سطح دوم زیرمجموعه، و...)
+  isSubAssembly?: boolean;           // آیا این قطعه خودش یک زیرمجموعه با قطعات متشکله داخلی است؟
   componentPartId: string;
   componentPartCode: string;
   componentPartName: string;
   componentType: BomComponentType;
-  quantityPerAssembly: number;       // ضریب مصرف عددی یا وزنی (مثلا ۲ عدد پیچ یا ۱ عدد لچکی یا ۰.۳۵ کیلوگرم ورق)
-  unit: 'PCS' | 'KG' | 'SET';
+  quantityPerAssembly: number;       // ضریب مصرف عددی یا وزنی در سطح والد
+  unit: 'PCS' | 'KG' | 'SET' | string;
   grossWeightKg: number;             // وزن ناخالص مصرفی (شامل پرت برش و پانچ)
   netWeightKg: number;               // وزن خالص درون مجموعه مونتاژی نهایی
   scrapAllowancePercent: number;     // درصد پرت استاندارد فرآیند
-  joiningProcess?: JoiningProcessType; // نحوه اتصال به بدنه اصلی
+  joiningProcess?: JoiningProcessType; // نحوه اتصال به بدنه اصلی یا زیرمجموعه
   subMoRequired: boolean;            // آیا نیازمند صدور دستور ساخت فرعی مجزا (Sub-MO) است؟
   subRoutingId?: string;             // مسیر ساخت قطعه فرعی
   stageJoinedStepNumber?: number;    // در کدام مرحله از مسیر ساخت الحاق می‌شود؟ (مثلاً OP30_WELD)
   supplierSource?: 'SAPCO_CONSIGNMENT' | 'INTERNAL_FABRICATED' | 'PURCHASED_MARKET';
   notes?: string;
+  children?: BomComponentItem[];     // زیرمجموعه‌ها و فرزندان این قطعه در درخت محصول
 }
 
 export interface AdvancedBomDefinition {

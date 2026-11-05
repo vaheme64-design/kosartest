@@ -28,6 +28,18 @@ export interface ProcessDefinition {
   description?: string;
 }
 
+export interface OperationDefinition {
+  id: string;
+  code: string;                // e.g. OP-10, OP-WELD-NUT, OP-BEND-3
+  name: string;                // عنوان عملیات
+  stationType: string;         // نوع ایستگاه کاری (خط برش، پرس ضربه‌ای، پرس هیدرولیک، پرس‌جوش، جوش CO2، خط رنگ)
+  cycleTimeSec: number;        // زمان چرخه استاندارد (ثانیه)
+  setupTimeMin: number;        // زمان ستاپ / تعویض قالب (دقیقه)
+  category: 'SHEARING' | 'STAMPING' | 'BENDING' | 'WELDING' | 'SURFACE_FINISH' | 'QC_PACK';
+  description?: string;
+  active: boolean;
+}
+
 export interface FactoryHall {
   id: string;
   code: string;
@@ -69,6 +81,15 @@ export interface UnitDefinition {
   isBaseUnit?: boolean;
 }
 
+export interface CarModel {
+  id: string;
+  code: string;
+  name: string;
+  oem: string;               // ساپکو (ایران‌خودرو)، سازه‌گستر (سایپا)، بهمن و...
+  description?: string;
+  active: boolean;
+}
+
 export interface ShiftDefinition {
   id: string;
   code: string;
@@ -77,6 +98,13 @@ export interface ShiftDefinition {
   endTime: string;
   netWorkMinutes: number;
   status: 'ACTIVE' | 'INACTIVE';
+  // Overtime & Factory Calendar enhancements
+  hasOvertime?: boolean;
+  overtimeStartTime?: string;      // e.g. 15:00 (ساعت ۳ بعدازظهر)
+  overtimeEndTime?: string;        // e.g. 17:00 (ساعت ۵ عصر)
+  overtimeMinutes?: number;        // e.g. 120 دقیقه
+  overtimeDaysDescription?: string;// e.g. شنبه تا چهارشنبه
+  thursdayStatus?: 'OFF' | 'OVERTIME_15_17' | 'FULL_SHIFT'; // وضعیت پنجشنبه: تعطیل / اضافه‌کاری ۱۵ تا ۱۷ / شیفت کامل
 }
 
 export interface DieMold {
@@ -129,6 +157,13 @@ export interface OperationStep {
   standardCycleTimeSec: number;// زمان استاندارد سیکل به ثانیه
   scrapNormPercent: number;    // نرم استاندارد ضایعات درصدی
   description?: string;
+  // Shared / Co-Production Operation (عملیات مشترک / قالب ۲ کویته همزمان)
+  isSharedOperation?: boolean;          // آیا این گام یک عملیات مشترک با خروجی همزمان دو یا چند قطعه است؟
+  sharedPartId?: string;                // شناسه قطعه دوم (هم‌تولید) مثلاً پشت صندلی راست
+  sharedPartCode?: string;              // کد قطعه دوم (مثلاً SAPCO-ST-BACK-RH)
+  sharedPartName?: string;              // نام قطعه دوم (مثلاً پشت صندلی راست)
+  sharedYieldRatio?: number;            // نسبت خروجی قطعه دوم به ازای هر ضرب (پیش‌فرض ۱)
+  sharedOperationNotes?: string;        // توضیحات فرآیند قالب مشترک و خروجی دوگانه
 }
 
 export interface Routing {

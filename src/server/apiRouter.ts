@@ -69,6 +69,8 @@ import {
   CustomerDefinition,
   UnitDefinition,
   ShiftDefinition,
+  CarModel,
+  OperationDefinition,
 } from '../types/inventory';
 import {
   getManufacturingOrdersList,
@@ -132,8 +134,10 @@ import {
   getAllBoms,
   getBomByPartId,
   saveAdvancedBom,
+  deleteAdvancedBom,
   getAllParallelFlows,
   saveParallelFlow,
+  deleteParallelFlow,
   issueTraceabilityTag,
   getAllTraceabilityTags,
 } from './bomAndParallelEngine';
@@ -320,10 +324,64 @@ let customersStore: CustomerDefinition[] = [
   { id: 'CUST-BAHMAN', code: 'CUST-BAHMAN', name: 'گروه بهمن (بهمن موتور)', contractType: 'تامین براکت‌ها و رام زیر موتور', phone: '۰۲۱-۴۸۰۲۷۰۰۰', isDefault: false },
 ];
 
+let carModelsStore: CarModel[] = [
+  { id: 'CAR-206', code: 'IKCO-206', name: 'پژو ۲۰۶', oem: 'ایران‌خودرو (ساپکو)', description: 'هاچ‌بک و اس‌دی ۲۰۶ تیپ ۲ و ۵', active: true },
+  { id: 'CAR-207', code: 'IKCO-207', name: 'پژو ۲۰۷', oem: 'ایران‌خودرو (ساپکو)', description: '۲۰۷ دستی و اتوماتیک با سقف شیشه‌ای', active: true },
+  { id: 'CAR-TARA', code: 'IKCO-TARA', name: 'تارا', oem: 'ایران‌خودرو (ساپکو)', description: 'سدان پلتفرم IKP1', active: true },
+  { id: 'CAR-DENA', code: 'IKCO-DENA', name: 'دنا پلاس', oem: 'ایران‌خودرو (ساپکو)', description: 'دنا پلاس توربو و اتوماتیک', active: true },
+  { id: 'CAR-SHAHIN', code: 'SAIPA-SHAHIN', name: 'شاهین', oem: 'سایپا (سازه‌گستر / مگاموتور)', description: 'سدان پلتفرم SP100 سایپا', active: true },
+  { id: 'CAR-QUICK', code: 'SAIPA-QUICK', name: 'کوییک', oem: 'سایپا (سازه‌گستر)', description: 'کوییک R، S و GX', active: true },
+  { id: 'CAR-SAINA', code: 'SAIPA-SAINA', name: 'ساینا', oem: 'سایپا (سازه‌گستر)', description: 'ساینا S و دوگانه‌سوز', active: true },
+  { id: 'CAR-RIRA', code: 'IKCO-RIRA', name: 'ری‌را', oem: 'ایران‌خودرو (ساپکو)', description: 'کراس‌اوور ملی جدید ایران‌خودرو', active: true },
+  { id: 'CAR-SAMAND', code: 'IKCO-SAMAND', name: 'سمند / سورن پلاس', oem: 'ایران‌خودرو (ساپکو)', description: 'پلتفرم کلاسیک ایران‌خودرو', active: true },
+  { id: 'CAR-L90', code: 'RENAULT-L90', name: 'تندر ۹۰ (L90)', oem: 'رنو پارس / پارس خودرو', description: 'تندر و ساندرو', active: true },
+];
+
+let operationsStore: OperationDefinition[] = [
+  { id: 'OP-10', code: 'OP-10', name: 'برش رول و نواربری (Slitting & Cut-to-Length)', stationType: 'خط برش کویل و رول‌بازکن', cycleTimeSec: 4.5, setupTimeMin: 35, category: 'SHEARING', description: 'برش شیت اولیه از رول با ابعاد و تلرانس مهندسی', active: true },
+  { id: 'OP-15', code: 'OP-15', name: 'برش سایز کوچکتر با گیوتین (Guillotine Shearing)', stationType: 'قیچی گیوتین هیدرولیک', cycleTimeSec: 3.5, setupTimeMin: 15, category: 'SHEARING', description: 'برش ثانویه شیت به ابعاد کوچکتر جهت ورود به خط پرس', active: true },
+  { id: 'OP-20', code: 'OP-20', name: 'خالی‌بری و بلنکینگ (Blanking)', stationType: 'پرس ضربه‌ای ۲۵۰ تن', cycleTimeSec: 3.2, setupTimeMin: 25, category: 'STAMPING', description: 'تولید بلنک با قالب سنبه و ماتریس همراه با پلیسه‌گیری', active: true },
+  { id: 'OP-25', code: 'OP-25', name: 'کشش عمیق و فرم‌دهی اولیه (Deep Drawing)', stationType: 'پرس هیدرولیک ۸۰۰ تن', cycleTimeSec: 8.0, setupTimeMin: 45, category: 'STAMPING', description: 'کشش فرم اصلی با بالشتک هیدرولیک و قالب کشش سنگین', active: true },
+  { id: 'OP-30', code: 'OP-30', name: 'خم لبه و فلنجینگ (Edge Bending & Flanging)', stationType: 'پرس خم ۱۶۰ تن', cycleTimeSec: 4.2, setupTimeMin: 20, category: 'BENDING', description: 'خم‌کاری لبه‌های تقویتی و فلنج‌های مونتاژی', active: true },
+  { id: 'OP-35', code: 'OP-35', name: 'خم اول (Bending Step 1)', stationType: 'پرس برک یا پرس فرم ۱۲۰ تن', cycleTimeSec: 4.0, setupTimeMin: 15, category: 'BENDING', description: 'مرحله اول خم‌کاری زاویه ۹۰ درجه اولیه', active: true },
+  { id: 'OP-36', code: 'OP-36', name: 'خم دوم (Bending Step 2)', stationType: 'پرس برک یا پرس فرم ۱۲۰ تن', cycleTimeSec: 4.0, setupTimeMin: 15, category: 'BENDING', description: 'مرحله دوم خم‌کاری زاویه ثانویه بدنه قطعه', active: true },
+  { id: 'OP-37', code: 'OP-37', name: 'خم سوم (Bending Step 3)', stationType: 'پرس برک یا پرس فرم ۱۲۰ تن', cycleTimeSec: 4.5, setupTimeMin: 15, category: 'BENDING', description: 'مرحله سوم خم‌کاری نهایی و تثبیت زوایای مونتاژی', active: true },
+  { id: 'OP-40', code: 'OP-40', name: 'پانچ و سوراخ‌کاری مرحله اول (Piercing Step 1)', stationType: 'پرس ضربه‌ای ۱۶۰ تن', cycleTimeSec: 3.8, setupTimeMin: 20, category: 'STAMPING', description: 'ایجاد سوراخ‌های عبور و جای مهره و راهنما', active: true },
+  { id: 'OP-45', code: 'OP-45', name: 'پانچ و سوراخ‌کاری مرحله دوم (Piercing Step 2)', stationType: 'پرس ضربه‌ای ۱۶۰ تن', cycleTimeSec: 3.8, setupTimeMin: 20, category: 'STAMPING', description: 'پانچ تکمیلی و دوربری لبه‌ها', active: true },
+  { id: 'OP-50', code: 'OP-50', name: 'پرس‌جوش مقاومتی مهره (Projection Nut Welding M6)', stationType: 'دستگاه پرس‌جوش ۷۵kVA', cycleTimeSec: 12.0, setupTimeMin: 15, category: 'WELDING', description: 'جوش مقاومتی مهره‌های M6 با تست گشتاور پیچش', active: true },
+  { id: 'OP-55', code: 'OP-55', name: 'پرس‌جوش مقاومتی پیچ ۶×۲۰ (Projection Stud Welding)', stationType: 'دستگاه استود ولدر / پرس‌جوش پیچ', cycleTimeSec: 10.0, setupTimeMin: 15, category: 'WELDING', description: 'جوش مقاومتی پیچ‌های پایه ۶×۲۰', active: true },
+  { id: 'OP-60', code: 'OP-60', name: 'جوشکاری اتصال با ایستگاه CO2 (MIG/MAG CO2 Welding)', stationType: 'سالن جوش CO2 دستی و رباتیک', cycleTimeSec: 25.0, setupTimeMin: 20, category: 'WELDING', description: 'اتصال اجزای براکت اصلی و مکمل با جوش CO2 پیوسته', active: true },
+  { id: 'OP-65', code: 'OP-65', name: 'پرس‌جوش تکمیلی قبل از رنگ (اختیاری)', stationType: 'دستگاه پرس‌جوش تکمیلی', cycleTimeSec: 8.0, setupTimeMin: 10, category: 'WELDING', description: 'مرحله تکمیلی جوش مقاومتی قبل از ارسال به سالن رنگ', active: true },
+  { id: 'OP-70', code: 'OP-70', name: 'شستشو، فسفاته و رنگ کاتافورز ED (ED Coating)', stationType: 'خط غوطه‌وری رنگ کاتافورز ED', cycleTimeSec: 60.0, setupTimeMin: 30, category: 'SURFACE_FINISH', description: 'پوشش ضدخوردگی استاندارد ساپکو تست سالت اسپری ۱۰۰۰ ساعت', active: true },
+  { id: 'OP-80', code: 'OP-80', name: 'کنترل کیفیت نهایی و بسته‌بندی در پالت ساپکو', stationType: 'ایستگاه قرنطینه و QC نهایی', cycleTimeSec: 15.0, setupTimeMin: 10, category: 'QC_PACK', description: 'چک چشمی، تست ابعادی CMM/فیکسچر کنترلی و چینش در پالت فلزی', active: true },
+];
+
 let shiftsStore: ShiftDefinition[] = [
-  { id: 'SHIFT-A', code: 'SHIFT-A', name: 'شیفت صبح (A)', startTime: '06:00', endTime: '14:00', netWorkMinutes: 450, status: 'ACTIVE' },
-  { id: 'SHIFT-B', code: 'SHIFT-B', name: 'شیفت عصر (B)', startTime: '14:00', endTime: '22:00', netWorkMinutes: 450, status: 'ACTIVE' },
-  { id: 'SHIFT-C', code: 'SHIFT-C', name: 'شیفت شب (C)', startTime: '22:00', endTime: '06:00', netWorkMinutes: 420, status: 'ACTIVE' },
+  {
+    id: 'SHIFT-MAIN',
+    code: 'SHIFT-MAIN',
+    name: 'شیفت روزانه خطوط پرس و جوش',
+    startTime: '07:00',
+    endTime: '14:30',
+    netWorkMinutes: 450, // ۷.۵ ساعت کار عادی
+    hasOvertime: true,
+    overtimeStartTime: '15:00',
+    overtimeEndTime: '17:00',
+    overtimeMinutes: 120, // ۲ ساعت اضافه‌کاری
+    overtimeDaysDescription: 'شنبه تا چهارشنبه (ساعت ۱۵:۰۰ الی ۱۷:۰۰)',
+    thursdayStatus: 'OVERTIME_15_17', // پنجشنبه‌ها: بعضی اوقات ۳ تا ۵ اضافه‌کاری هست
+    status: 'ACTIVE',
+  },
+  {
+    id: 'SHIFT-EVENING',
+    code: 'SHIFT-EVENING',
+    name: 'شیفت عصر (پشتیبان)',
+    startTime: '14:30',
+    endTime: '22:30',
+    netWorkMinutes: 450,
+    hasOvertime: false,
+    status: 'ACTIVE',
+  },
 ];
 let savedReportsStore: SavedReportConfig[] = [
   {
@@ -738,6 +796,16 @@ apiRouter.post('/production/boms', (req: Request, res: Response) => {
   }
 });
 
+apiRouter.delete('/production/boms/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const deleted = deleteAdvancedBom(id);
+  if (deleted) {
+    res.json({ success: true, message: 'درخت محصول (BOM) با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'BOM مورد نظر یافت نشد.' });
+  }
+});
+
 apiRouter.post('/production/boms/generate-sub-mos', (req: Request, res: Response) => {
   try {
     const { bomId, plannedQty = 500, masterMoNumber = `MO-${Date.now()}` } = req.body;
@@ -787,6 +855,16 @@ apiRouter.post('/production/parallel-flows', (req: Request, res: Response) => {
     res.json({ success: true, message: 'جریان تولید موازی با موفقیت ذخیره گردید.', data: saved });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.delete('/production/parallel-flows/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const deleted = deleteParallelFlow(id);
+  if (deleted) {
+    res.json({ success: true, message: 'جریان تولید موازی با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'جریان تولید موازی یافت نشد.' });
   }
 });
 
@@ -1292,9 +1370,15 @@ apiRouter.post('/shifts', (req: Request, res: Response) => {
       id: payload.id || `SHIFT-${Date.now()}`,
       code: payload.code || `SHIFT-${Date.now().toString().slice(-3)}`,
       name: payload.name,
-      startTime: payload.startTime || '08:00',
-      endTime: payload.endTime || '16:00',
+      startTime: payload.startTime || '07:00',
+      endTime: payload.endTime || '14:30',
       netWorkMinutes: Number(payload.netWorkMinutes) || 450,
+      hasOvertime: payload.hasOvertime ?? true,
+      overtimeStartTime: payload.overtimeStartTime || '15:00',
+      overtimeEndTime: payload.overtimeEndTime || '17:00',
+      overtimeMinutes: Number(payload.overtimeMinutes) || 120,
+      overtimeDaysDescription: payload.overtimeDaysDescription || 'شنبه تا چهارشنبه',
+      thursdayStatus: payload.thursdayStatus || 'OVERTIME_15_17',
       status: payload.status || 'ACTIVE',
     };
     shiftsStore.push(newShift);
@@ -1310,6 +1394,98 @@ apiRouter.delete('/shifts/:id', (req: Request, res: Response) => {
     res.json({ success: true, message: 'شیفت کاری با موفقیت حذف گردید.' });
   } else {
     res.status(404).json({ success: false, error: 'شیفت کاری یافت نشد.' });
+  }
+});
+
+/**
+ * 11.5. Car Models & Product Families Master Data (مدل‌های خودرو و خانواده محصول)
+ */
+apiRouter.get('/car-models', (_req: Request, res: Response) => {
+  res.json({ success: true, count: carModelsStore.length, data: carModelsStore });
+});
+
+apiRouter.post('/car-models', (req: Request, res: Response) => {
+  const payload: Partial<CarModel> = req.body;
+  if (!payload.name) {
+    return res.status(400).json({ success: false, error: 'نام مدل خودرو / خانواده محصول الزامی است.' });
+  }
+
+  const existingIndex = carModelsStore.findIndex(c => c.id === payload.id || (payload.code && c.code === payload.code));
+  if (existingIndex >= 0) {
+    carModelsStore[existingIndex] = { ...carModelsStore[existingIndex], ...payload };
+    return res.json({ success: true, message: 'مدل خودرو با موفقیت به‌روزرسانی شد.', data: carModelsStore[existingIndex] });
+  } else {
+    const newCarModel: CarModel = {
+      id: payload.id || `CAR-${Date.now()}`,
+      code: payload.code || `CAR-${Date.now().toString().slice(-4)}`,
+      name: payload.name,
+      oem: payload.oem || 'ایران‌خودرو (ساپکو)',
+      description: payload.description || '',
+      active: payload.active ?? true,
+    };
+    carModelsStore.push(newCarModel);
+    return res.status(201).json({ success: true, message: 'مدل خودروی جدید با موفقیت ثبت شد.', data: newCarModel });
+  }
+});
+
+apiRouter.delete('/car-models/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = carModelsStore.length;
+  carModelsStore = carModelsStore.filter(c => c.id !== id && c.code !== id);
+  if (carModelsStore.length < initialCount) {
+    res.json({ success: true, message: 'مدل خودرو با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'مدل خودرو یافت نشد.' });
+  }
+});
+
+/**
+ * 11.6. Standard Operations Master Data (عملیات و ایستگاه‌های استاندارد تولید)
+ */
+apiRouter.get('/operations', (_req: Request, res: Response) => {
+  res.json({ success: true, count: operationsStore.length, data: operationsStore });
+});
+
+apiRouter.post('/operations', (req: Request, res: Response) => {
+  const payload: Partial<OperationDefinition> = req.body;
+  if (!payload.name) {
+    return res.status(400).json({ success: false, error: 'عنوان عملیات الزامی است.' });
+  }
+
+  const existingIndex = operationsStore.findIndex(o => o.id === payload.id || (payload.code && o.code === payload.code));
+  if (existingIndex >= 0) {
+    operationsStore[existingIndex] = {
+      ...operationsStore[existingIndex],
+      ...payload,
+      cycleTimeSec: Number(payload.cycleTimeSec) || operationsStore[existingIndex].cycleTimeSec,
+      setupTimeMin: Number(payload.setupTimeMin) || operationsStore[existingIndex].setupTimeMin,
+    };
+    return res.json({ success: true, message: 'مشخصات عملیات با موفقیت به‌روزرسانی شد.', data: operationsStore[existingIndex] });
+  } else {
+    const newOperation: OperationDefinition = {
+      id: payload.id || `OP-${Date.now().toString().slice(-4)}`,
+      code: payload.code || `OP-${Date.now().toString().slice(-3)}`,
+      name: payload.name,
+      stationType: payload.stationType || 'پرس یا ایستگاه مونتاژ',
+      cycleTimeSec: Number(payload.cycleTimeSec) || 5.0,
+      setupTimeMin: Number(payload.setupTimeMin) || 15,
+      category: payload.category || 'STAMPING',
+      description: payload.description || '',
+      active: payload.active ?? true,
+    };
+    operationsStore.push(newOperation);
+    return res.status(201).json({ success: true, message: 'عملیات استاندارد جدید با موفقیت ثبت شد.', data: newOperation });
+  }
+});
+
+apiRouter.delete('/operations/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const initialCount = operationsStore.length;
+  operationsStore = operationsStore.filter(o => o.id !== id && o.code !== id);
+  if (operationsStore.length < initialCount) {
+    res.json({ success: true, message: 'عملیات استاندارد با موفقیت حذف گردید.' });
+  } else {
+    res.status(404).json({ success: false, error: 'عملیات مورد نظر یافت نشد.' });
   }
 });
 

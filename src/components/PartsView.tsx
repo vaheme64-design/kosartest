@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Layers,
   Search,
@@ -12,8 +12,9 @@ import {
   X,
   Check,
 } from 'lucide-react';
-import { Part, PartCategory, UnitOfMeasure } from '../types/inventory';
+import { Part, PartCategory, UnitOfMeasure, CarModel } from '../types/inventory';
 import { formatNumber, formatWeightKg, exportToCsv, toPersianDigits } from '../utils/formatters';
+import { SearchableSelect } from './common/SearchableSelect';
 
 interface PartsViewProps {
   parts: Part[];
@@ -43,15 +44,26 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [carModelsList, setCarModelsList] = useState<CarModel[]>([]);
 
-  // Extract unique car models for filter
+  useEffect(() => {
+    fetch('/api/car-models')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) setCarModelsList(d.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Extract unique car models for filter combining API models & parts
   const carModels = useMemo(() => {
     const set = new Set<string>();
+    carModelsList.forEach(c => set.add(c.name));
     parts.forEach(p => {
       if (p.carModel) set.add(p.carModel);
     });
     return Array.from(set);
-  }, [parts]);
+  }, [parts, carModelsList]);
 
   const filteredParts = useMemo(() => {
     return parts.filter(p => {
@@ -419,13 +431,21 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-700 font-medium">مدل خودرو</label>
-                  <input
-                    type="text"
+                  <label className="text-slate-700 font-medium">مدل خودرو / خانواده محصول</label>
+                  <SearchableSelect
                     value={formData.carModel || ''}
-                    onChange={e => setFormData({ ...formData, carModel: e.target.value })}
-                    placeholder="تارا، پژو ۲۰۶، دنا"
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500"
+                    onChange={val => setFormData({ ...formData, carModel: val })}
+                    placeholder="انتخاب مدل خودرو..."
+                    searchPlaceholder="جستجوی مدل خودرو (۲۰۶، تارا، دنا...)"
+                    options={[
+                      { value: 'مشترک', label: 'مشترک بین چند خودرو' },
+                      ...carModelsList.map(c => ({
+                        value: c.name,
+                        label: c.name,
+                        sublabel: c.oem,
+                        badge: c.code,
+                      })),
+                    ]}
                   />
                 </div>
 
