@@ -10,6 +10,7 @@ import { UserManagementView } from './components/UserManagementView';
 import { SapcoMaterialsView } from './components/SapcoMaterialsView';
 import { ProductionWipModuleView } from './components/wip/ProductionWipModuleView';
 import { ProductionPlanningModuleView } from './components/planning/ProductionPlanningModuleView';
+import { ErpProductionWorkbenchView } from './components/production/ErpProductionWorkbenchView';
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
 import { TemplateSwitcherModal } from './components/TemplateSwitcherModal';
@@ -42,6 +43,7 @@ export default function App() {
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiReceiptDraft, setAiReceiptDraft] = useState<any>(null);
   const [aiIssueDraft, setAiIssueDraft] = useState<any>(null);
+  const [productionViewMode, setProductionViewMode] = useState<'ERP_WORKBENCH' | 'VOUCHERS'>('ERP_WORKBENCH');
 
   // Multi-Template & Color Theme Engine (Persisted in localStorage)
   const [layoutTemplate, setLayoutTemplate] = useState<ErpLayoutTemplate>(() => {
@@ -573,17 +575,52 @@ export default function App() {
 
           {/* 4. Production */}
           {activeTab === 'production' && (
-            <TransactionsVouchersView
-              parts={parts}
-              machines={machines}
-              dies={dies}
-              operators={operators}
-              stageBalances={summary?.stageBalances || []}
-              initialVoucherType={initialVoucherType}
-              initialPartId={initialPartId}
-              initialStageId={initialStageId}
-              onSubmitVoucher={handleSubmitVoucher}
-            />
+            <div className="space-y-4">
+              <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap items-center gap-2 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setProductionViewMode('ERP_WORKBENCH')}
+                  className={`flex-1 min-w-[240px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    productionViewMode === 'ERP_WORKBENCH'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  ۱. فرآیند جامع تولید از سفارش تا برنامه روزانه و انتقال مانده کار (استاندارد SAP / Odoo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductionViewMode('VOUCHERS')}
+                  className={`flex-1 min-w-[240px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    productionViewMode === 'VOUCHERS'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  ۲. ثبت تکی اسناد کارگاهی (ورود ورق، تولید ایستگاهی و ضایعات)
+                </button>
+              </div>
+
+              {productionViewMode === 'ERP_WORKBENCH' ? (
+                <ErpProductionWorkbenchView
+                  parts={parts}
+                  routings={routings}
+                  onRefreshData={loadAllData}
+                />
+              ) : (
+                <TransactionsVouchersView
+                  parts={parts}
+                  machines={machines}
+                  dies={dies}
+                  operators={operators}
+                  stageBalances={summary?.stageBalances || []}
+                  initialVoucherType={initialVoucherType}
+                  initialPartId={initialPartId}
+                  initialStageId={initialStageId}
+                  onSubmitVoucher={handleSubmitVoucher}
+                />
+              )}
+            </div>
           )}
 
           {/* 5. Production Execution & WIP Module */}

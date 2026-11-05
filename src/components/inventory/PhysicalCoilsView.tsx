@@ -61,6 +61,9 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
 
   // Multi-contract allocation form
   const [allocationsList, setAllocationsList] = useState<{ contractId: string; allocatedWeightKg: number }[]>([]);
+  const [availableContracts, setAvailableContracts] = useState<
+    Array<{ id: string; contractNumber: string; title?: string; customerName?: string }>
+  >([]);
 
   // Genealogy data state
   const [genealogyData, setGenealogyData] = useState<any>(null);
@@ -72,10 +75,17 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
   const fetchCoils = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/inventory/coils');
-      const data = await res.json();
+      const [coilsRes, cntRes] = await Promise.all([
+        fetch('/api/inventory/coils'),
+        fetch('/api/inventory/contracts'),
+      ]);
+      const data = await coilsRes.json();
       if (data.success) {
         setCoils(data.data);
+      }
+      const cntData = await cntRes.json();
+      if (cntData.success && Array.isArray(cntData.data)) {
+        setAvailableContracts(cntData.data);
       }
     } catch (err) {
       console.error('Error fetching coils:', err);
@@ -1084,36 +1094,56 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
             <form onSubmit={handleAllocateSubmit} className="space-y-3.5 text-xs">
               <div className="space-y-2">
                 {allocationsList.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <input
-                      type="text"
-                      placeholder="شناسه قرارداد سهمیه (مثلاً CNT-SAPCO-1403-Q3)"
-                      value={item.contractId}
-                      onChange={e => {
-                        const updated = [...allocationsList];
-                        updated[idx].contractId = e.target.value;
-                        setAllocationsList(updated);
-                      }}
-                      className="flex-1 bg-white border border-slate-200 rounded px-2.5 py-1 text-slate-800 focus:outline-none text-xs"
-                    />
-                    <input
-                      type="number"
-                      placeholder="وزن تخصیصی (kg)"
-                      value={item.allocatedWeightKg}
-                      onChange={e => {
-                        const updated = [...allocationsList];
-                        updated[idx].allocatedWeightKg = Number(e.target.value);
-                        setAllocationsList(updated);
-                      }}
-                      className="w-28 bg-white border border-slate-200 rounded px-2.5 py-1 text-slate-800 font-mono text-xs focus:outline-none"
-                    />
+                  <div
+                    key={idx}
+                    className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200"
+                  >
+                    <div className="flex-1">
+                      <label className="block text-[10px] text-slate-500 mb-1">
+                        انتخاب قرارداد از لیست قراردادهای فعال:
+                      </label>
+                      <select
+                        value={item.contractId}
+                        onChange={e => {
+                          const updated = [...allocationsList];
+                          updated[idx].contractId = e.target.value;
+                          setAllocationsList(updated);
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-mono font-bold focus:outline-none text-xs"
+                      >
+                        <option value="">-- انتخاب قرارداد از لیست --</option>
+                        {availableContracts.map(cnt => (
+                          <option key={cnt.id} value={cnt.contractNumber}>
+                            {cnt.contractNumber} — {cnt.title || cnt.customerName || 'ساپکو'}
+                          </option>
+                        ))}
+                        {item.contractId &&
+                          !availableContracts.some(
+                            c => c.contractNumber === item.contractId || c.id === item.contractId
+                          ) && <option value={item.contractId}>{item.contractId}</option>}
+                      </select>
+                    </div>
+                    <div className="w-full sm:w-32">
+                      <label className="block text-[10px] text-slate-500 mb-1">وزن تخصیصی (kg):</label>
+                      <input
+                        type="number"
+                        placeholder="وزن (kg)"
+                        value={item.allocatedWeightKg}
+                        onChange={e => {
+                          const updated = [...allocationsList];
+                          updated[idx].allocatedWeightKg = Number(e.target.value);
+                          setAllocationsList(updated);
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-mono font-bold text-xs focus:outline-none"
+                      />
+                    </div>
                     {allocationsList.length > 1 && (
                       <button
                         type="button"
                         onClick={() => {
                           setAllocationsList(allocationsList.filter((_, i) => i !== idx));
                         }}
-                        className="text-rose-500 hover:text-rose-700 px-1 text-sm cursor-pointer"
+                        className="text-rose-500 hover:text-rose-700 px-1.5 pt-4 text-sm cursor-pointer self-end sm:self-center"
                       >
                         ✕
                       </button>
@@ -1125,12 +1155,16 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
               <button
                 type="button"
                 onClick={() => {
-                  setAllocationsList([...allocationsList, { contractId: '', allocatedWeightKg: 0 }]);
+                  const defaultCnt = availableContracts[0]?.contractNumber || '';
+                  setAllocationsList([
+                    ...allocationsList,
+                    { contractId: defaultCnt, allocatedWeightKg: 0 },
+                  ]);
                 }}
-                className="text-xs text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1 mt-1 cursor-pointer"
+                className="text-xs text-indigo-700 hover:text-indigo-900 font-bold flex items-center gap-1 mt-1 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>افزودن سهم قرارداد دیگر</span>
+                <span>+ افزودن سهم قرارداد دیگر</span>
               </button>
 
               <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-100">

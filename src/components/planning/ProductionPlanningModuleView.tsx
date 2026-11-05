@@ -32,6 +32,7 @@ import { NewCustomerOrderModal } from './NewCustomerOrderModal';
 import { MrpModuleView } from './MrpModuleView';
 import { ConsumablesForecastView } from './ConsumablesForecastView';
 import { DailyProductionScheduleView } from './DailyProductionScheduleView';
+import { ErpProductionWorkbenchView } from '../production/ErpProductionWorkbenchView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
@@ -50,8 +51,15 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   onGlobalRefresh,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'daily_schedule' | 'mrp' | 'consumables' | 'recommendations' | 'orders' | 'approved_plans'
-  >('dashboard');
+    | 'erp_workbench'
+    | 'dashboard'
+    | 'daily_schedule'
+    | 'mrp'
+    | 'consumables'
+    | 'recommendations'
+    | 'orders'
+    | 'approved_plans'
+  >('erp_workbench');
 
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<PlanningDashboardMetrics | null>(null);
@@ -272,6 +280,9 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                 onChange={e => setActiveSubTab(e.target.value as any)}
                 className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
+                <option value="erp_workbench">
+                  میز کار ۵ مرحله‌ای تولید (SAP / Odoo — ۵,۰۰۰ عدد تا انتقال مانده روزانه)
+                </option>
                 <option value="dashboard">داشبورد موازنه تقاضا و ظرفیت</option>
                 <option value="daily_schedule">برنامه روزانه شرکت به تفکیک سالن (Daily Dispatch)</option>
                 <option value="mrp">پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</option>
@@ -290,6 +301,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
             <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
+                { id: 'erp_workbench', label: 'میز کار ۵ مرحله‌ای (SAP / Odoo)' },
                 { id: 'dashboard', label: 'موازنه تقاضا' },
                 { id: 'daily_schedule', label: 'برنامه روزانه سالن' },
                 { id: 'mrp', label: 'نیازسنجی MRP' },
@@ -328,6 +340,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             ✕
           </button>
         </div>
+      )}
+
+      {/* Sub-Tab 0: ERP 5-Stage Workbench (SAP PP / Odoo MRP / Daily Roll-Forward) */}
+      {activeSubTab === 'erp_workbench' && (
+        <ErpProductionWorkbenchView parts={parts} routings={[]} onRefreshData={loadPlanningData} />
       )}
 
       {/* 1. Dashboard Sub-Tab */}

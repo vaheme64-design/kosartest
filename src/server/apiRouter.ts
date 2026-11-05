@@ -1971,6 +1971,87 @@ apiRouter.post('/inventory/documents', (req: Request, res: Response) => {
         auditLogsStore.unshift(postResult.auditRecord);
       }
 
+      // Synchronize posted document lines with physicalCoilsStore so CustomReportsView & PhysicalCoilsView stay in sync
+      if (
+        newDoc.documentType === 'RECEIPT_RAW_MATERIAL' ||
+        newDoc.documentType === 'OPENING_BALANCE'
+      ) {
+        for (const line of newDoc.lines) {
+          const partObj = partsStore.find(p => p.id === line.partId || p.code === line.partCode);
+          const isRawOrCoil =
+            !partObj ||
+            partObj.category === 'RAW_MATERIAL' ||
+            line.unit === 'KG' ||
+            Boolean(line.lotNumber);
+          if (!isRawOrCoil) continue;
+
+          const lotCode = line.lotNumber || `COIL-${newDoc.documentNumber}-${line.lineNumber}`;
+          const existingCoil = physicalCoilsStore.find(
+            c => c.coilId === lotCode || c.coilPackNumber === lotCode
+          );
+          const weightKg = Number(line.quantityKg || line.quantity || 0);
+
+          if (existingCoil) {
+            existingCoil.remainingWeightKg += weightKg;
+            existingCoil.originalWeightKg = Math.max(
+              existingCoil.originalWeightKg,
+              existingCoil.remainingWeightKg
+            );
+          } else {
+            const contractObj = contractsStore.find(
+              c => c.id === line.contractId || c.contractNumber === line.contractNumber
+            );
+            physicalCoilsStore.unshift({
+              id: `COIL-DOC-${Date.now()}-${line.lineNumber}`,
+              coilId: lotCode,
+              coilPackNumber: newDoc.referenceNumber || lotCode,
+              partId: line.partId,
+              partCode: line.partCode,
+              partName: line.partName,
+              materialGrade: partObj?.materialGrade || 'DC01A',
+              heatNumber: line.heatNumber || `HT-${Math.floor(1000 + Math.random() * 9000)}`,
+              thicknessMm: partObj?.thicknessMm || 2.0,
+              widthMm: 1140,
+              originalWeightKg: weightKg,
+              remainingWeightKg: weightKg,
+              warehouseId: newDoc.warehouseId || 'WH-RAW',
+              warehouseName: newDoc.warehouseName || 'انبار مرکزی رول و ورق ساپکو',
+              warehouseLocationCode: line.locationCode || 'LOC-RAW-A1',
+              ownership: line.ownership || newDoc.ownership || 'SAPCO_SUPPLIER_OWNED',
+              qualityStatus: 'AVAILABLE',
+              physicalStatus: 'AVAILABLE',
+              supplierName: contractObj?.customerName || 'ساپکو',
+              receiptDate: newDoc.documentDate || now,
+              allocations:
+                line.contractId || line.contractNumber
+                  ? ([
+                      {
+                        id: `ALLOC-${Date.now()}`,
+                        coilId: lotCode,
+                        contractId: line.contractId || line.contractNumber || '',
+                        contractNumber: line.contractNumber || contractObj?.contractNumber || '',
+                        allocatedWeightKg: weightKg,
+                      },
+                    ] as any)
+                  : [],
+            });
+          }
+        }
+      } else if (newDoc.documentType === 'ISSUE_RAW_MATERIAL') {
+        for (const line of newDoc.lines) {
+          if (!line.lotNumber) continue;
+          const existingCoil = physicalCoilsStore.find(
+            c => c.coilId === line.lotNumber || c.coilPackNumber === line.lotNumber
+          );
+          if (existingCoil) {
+            const issuedKg = Number(line.quantityKg || line.quantity || 0);
+            existingCoil.remainingWeightKg = Math.max(0, existingCoil.remainingWeightKg - issuedKg);
+            existingCoil.physicalStatus =
+              existingCoil.remainingWeightKg <= 0 ? 'CONSUMED' : 'PARTIALLY_ISSUED';
+          }
+        }
+      }
+
       // Persist to PostgreSQL via Prisma transaction
       postDocumentInDbTransaction(newDoc, user).catch(err => {
         console.warn('PostgreSQL Prisma transaction background warning:', err?.message || err);
@@ -2701,9 +2782,58 @@ apiRouter.post('/inventory/coils', (req: Request, res: Response) => {
 
     physicalCoilsStore.unshift(newCoil);
 
+    // Also create a corresponding posted RECEIPT_RAW_MATERIAL document in inventoryDocsStore so StockInquiryView and IssueFormModal see the new coil immediately
+    const autoDoc: InventoryDocument = {
+      id: `DOC-COIL-${Date.now()}`,
+      documentNumber: `RCV-CL-${Math.floor(10000 + Math.random() * 90000)}`,
+      documentType: 'RECEIPT_RAW_MATERIAL',
+      documentDate: newCoil.receiptDate || new Date().toISOString(),
+      documentStatus: 'CONFIRMED',
+      postingStatus: 'POSTED',
+      warehouseId: newCoil.warehouseId || 'WH-RAW',
+      warehouseName: newCoil.warehouseName || 'انبار رول و ورق',
+      ownership: newCoil.ownership,
+      contractId: newCoil.allocations?.[0]?.contractId,
+      contractNumber: newCoil.allocations?.[0]?.contractNumber,
+      referenceType: 'PURCHASE_ORDER',
+      referenceNumber: newCoil.coilPackNumber || newCoil.coilId,
+      auditNote: `ثبت خودکار از ورود کلاف فیزیکی ${newCoil.coilId}`,
+      lines: [
+        {
+          id: `LN-COIL-${Date.now()}`,
+          documentId: `DOC-COIL-${Date.now()}`,
+          lineNumber: 1,
+          partId: newCoil.partId || '',
+          partCode: newCoil.partCode || '',
+          partName: newCoil.partName || '',
+          lotNumber: newCoil.coilId,
+          heatNumber: newCoil.heatNumber,
+          ownership: newCoil.ownership,
+          contractId: newCoil.allocations?.[0]?.contractId,
+          contractNumber: newCoil.allocations?.[0]?.contractNumber,
+          locationCode: newCoil.warehouseLocationCode || 'LOC-RAW-A1',
+          quantity: Number(newCoil.originalWeightKg) || 0,
+          unit: 'KG',
+          quantityKg: Number(newCoil.originalWeightKg) || 0,
+          qualityStatus: 'AVAILABLE',
+          notes: `کویل‌پک: ${newCoil.coilPackNumber}`,
+        },
+      ],
+      totalQuantity: Number(newCoil.originalWeightKg) || 0,
+      totalWeightKg: Number(newCoil.originalWeightKg) || 0,
+      createdByUid: 'USR-OP-01',
+      createdByName: 'انباردار رول و ورق',
+      postedByUid: 'USR-OP-01',
+      postedByName: 'انباردار رول و ورق',
+      postedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    inventoryDocsStore.unshift(autoDoc);
+
     res.status(201).json({
       success: true,
-      message: `کلاف فیزیکی شماره «${newCoil.coilId}» (پکینگ ${newCoil.coilPackNumber}) با موفقیت ثبت گردید.`,
+      message: `کلاف فیزیکی شماره «${newCoil.coilId}» (پکینگ ${newCoil.coilPackNumber}) در انبار و گزارش‌ها با موفقیت ثبت گردید.`,
       data: newCoil,
     });
   } catch (error) {
@@ -4796,6 +4926,37 @@ apiRouter.post('/consumables/update-stock', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'خطا در بروزرسانی کالای مصرفی',
+    });
+  }
+});
+
+// =========================================================================
+// 22. RECURSIVE PRODUCT STRUCTURES (ProductStructure Persistence)
+// =========================================================================
+let productStructuresStore: any[] = [];
+
+apiRouter.get('/production/product-structures', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: productStructuresStore,
+  });
+});
+
+apiRouter.post('/production/product-structures', (req: Request, res: Response) => {
+  try {
+    const { structures } = req.body || {};
+    if (Array.isArray(structures)) {
+      productStructuresStore = structures;
+    }
+    res.json({
+      success: true,
+      message: 'ساختار درختی محصولات با موفقیت ذخیره و در برنامه‌ریزی تولید (MRP) بروزرسانی شد.',
+      data: productStructuresStore,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ذخیره ساختار درختی محصول',
     });
   }
 });

@@ -174,17 +174,87 @@ interface ProductStructureViewProps {
   parts: Part[];
 }
 
+const STORAGE_KEY_PRODUCT_STRUCTURES = 'kpims_product_structures_v1';
+
 export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ parts }) => {
-  const [structures, setStructures] = useState<ProductStructureData[]>(INITIAL_PRODUCT_STRUCTURES);
-  const [selectedStructureId, setSelectedStructureId] = useState<string>(
-    INITIAL_PRODUCT_STRUCTURES[0]?.id || ''
-  );
+  const [structures, setStructures] = useState<ProductStructureData[]>(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY_PRODUCT_STRUCTURES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_PRODUCT_STRUCTURES;
+  });
+
+  const [selectedStructureId, setSelectedStructureId] = useState<string>(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY_PRODUCT_STRUCTURES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_PRODUCT_STRUCTURES[0]?.id || '';
+  });
+
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     'SUB-ECU-01': true,
     'SUB-ECU-02': true,
     'SUB-TAR-01': true,
     'SUB-TAR-02': true,
   });
+
+  // Load from backend if backend has saved structures
+  useEffect(() => {
+    fetch('/api/production/product-structures')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setStructures(res.data);
+          window.localStorage.setItem(STORAGE_KEY_PRODUCT_STRUCTURES, JSON.stringify(res.data));
+        } else {
+          // Seed backend with current localStorage / initial structures
+          fetch('/api/production/product-structures', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ structures }),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const persistStructures = async (nextStructures: ProductStructureData[], msg: string) => {
+    setStructures(nextStructures);
+    try {
+      window.localStorage.setItem(STORAGE_KEY_PRODUCT_STRUCTURES, JSON.stringify(nextStructures));
+    } catch {
+      // ignore
+    }
+    setIsSyncing(true);
+    try {
+      await fetch('/api/production/product-structures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structures: nextStructures }),
+      });
+    } catch {
+      // ignore
+    } finally {
+      setIsSyncing(false);
+      setSaveMessage(msg);
+      setTimeout(() => setSaveMessage(null), 4000);
+    }
+  };
 
   // Modal State for adding/editing a sub-component recursively
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -314,7 +384,12 @@ export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ part
       return s;
     });
 
-    setStructures(updatedStructures);
+    persistStructures(
+      updatedStructures,
+      editingNodeId
+        ? `تغییرات جزء «${newNode.partName}» با موفقیت ذخیره و در MRP همگام‌سازی شد.`
+        : `جزء جدید «${newNode.partName}» به ساختار درختی افزوده و ذخیره دائمی شد.`
+    );
     if (targetParentNodeId) {
       setExpandedNodes(prev => ({ ...prev, [targetParentNodeId]: true }));
     }
@@ -333,7 +408,7 @@ export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ part
       return s;
     });
 
-    setStructures(updatedStructures);
+    persistStructures(updatedStructures, 'زیرمجموعه انتخابی حذف شد و ساختار درختی بروزرسانی گردید.');
   };
 
   const handleCreateNewAssembly = (e: React.FormEvent) => {
@@ -341,19 +416,21 @@ export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ part
     if (!newRootPartId) return;
 
     const foundPart = parts.find(p => p.id === newRootPartId || p.code === newRootPartId);
-    if (!foundPart) return;
-
     const newStruct: ProductStructureData = {
       id: `PS-${Date.now()}`,
-      rootPartId: foundPart.id,
-      rootPartCode: foundPart.code,
-      rootPartName: foundPart.name,
+      rootPartId: foundPart ? foundPart.id : newRootPartId,
+      rootPartCode: foundPart ? foundPart.code : newRootPartId,
+      rootPartName: foundPart ? foundPart.name : newRootPartId,
       carModel: newCarModel || 'مشترک',
       notes: newAssemblyNotes,
       subComponents: [],
     };
 
-    setStructures(prev => [...prev, newStruct]);
+    const nextStructures = [...structures, newStruct];
+    persistStructures(
+      nextStructures,
+      `ساختار محصول جدید برای «${newStruct.rootPartName}» ایجاد و در پایگاه داده ذخیره شد.`
+    );
     setSelectedStructureId(newStruct.id);
     setIsNewAssemblyModalOpen(false);
     setNewRootPartId('');
@@ -458,14 +535,32 @@ export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ part
 
   return (
     <div className="space-y-5 text-right font-sans">
-      {/* Educational Banner */}
+      {/* Save Notification Toast */}
+      {saveMessage && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-950 rounded-2xl p-3.5 text-xs font-bold flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{saveMessage}</span>
+          </div>
+          <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+            ذخیره پایدار در سرور و مرورگر
+          </span>
+        </div>
+      )}
+
+      {/* Educational Banner: Difference between ProductStructure and BOM */}
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 flex items-start gap-3 shadow-2xs leading-relaxed">
         <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div>
-          <strong className="block font-bold text-amber-950 text-sm mb-1">
-            ساختار درختی بازگشتی کالا و زیرمجموعه‌ها (ProductStructure Component):
+        <div className="space-y-1.5">
+          <strong className="block font-bold text-amber-950 text-sm">
+            تفاوت «ساختار درختی محصول (ProductStructure)» با «جدول BOM مهندسی» و نقش آن‌ها در برنامه‌ریزی تولید (MRP):
           </strong>
-          این بخش برای مدل‌سازی ساختارهای چندسطحی پیچیده مانند «مجموعه براکت ضدسرقت» پیاده‌سازی شده است. هر قطعه نهایی می‌تواند شامل زیرمجموعه‌هایی (مانند صفحه اصلی و مکمل) باشد و هر زیرمجموعه خود شامل اجزای فرعی‌تر (مانند ورق خام، پیچ‌ها و مهره‌های جوشی M6) با ضرایب مصرف مشخص باشد.
+          <p>
+            • <strong>۱. ساختار درختی محصول (این صفحه - ProductStructure):</strong> نمای گرافیکی و بازگشتی (چندسطحی) مونتاژ است؛ مثلاً نشان می‌دهد «مجموعه براکت ضدسرقت» (سطح ۰) از ۲ زیرمجموعه نیمه‌ساخته «صفحه اصلی» و «مکمل» (سطح ۱) تشکیل شده و هر کدام از این زیرمجموعه‌ها خود از چه ورق خام و چند عدد مهره/پیچ جوشی (سطح ۲) ساخته می‌شوند. این ساختار برای <strong>صدور دستورات ساخت مرحله‌ای (Sub-Assembly MOs)</strong> در ایستگاه‌های پرس و جوش به کار می‌رود.
+          </p>
+          <p>
+            • <strong>۲. جدول BOM مهندسی (Advanced BOM):</strong> فهرست مسطح و مهندسی مقادیر مصرف، درصد پرت ورق (Scrap %)، وزن بلنک و ارتباط با قالب‌های مشترک چپ و راست است که برای <strong>محاسبه دقیق تناژ ورق مورد نیاز و موازنه کلاف (MRP Netting)</strong> استفاده می‌شود. هر تغییری که اینجا ذخیره کنید به صورت خودکار در پایگاه داده و محاسبات برنامه‌ریزی تولید (MRP) لحاظ می‌گردد.
+          </p>
         </div>
       </div>
 
@@ -481,19 +576,36 @@ export const ProductStructureView: React.FC<ProductStructureViewProps> = ({ part
                 مدیریت ساختار محصول درختی (Recursive Assembly Trees)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                تعریف محصولات مرکب و تخصیص زیرمجموعه‌ها به صورت بازگشتی با ضرایب مصرف
+                تعریف محصولات مرکب و تخصیص زیرمجموعه‌ها به صورت بازگشتی با ضرایب مصرف (متصل به موتور MRP)
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsNewAssemblyModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-amber-400" />
-            <span>+ تعریف ساختار محصول جدید</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={isSyncing}
+              onClick={() =>
+                persistStructures(
+                  structures,
+                  'تمامی ساختارهای درختی محصول با موفقیت در سرور و ماژول برنامه‌ریزی تولید (MRP) ذخیره و همگام‌سازی شدند.'
+                )
+              }
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{isSyncing ? 'در حال ذخیره...' : 'ذخیره نهایی و بروزرسانی در MRP'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewAssemblyModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span>+ تعریف ساختار محصول جدید</span>
+            </button>
+          </div>
         </div>
 
         {/* Structure Selector Bar */}

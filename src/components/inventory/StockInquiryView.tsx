@@ -11,12 +11,18 @@ import {
   Layers,
   Boxes,
   BookmarkCheck,
+  FileSpreadsheet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  History,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   DetailedStockBalance,
   Part,
   WarehouseDefinition,
   StockOwnership,
+  InventoryDocument,
 } from '../../types/inventory';
 import {
   formatNumber,
@@ -75,11 +81,40 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
   const [selectedLotFilter, setSelectedLotFilter] = useState('ALL');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
 
+  // View Mode: ANALYTICAL_TABLE vs PART_CARDEX (Master-Detail Part Stock + Cardex)
+  const [inquiryMode, setInquiryMode] = useState<'PART_CARDEX' | 'ANALYTICAL_TABLE'>('PART_CARDEX');
+  const [selectedCardexPartId, setSelectedCardexPartId] = useState<string>('');
+  const [partSearchQuery, setPartSearchQuery] = useState<string>('');
+  const [allDocuments, setAllDocuments] = useState<InventoryDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState<boolean>(false);
+
   // Grouping & Expandable Details
   const [groupBy, setGroupBy] = useState<StockGroupingKey>('NONE');
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [savedViewNotice, setSavedViewNotice] = useState(false);
+
+  // Fetch inventory documents for Cardex calculation
+  useEffect(() => {
+    setDocsLoading(true);
+    fetch('/api/inventory/documents?limit=500')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setAllDocuments(res.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDocsLoading(false));
+  }, [balances]);
+
+  // Select default part for Cardex
+  useEffect(() => {
+    if (!selectedCardexPartId && parts.length > 0) {
+      const partWithStock = parts.find(p => balances.some(b => b.partId === p.id || b.partCode === p.code));
+      setSelectedCardexPartId((partWithStock || parts[0]).id);
+    }
+  }, [parts, balances, selectedCardexPartId]);
 
   // Saved Column Preferences
   const [visibleCols, setVisibleCols] = useState<typeof DEFAULT_VISIBLE_COLUMNS>(() => {
@@ -344,6 +379,138 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
     }
   };
 
+  // Master-Detail Part List with aggregated stock for PART_CARDEX mode
+  const catalogPartsWithStock = useMemo(() => {
+    const q = partSearchQuery.trim().toLowerCase();
+    return parts
+      .map(p => {
+        const pBalances = balances.filter(b => b.partId === p.id || b.partCode === p.code);
+        const physicalTotal = pBalances.reduce((s, b) => s + b.physicalQty, 0);
+        const availableTotal = pBalances.reduce((s, b) => s + b.availableQty, 0);
+        const lotsCount = pBalances.length;
+        return {
+          part: p,
+          physicalTotal,
+          availableTotal,
+          lotsCount,
+          balances: pBalances,
+        };
+      })
+      .filter(item => {
+        if (!q) return true;
+        return (
+          item.part.name.toLowerCase().includes(q) ||
+          item.part.code.toLowerCase().includes(q) ||
+          (item.part.materialGrade && item.part.materialGrade.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => b.physicalTotal - a.physicalTotal);
+  }, [parts, balances, partSearchQuery]);
+
+  const activeCardexPartSummary =
+    catalogPartsWithStock.find(
+      c => c.part.id === selectedCardexPartId || c.part.code === selectedCardexPartId
+    ) || catalogPartsWithStock[0];
+
+  // Compute chronological Cardex (ورود، خروج و مانده لحظه‌ای) for the selected part
+  const selectedPartCardexRows = useMemo(() => {
+    if (!activeCardexPartSummary) return [];
+    const targetPart = activeCardexPartSummary.part;
+
+    const matchingTx: Array<{
+      id: string;
+      docId: string;
+      docNumber: string;
+      docDate: string;
+      docType: string;
+      warehouseName: string;
+      lotNumber: string;
+      contractNumber: string;
+      referenceNumber: string;
+      inQty: number;
+      outQty: number;
+      unit: string;
+      notes: string;
+    }> = [];
+
+    // Sort documents ascending by date to compute running balance accurately
+    const sortedDocs = [...allDocuments]
+      .filter(d => d.postingStatus === 'POSTED')
+      .sort((a, b) => new Date(a.documentDate).getTime() - new Date(b.documentDate).getTime());
+
+    for (const doc of sortedDocs) {
+      for (const line of doc.lines || []) {
+        if (line.partId !== targetPart.id && line.partCode !== targetPart.code) continue;
+        const qty = Number(line.quantity) || 0;
+        const docTypeStr = String(doc.documentType);
+        const isReceipt =
+          docTypeStr === 'OPENING_BALANCE' ||
+          docTypeStr === 'RECEIPT_RAW_MATERIAL' ||
+          docTypeStr === 'RECEIPT_FINISHED_GOODS' ||
+          docTypeStr === 'PRODUCTION_RECEIPT' ||
+          docTypeStr === 'RETURN_FROM_PRODUCTION';
+
+        const isIssue =
+          docTypeStr === 'ISSUE_RAW_MATERIAL' ||
+          docTypeStr === 'ISSUE_FINISHED_GOODS' ||
+          docTypeStr === 'DELIVERY_CUSTOMER' ||
+          docTypeStr === 'SHIPMENT_CUSTOMER' ||
+          docTypeStr === 'ISSUE_TO_PRODUCTION' ||
+          docTypeStr === 'DELIVERY_TO_CUSTOMER';
+
+        matchingTx.push({
+          id: `${doc.id}-${line.id || line.lineNumber}`,
+          docId: doc.id,
+          docNumber: doc.documentNumber,
+          docDate: doc.documentDate,
+          docType: doc.documentType,
+          warehouseName: doc.warehouseName,
+          lotNumber: line.lotNumber || 'عمومی',
+          contractNumber: line.contractNumber || doc.contractNumber || 'آزاد',
+          referenceNumber: doc.referenceNumber || '—',
+          inQty: isReceipt ? qty : 0,
+          outQty: isIssue ? qty : 0,
+          unit: line.unit || targetPart.unit,
+          notes: line.notes || doc.auditNote || '',
+        });
+      }
+    }
+
+    let runningBalance = 0;
+    const withRunning = matchingTx.map(tx => {
+      runningBalance = Math.max(0, Number((runningBalance + tx.inQty - tx.outQty).toFixed(3)));
+      return {
+        ...tx,
+        runningBalance,
+      };
+    });
+
+    // Return newest first for display
+    return withRunning.reverse();
+  }, [activeCardexPartSummary, allDocuments]);
+
+  const getDocTypeBadge = (docType: string) => {
+    switch (docType) {
+      case 'OPENING_BALANCE':
+        return { label: 'موجودی اول دوره', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+      case 'RECEIPT_RAW_MATERIAL':
+        return { label: 'رسید ورود به انبار', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      case 'RECEIPT_FINISHED_GOODS':
+      case 'PRODUCTION_RECEIPT':
+        return { label: 'رسید تولید از خط', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      case 'ISSUE_RAW_MATERIAL':
+      case 'ISSUE_TO_PRODUCTION':
+        return { label: 'حواله ارسال به خط تولید', color: 'bg-amber-50 text-amber-900 border-amber-200' };
+      case 'ISSUE_FINISHED_GOODS':
+      case 'DELIVERY_CUSTOMER':
+      case 'SHIPMENT_CUSTOMER':
+      case 'DELIVERY_TO_CUSTOMER':
+        return { label: 'حواله تحویل به مشتری', color: 'bg-rose-50 text-rose-800 border-rose-200' };
+      default:
+        return { label: docType, color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Page Header */}
@@ -351,22 +518,24 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         <div>
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Boxes className="w-5 h-5 text-slate-700" />
-            <span>جستجو و استعلام موجودی انبار، کویل‌پک و قراردادها</span>
+            <span>جستجو، استعلام موجودی و کاردکس اختصاصی هر کالا / ورق</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            جستجوی یکپارچه بر اساس نام یا کد کالا، مشخصات ورق (جنس و ضخامت)، شماره کویل‌پک و شماره قرارداد به همراه گروه‌بندی پویا
+            انتخاب هر قطعه یا رول ورق جهت مشاهده همزمان «موجودی تفکیکی در انبارها» و «کاردکس کامل گردش ورود و خروج»
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowColumnPicker(!showColumnPicker)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-colors cursor-pointer"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-            <span>تنظیم ستون‌ها</span>
-          </button>
+          {inquiryMode === 'ANALYTICAL_TABLE' && (
+            <button
+              type="button"
+              onClick={() => setShowColumnPicker(!showColumnPicker)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition-colors cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+              <span>تنظیم ستون‌ها</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onRefresh}
@@ -386,6 +555,340 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Mode Switcher Bar: Part Stock + Cardex vs Analytical Table */}
+      <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap items-center gap-2 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setInquiryMode('PART_CARDEX')}
+          className={`flex-1 min-w-[240px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            inquiryMode === 'PART_CARDEX'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <History className="w-4 h-4 text-amber-400" />
+          <span>۱. فهرست قطعات + موجودی و کاردکس اختصاصی هر کالا (پیشنهادی)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setInquiryMode('ANALYTICAL_TABLE')}
+          className={`flex-1 min-w-[240px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            inquiryMode === 'ANALYTICAL_TABLE'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+          <span>۲. جدول تحلیلی کل موجودی انبارها، کویل‌پک‌ها و قراردادها</span>
+        </button>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* MODE 1: MASTER-DETAIL PART LIST + STOCK BREAKDOWN + PART CARDEX      */}
+      {/* ==================================================================== */}
+      {inquiryMode === 'PART_CARDEX' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Right Sidebar: Searchable List of Parts */}
+          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="p-3.5 border-b border-slate-200 bg-slate-50 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-900">فهرست قطعات، ورق‌ها و ملزومات</h3>
+                <span className="text-[11px] font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">
+                  {toPersianDigits(catalogPartsWithStock.length)} کالا
+                </span>
+              </div>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  value={partSearchQuery}
+                  onChange={e => setPartSearchQuery(e.target.value)}
+                  placeholder="جستجوی نام قطعه، کد کالا یا گرید ورق..."
+                  className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="max-h-[640px] overflow-y-auto divide-y divide-slate-100">
+              {catalogPartsWithStock.map(item => {
+                const isSelected =
+                  activeCardexPartSummary?.part.id === item.part.id;
+                return (
+                  <button
+                    key={item.part.id}
+                    type="button"
+                    onClick={() => setSelectedCardexPartId(item.part.id)}
+                    className={`w-full text-right p-3.5 transition-all flex items-start justify-between gap-2 cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-50/90 border-r-4 border-amber-600'
+                        : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="font-bold text-xs text-slate-900">{item.part.name}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 border border-slate-200">
+                          {item.part.code}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {item.part.category === 'RAW_MATERIAL'
+                            ? 'ماده اولیه / ورق'
+                            : item.part.category === 'WIP_PART'
+                            ? 'نیمه‌ساخته'
+                            : 'محصول نهایی'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-left shrink-0">
+                      <div
+                        className={`text-xs font-mono font-bold ${
+                          item.availableTotal > 0 ? 'text-emerald-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {formatNumber(item.availableTotal)}{' '}
+                        <span className="text-[10px] font-sans">
+                          {item.part.unit === 'KG' ? 'kg' : 'عدد'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {toPersianDigits(item.lotsCount)} ردیف/کویل
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Left Main Panel: Selected Part Stock Breakdown + Chronological Cardex */}
+          <div className="lg:col-span-8 space-y-4">
+            {activeCardexPartSummary ? (
+              <>
+                {/* Part Header & Total Stock KPIs */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded bg-slate-900 text-white font-mono text-xs font-bold">
+                          {activeCardexPartSummary.part.code}
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">
+                          {activeCardexPartSummary.part.name}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        واحد سنجش:{' '}
+                        <strong>
+                          {activeCardexPartSummary.part.unit === 'KG' ? 'کیلوگرم (KG)' : 'عدد (PCS)'}
+                        </strong>
+                        {activeCardexPartSummary.part.materialGrade && (
+                          <span>
+                            {' '}
+                            · جنس/گرید: <strong>{activeCardexPartSummary.part.materialGrade}</strong>
+                          </span>
+                        )}
+                        {activeCardexPartSummary.part.thicknessMm && (
+                          <span>
+                            {' '}
+                            · ضخامت: <strong>{activeCardexPartSummary.part.thicknessMm} mm</strong>
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl">
+                      <div>
+                        <span className="text-[11px] text-emerald-800 block">
+                          موجودی قابل استفاده در کل انبارها:
+                        </span>
+                        <strong className="font-mono text-lg text-emerald-700">
+                          {formatNumber(activeCardexPartSummary.availableTotal)}{' '}
+                          <span className="text-xs font-sans">
+                            {activeCardexPartSummary.part.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
+                          </span>
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section A: Warehouse & Coil-Pack Balances for this Part */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Boxes className="w-4 h-4 text-blue-600" />
+                      <span>
+                        الف) تفکیک موجودی فعلی این کالا در انبارها و کویل‌پک‌ها (
+                        {toPersianDigits(activeCardexPartSummary.balances.length)} ردیف):
+                      </span>
+                    </h4>
+
+                    {activeCardexPartSummary.balances.length === 0 ? (
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 text-center">
+                        در حال حاضر هیچ موجودی فعالی برای این قطعه در انبارها ثبت نشده است.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table className="w-full text-right text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                              <th className="py-2.5 px-3">انبار و جایگاه</th>
+                              <th className="py-2.5 px-3">شماره کویل‌پک / بچ</th>
+                              <th className="py-2.5 px-3">قرارداد مرتبط</th>
+                              <th className="py-2.5 px-3">مالکیت</th>
+                              <th className="py-2.5 px-3">موجودی فیزیکی</th>
+                              <th className="py-2.5 px-3 text-emerald-700">موجودی آزاد</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {activeCardexPartSummary.balances.map(b => (
+                              <tr key={b.id} className="hover:bg-slate-50">
+                                <td className="py-2.5 px-3 font-medium text-slate-900">
+                                  {b.warehouseName}{' '}
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    ({b.locationCode})
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                  {b.lotNumber || 'عمومی'}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-slate-700">
+                                  {b.contractNumber || 'آزاد'}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  {b.ownership === 'SAPCO_SUPPLIER_OWNED' ? (
+                                    <span className="text-amber-800 font-semibold">امانی ساپکو</span>
+                                  ) : (
+                                    <span className="text-slate-700">ملکی شرکت</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                  {formatNumber(b.physicalQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                                  {formatNumber(b.availableQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section B: Chronological Stock Cardex (کاردکس جامع ورود و خروج قطعه) */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <History className="w-4 h-4 text-amber-600" />
+                      <span>
+                        ب) کاردکس رسمی گردش کالا (تاریخچه ورود، خروج و مانده لحظه‌ای «
+                        {activeCardexPartSummary.part.name}»)
+                      </span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500">
+                      تعداد اسناد گردش:{' '}
+                      <strong className="font-mono text-slate-900">
+                        {toPersianDigits(selectedPartCardexRows.length)}
+                      </strong>{' '}
+                      تراکنش قطعی
+                    </span>
+                  </div>
+
+                  {docsLoading ? (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      در حال بارگذاری کاردکس گردش کالا...
+                    </div>
+                  ) : selectedPartCardexRows.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                      هنوز هیچ سند ورود یا خروجی برای این کالا در کاردکس ثبت نشده است.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                          <tr>
+                            <th className="py-2.5 px-3">تاریخ و ساعت</th>
+                            <th className="py-2.5 px-3">شماره سند</th>
+                            <th className="py-2.5 px-3">نوع عملیات</th>
+                            <th className="py-2.5 px-3">انبار</th>
+                            <th className="py-2.5 px-3">کویل‌پک / بچ</th>
+                            <th className="py-2.5 px-3 text-emerald-700">وارده (+)</th>
+                            <th className="py-2.5 px-3 text-rose-700">صادره (-)</th>
+                            <th className="py-2.5 px-3 bg-slate-100 font-bold text-slate-900">
+                              مانده پس از سند
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {selectedPartCardexRows.map(tx => {
+                            const badge = getDocTypeBadge(tx.docType);
+                            return (
+                              <tr key={tx.id} className="hover:bg-slate-50">
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                                  {formatDateTime(tx.docDate)}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                  <div>{tx.docNumber}</div>
+                                  {tx.referenceNumber !== '—' && (
+                                    <div className="text-[10px] text-slate-500">
+                                      مرجع: {tx.referenceNumber}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded border text-[10px] font-bold ${badge.color}`}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-700">{tx.warehouseName}</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-800">
+                                  {tx.lotNumber}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                                  {tx.inQty > 0 ? (
+                                    <span className="flex items-center gap-0.5">
+                                      <ArrowDownLeft className="w-3.5 h-3.5" />+
+                                      {formatNumber(tx.inQty)}
+                                    </span>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-rose-700">
+                                  {tx.outQty > 0 ? (
+                                    <span className="flex items-center gap-0.5">
+                                      <ArrowUpRight className="w-3.5 h-3.5" />-
+                                      {formatNumber(tx.outQty)}
+                                    </span>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900 bg-slate-50/80">
+                                  {formatNumber(tx.runningBalance)}{' '}
+                                  <span className="text-[10px] font-normal text-slate-500">
+                                    {tx.unit === 'KG' ? 'kg' : 'عدد'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* Column Visibility Customizer Drawer */}
       {showColumnPicker && (
@@ -962,6 +1465,8 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );

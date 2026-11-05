@@ -23,6 +23,7 @@ import {
 } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
 import { ContextualHelp } from '../common/ContextualHelp';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 export interface IssueDraftPayload {
   partId?: string;
@@ -145,22 +146,38 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
     }
   }, [initialDraft, isOpen, localParts]);
 
-  // Adjust defaults when issuePurpose changes
+  // Suggested MO helper
+  const generateSuggestedMoNumber = () => {
+    const seq = 1010 + Math.floor(Math.random() * 890);
+    return `MO-1404-${seq}`;
+  };
+
+  // Adjust defaults when issuePurpose changes or modal opens
   useEffect(() => {
+    if (!isOpen) return;
     if (issuePurpose === 'CUSTOMER_DELIVERY') {
       setWarehouseId('WH-FINISHED');
       setTargetWarehouseId('WH-OUTFLOW-CUSTOMER');
       if (localCustomers.length > 0 && !selectedCustomerId) {
         setSelectedCustomerId(localCustomers[0].id || localCustomers[0].code);
       }
+      if (!referenceNumber || referenceNumber.startsWith('MO-')) {
+        setReferenceNumber(`SHP-1404-${2000 + Math.floor(Math.random() * 7999)}`);
+      }
     } else if (issuePurpose === 'PRODUCTION_LINE') {
       setWarehouseId('WH-RAW');
       setTargetWarehouseId('WH-WIP-STAMP');
+      if (!referenceNumber || referenceNumber.startsWith('SHP-')) {
+        setReferenceNumber(generateSuggestedMoNumber());
+      }
     } else if (issuePurpose === 'SUBCONTRACTOR') {
       setWarehouseId('WH-RAW');
       setTargetWarehouseId('WH-SUBCONTRACTOR');
+      if (!referenceNumber) {
+        setReferenceNumber(`SUB-1404-${300 + Math.floor(Math.random() * 699)}`);
+      }
     }
-  }, [issuePurpose, localCustomers, selectedCustomerId]);
+  }, [issuePurpose, isOpen]);
 
   // Eligible items: filter based on purpose
   const eligibleParts = useMemo(() => {
@@ -178,27 +195,78 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
     }
   }, [eligibleParts, selectedPartId]);
 
+  const selectedPart = localParts.find(p => p.id === selectedPartId || p.code === selectedPartId);
+
+  // Match lots by partId OR partCode; prefer current warehouse, fallback to all warehouses if current has none
   const availableLots = useMemo(() => {
-    return balances.filter(
-      b => b.partId === selectedPartId && b.warehouseId === warehouseId && b.availableQty > 0
+    const matchesPart = (b: DetailedStockBalance) =>
+      b.partId === selectedPartId ||
+      (selectedPart && (b.partId === selectedPart.id || b.partCode === selectedPart.code));
+
+    const inSelectedWh = balances.filter(
+      b => matchesPart(b) && b.warehouseId === warehouseId && b.availableQty > 0
     );
-  }, [balances, selectedPartId, warehouseId]);
+    if (inSelectedWh.length > 0) return inSelectedWh;
+
+    // Fallback: any warehouse that holds available stock for this part
+    return balances.filter(b => matchesPart(b) && b.availableQty > 0);
+  }, [balances, selectedPartId, selectedPart, warehouseId]);
 
   useEffect(() => {
     if (availableLots.length > 0) {
-      setSelectedLotNumber(availableLots[0].lotNumber || '');
+      const firstLot = availableLots[0];
+      setSelectedLotNumber(firstLot.lotNumber || '');
+      // If the lot is in a different warehouse, sync warehouseId automatically
+      if (firstLot.warehouseId && firstLot.warehouseId !== warehouseId) {
+        setWarehouseId(firstLot.warehouseId);
+      }
     } else {
       setSelectedLotNumber('');
     }
   }, [availableLots]);
 
-  const selectedPart = localParts.find(p => p.id === selectedPartId);
-  const selectedLotBalance = availableLots.find(l => (l.lotNumber || '') === selectedLotNumber) || availableLots[0];
+  const selectedLotBalance =
+    availableLots.find(l => (l.lotNumber || '') === selectedLotNumber) || availableLots[0];
+
+  // Auto-populate contract when a part or coil/lot with an associated contract is selected
+  useEffect(() => {
+    if (selectedLotBalance && (selectedLotBalance.contractId || selectedLotBalance.contractNumber)) {
+      const matchedCnt = localContracts.find(
+        c =>
+          c.id === selectedLotBalance.contractId ||
+          c.contractNumber === selectedLotBalance.contractNumber ||
+          c.contractNumber === selectedLotBalance.contractId
+      );
+      if (matchedCnt) {
+        setSelectedContractId(matchedCnt.id);
+        return;
+      }
+    }
+    // Also check if any lot of this part has a contract or if a contract matches this part/grade
+    const lotWithContract = availableLots.find(l => l.contractId || l.contractNumber);
+    if (lotWithContract) {
+      const matchedCnt = localContracts.find(
+        c =>
+          c.id === lotWithContract.contractId ||
+          c.contractNumber === lotWithContract.contractNumber ||
+          c.contractNumber === lotWithContract.contractId
+      );
+      if (matchedCnt) {
+        setSelectedContractId(matchedCnt.id);
+        return;
+      }
+    }
+  }, [selectedPartId, selectedLotNumber, selectedLotBalance, availableLots, localContracts]);
 
   const totalAvailableInWarehouse = useMemo(() => {
-    const list = balances.filter(b => b.partId === selectedPartId && b.warehouseId === warehouseId);
-    return list.reduce((sum, b) => sum + b.availableQty, 0);
-  }, [balances, selectedPartId, warehouseId]);
+    const matchesPart = (b: DetailedStockBalance) =>
+      b.partId === selectedPartId ||
+      (selectedPart && (b.partId === selectedPart.id || b.partCode === selectedPart.code));
+    const list = balances.filter(b => matchesPart(b) && b.warehouseId === warehouseId);
+    const sumWh = list.reduce((sum, b) => sum + b.availableQty, 0);
+    if (sumWh > 0) return sumWh;
+    return balances.filter(b => matchesPart(b)).reduce((sum, b) => sum + b.availableQty, 0);
+  }, [balances, selectedPartId, selectedPart, warehouseId]);
 
   const availableToIssue = selectedLotBalance ? selectedLotBalance.availableQty : totalAvailableInWarehouse;
   const requestedQty = Number(quantity) || 0;
@@ -612,16 +680,48 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                 )}
 
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    {issuePurpose === 'CUSTOMER_DELIVERY' ? 'شماره حواله خروج / بارنامه' : 'شماره دستور ساخت (MO)'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-700 font-semibold">
+                      {issuePurpose === 'CUSTOMER_DELIVERY'
+                        ? 'شماره حواله خروج / بارنامه'
+                        : 'شماره دستور ساخت (MO) - پیشنهاد سیستم (قابل ویرایش)'}
+                    </label>
+                    {issuePurpose !== 'CUSTOMER_DELIVERY' && (
+                      <button
+                        type="button"
+                        onClick={() => setReferenceNumber(generateSuggestedMoNumber())}
+                        className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 cursor-pointer"
+                      >
+                        پیشنهاد کد جدید
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={referenceNumber}
                     onChange={e => setReferenceNumber(e.target.value)}
-                    placeholder={issuePurpose === 'CUSTOMER_DELIVERY' ? 'مثلاً SHP-1403-8820' : 'مثلاً MO-1403-1002'}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:bg-white"
+                    placeholder={issuePurpose === 'CUSTOMER_DELIVERY' ? 'مثلاً SHP-1404-8820' : 'مثلاً MO-1404-1025'}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold focus:outline-none focus:bg-white focus:border-slate-900"
                   />
+                  {issuePurpose !== 'CUSTOMER_DELIVERY' && (
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap text-[10px]">
+                      <span className="text-slate-500">دستورات فعال:</span>
+                      {['MO-1404-1001', 'MO-1404-1002', 'MO-1404-5000'].map(moCode => (
+                        <button
+                          key={moCode}
+                          type="button"
+                          onClick={() => setReferenceNumber(moCode)}
+                          className={`px-2 py-0.5 rounded font-mono border cursor-pointer ${
+                            referenceNumber === moCode
+                              ? 'bg-slate-900 text-white border-slate-900 font-bold'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {moCode}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -630,7 +730,9 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-slate-700 font-semibold">
-                      {issuePurpose === 'CUSTOMER_DELIVERY' ? 'انتخاب محصول نهایی / مجموعه جهت تحویل' : 'انتخاب کالا / ورق / قطعه مورد نیاز'}{' '}
+                      {issuePurpose === 'CUSTOMER_DELIVERY'
+                        ? 'جستجو و انتخاب محصول نهایی / مجموعه جهت تحویل'
+                        : 'جستجو و انتخاب کالا / ورق / قطعه مورد نیاز'}{' '}
                       <span className="text-rose-500">*</span>
                     </label>
                     <button
@@ -642,30 +744,51 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                       <span>+ تعریف سریع کالا جدید</span>
                     </button>
                   </div>
-                  <select
+                  <SearchableSelect
                     value={selectedPartId}
-                    onChange={e => setSelectedPartId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-semibold focus:outline-none focus:bg-white"
-                  >
-                    {eligibleParts.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.code}) — واحد: {p.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={val => setSelectedPartId(val)}
+                    placeholder="جستجو با نام، کد کالا، گرید ورق یا ابعاد..."
+                    searchPlaceholder="تایپ نام یا کد ورق / کالا (مثلاً DC01A یا 1140)..."
+                    options={eligibleParts.map(p => {
+                      const partStock = balances
+                        .filter(b => b.partId === p.id || b.partCode === p.code)
+                        .reduce((s, b) => s + b.availableQty, 0);
+                      return {
+                        value: p.id,
+                        label: `${p.name} (${p.code})`,
+                        sublabel: `واحد: ${p.unit === 'KG' ? 'کیلوگرم' : 'عدد'}${
+                          p.materialGrade ? ` • گرید: ${p.materialGrade}` : ''
+                        }`,
+                        badge: `موجودی: ${formatNumber(partStock)} ${p.unit === 'KG' ? 'kg' : 'عدد'}`,
+                      };
+                    })}
+                  />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-700 font-semibold">قرارداد مرتبط (اختیاری)</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsQuickContractOpen(true)}
-                      className="text-emerald-700 hover:text-emerald-800 font-semibold text-[11px] flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>+ قرارداد جدید</span>
-                    </button>
+                    <label className="text-slate-700 font-semibold">
+                      قرارداد مرتبط (پیشنهاد خودکار / قابل حذف)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {selectedContractId && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedContractId('')}
+                          className="text-rose-600 hover:text-rose-800 font-bold text-[10px] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 cursor-pointer"
+                        >
+                          حذف قرارداد
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsQuickContractOpen(true)}
+                        className="text-emerald-700 hover:text-emerald-800 font-semibold text-[11px] flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>+ جدید</span>
+                      </button>
+                    </div>
                   </div>
                   <select
                     value={selectedContractId}
@@ -688,7 +811,7 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                   انتخاب کویل‌پک / پالت / بچ موجود در انبار <span className="text-rose-500">*</span>
                   <ContextualHelp
                     title="انتخاب کویل‌پک / پالت"
-                    description="فهرست رول‌ها یا پالت‌هایی که هم‌اکنون در انبار مبدا موجودی آزاد دارند."
+                    description="فهرست رول‌ها یا پالت‌هایی که هم‌اکنون در انبار موجودی آزاد دارند."
                     whyNeeded="برای کسر دقیق از همان بسته و به‌روزرسانی کاردکس."
                     mandatory
                   />
@@ -696,17 +819,18 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                 {availableLots.length === 0 ? (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-                    <span>در حال حاضر هیچ موجودی آزادی از این کالا در انبار انتخاب‌شده وجود ندارد.</span>
+                    <span>در حال حاضر هیچ موجودی آزادی از این کالا در انبار وجود ندارد.</span>
                   </div>
                 ) : (
                   <select
                     value={selectedLotNumber}
                     onChange={e => setSelectedLotNumber(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-mono"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 font-mono font-bold"
                   >
                     {availableLots.map(lot => (
                       <option key={lot.id} value={lot.lotNumber || ''}>
-                        بچ/کویل‌پک: {lot.lotNumber || 'عمومی'} | موجودی آزاد: {formatNumber(lot.availableQty)} {lot.unit} | مالکیت:{' '}
+                        کویل/بچ: {lot.lotNumber || 'عمومی'} | موجودی آزاد: {formatNumber(lot.availableQty)}{' '}
+                        {lot.unit === 'KG' ? 'کیلوگرم' : 'عدد'} | انبار: {lot.warehouseName} | مالکیت:{' '}
                         {lot.ownership === 'SAPCO_SUPPLIER_OWNED' ? 'امانی ساپکو' : 'ملکی کارخانه'}
                         {lot.contractNumber ? ` | قرارداد: ${lot.contractNumber}` : ''}
                       </option>
@@ -719,11 +843,11 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
               {selectedLotBalance && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <span className="text-[11px] text-slate-500 block">بچ / کویل‌پک</span>
+                    <span className="text-[11px] text-slate-500 block">بچ / کویل‌پک انتخابی</span>
                     <strong className="font-mono text-slate-900 mt-0.5 block">{selectedLotBalance.lotNumber || 'عمومی'}</strong>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-500 block">موجودی قابل استفاده</span>
+                    <span className="text-[11px] text-slate-500 block">موجودی قابل استفاده این کویل</span>
                     <strong className="font-mono text-emerald-700 text-sm mt-0.5 block">
                       {formatNumber(selectedLotBalance.availableQty)} {selectedLotBalance.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
                     </strong>
@@ -735,7 +859,7 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                     </strong>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-500 block">شماره قرارداد</span>
+                    <span className="text-[11px] text-slate-500 block">شماره قرارداد کویل</span>
                     <strong className="font-mono text-slate-900 mt-0.5 block">
                       {selectedLotBalance.contractNumber || 'آزاد / عمومی'}
                     </strong>
@@ -758,6 +882,31 @@ export const IssueFormModal: React.FC<IssueFormModalProps> = ({
                     placeholder="مثلاً 500"
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 font-mono font-bold text-sm focus:outline-none focus:bg-white focus:border-slate-900"
                   />
+                  {/* Explicit Warehouse Stock Display Directly Underneath Quantity Input */}
+                  <div className="mt-2 p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <div className="text-emerald-950">
+                      <span>موجودی این کالا در انبار: </span>
+                      <strong className="font-mono text-emerald-800 text-xs">
+                        {formatNumber(totalAvailableInWarehouse)} {selectedPart?.unit === 'KG' ? 'کیلوگرم' : 'عدد'}
+                      </strong>
+                      {selectedLotBalance && (
+                        <span className="text-emerald-700 mr-1.5">
+                          (موجودی کویل/بچ انتخابی:{' '}
+                          <strong className="font-mono">{formatNumber(selectedLotBalance.availableQty)}</strong>{' '}
+                          {selectedPart?.unit === 'KG' ? 'kg' : 'عدد'})
+                        </span>
+                      )}
+                    </div>
+                    {availableToIssue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(String(availableToIssue))}
+                        className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md font-bold text-[10px] cursor-pointer"
+                      >
+                        انتخاب کل موجودی ({formatNumber(availableToIssue)})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>

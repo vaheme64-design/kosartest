@@ -194,9 +194,20 @@ export const CustomReportsView: React.FC = () => {
     }
   };
 
+  // Unique grades combining standard grades and any grades present in allCoils
+  const allGrades = useMemo(() => {
+    const base = ['DC01A', 'DC04', 'ST14', 'ST12', 'DX51D+Z140', 'ST37', 'DC06'];
+    const set = new Set<string>(base);
+    allCoils.forEach(c => {
+      if (c.materialGrade) set.add(c.materialGrade);
+    });
+    return Array.from(set);
+  }, [allCoils]);
+
   useEffect(() => {
+    fetchFilterMetadata();
     fetchReport();
-  }, [reportType, materialGrade, coilPackNumber, warehouseId, ownership, contractId]);
+  }, [reportType, materialGrade, coilPackNumber, warehouseId, ownership, contractId, searchTerm]);
 
   useEffect(() => {
     fetchSavedConfigs();
@@ -252,10 +263,10 @@ export const CustomReportsView: React.FC = () => {
             <button
               key={type.id}
               onClick={() => setReportType(type.id)}
-              className={`px-3 py-1.5 rounded font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded font-medium transition-colors cursor-pointer ${
                 reportType === type.id
                   ? 'bg-blue-600 text-white font-bold shadow-sm'
-                  : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-200'
+                  : 'bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
             >
               {type.label}
@@ -266,9 +277,9 @@ export const CustomReportsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-100 text-slate-900 border border-slate-200 rounded text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-200 rounded text-xs font-medium transition-colors cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>خروجی اکسل امن (CSV)</span>
           </button>
         </div>
@@ -276,37 +287,48 @@ export const CustomReportsView: React.FC = () => {
 
       {/* Filter Ribbon */}
       <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 text-xs">
+          {/* Free-text Search */}
+          <div>
+            <label className="block text-slate-600 font-semibold mb-1">جستجوی کویل / کالا</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="شماره کویل، پک، نام قطعه..."
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
           {/* Material Grade */}
           <div>
-            <label className="block text-slate-400 mb-1">گرید ورق / جنس</label>
+            <label className="block text-slate-600 font-semibold mb-1">گرید ورق / جنس</label>
             <select
               value={materialGrade}
               onChange={e => {
                 setMaterialGrade(e.target.value);
-                setCoilPackNumber(''); // Reset pack on grade change so dynamic list reflects accurately
+                setCoilPackNumber('');
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
             >
               <option value="">همه گریدها</option>
-              <option value="DC04">DC04 (کشش عمیق)</option>
-              <option value="ST14">ST14 (روغنی)</option>
-              <option value="ST12">ST12 (نیمه‌کشش)</option>
-              <option value="DX51D+Z140">DX51D (گالوانیزه)</option>
-              <option value="ST37">ST37 (سیاه)</option>
-              <option value="DC06">DC06 (فوق کشش)</option>
+              {allGrades.map(g => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
             </select>
           </div>
 
           {/* Dynamic Coil Pack Number */}
           <div>
-            <label className="block text-slate-400 mb-1">
-              شماره کویل‌پک {materialGrade && <span className="text-blue-400 font-mono">({materialGrade})</span>}
+            <label className="block text-slate-600 font-semibold mb-1">
+              شماره کویل‌پک {materialGrade && <span className="text-blue-600 font-mono">({materialGrade})</span>}
             </label>
             <select
               value={coilPackNumber}
               onChange={e => setCoilPackNumber(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
             >
               <option value="">همه کویل‌پک‌ها ({toPersianDigits(matchingCoilPacks.length)})</option>
               {matchingCoilPacks.map(p => (
@@ -319,11 +341,11 @@ export const CustomReportsView: React.FC = () => {
 
           {/* Contract Filter */}
           <div>
-            <label className="block text-slate-400 mb-1">قرارداد ساپکو / مشتری</label>
+            <label className="block text-slate-600 font-semibold mb-1">قرارداد ساپکو / مشتری</label>
             <select
               value={contractId}
               onChange={e => setContractId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
             >
               <option value="">همه قراردادها</option>
               {contractsList.map(c => (
@@ -336,11 +358,11 @@ export const CustomReportsView: React.FC = () => {
 
           {/* Warehouse */}
           <div>
-            <label className="block text-slate-400 mb-1">انبار هدف</label>
+            <label className="block text-slate-600 font-semibold mb-1">انبار هدف</label>
             <select
               value={warehouseId}
               onChange={e => setWarehouseId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value="">همه انبارها</option>
               <option value="WH-RAW">انبار مرکزی رول و ورق ساپکو</option>
@@ -352,11 +374,11 @@ export const CustomReportsView: React.FC = () => {
 
           {/* Ownership */}
           <div>
-            <label className="block text-slate-400 mb-1">مالکیت متریال</label>
+            <label className="block text-slate-600 font-semibold mb-1">مالکیت متریال</label>
             <select
               value={ownership}
               onChange={e => setOwnership(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value="">همه انواع مالکیت</option>
               <option value="SAPCO_SUPPLIER_OWNED">امانی ساپکو</option>
@@ -369,12 +391,15 @@ export const CustomReportsView: React.FC = () => {
           {/* Apply / Refresh */}
           <div className="flex items-end">
             <button
-              onClick={fetchReport}
+              onClick={() => {
+                fetchFilterMetadata();
+                fetchReport();
+              }}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>اعمال فیلترها</span>
+              <span>بروزرسانی گزارش</span>
             </button>
           </div>
         </div>
