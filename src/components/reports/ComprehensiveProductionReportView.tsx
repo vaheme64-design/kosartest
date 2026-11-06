@@ -1,0 +1,1207 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Gauge,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
+  Layers,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  Download,
+  Printer,
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  BarChart3,
+  GitBranch,
+  Search,
+  Factory,
+  ArrowRight,
+  ShieldAlert,
+} from 'lucide-react';
+import { exportToCsv } from '../../utils/csvExport';
+import { formatNumber, toPersianDigits } from '../../utils/formatters';
+
+// -------------------------------------------------------------
+// Types & Domain Models
+// -------------------------------------------------------------
+export interface MachineDowntimeEvent {
+  id: string;
+  machineCode: string;
+  machineName: string;
+  hall: string;
+  category: 'UNPLANNED_BREAKDOWN' | 'SETUP_CHANGE' | 'MINOR_STOP' | 'MATERIAL_SHORTAGE' | 'OPERATOR_ABSENCE';
+  categoryLabel: string;
+  startHour: string; // e.g. "08:30"
+  durationMinutes: number;
+  reason: string;
+  actionTaken: string;
+  color: string;
+}
+
+export interface ScheduleAdherenceRecord {
+  orderCode: string;
+  partCode: string;
+  partName: string;
+  carModel: string;
+  plannedQty: number;
+  actualProducedQty: number;
+  scrapQty: number;
+  plannedStartHour: string;
+  plannedEndHour: string;
+  actualStartHour: string;
+  actualEndHour: string;
+  adherencePercent: number; // e.g. 92%
+  varianceUnits: number; // actual - planned
+  status: 'AHEAD' | 'ON_TRACK' | 'DELAYED' | 'CRITICAL_LAG';
+  delayRootCause?: string;
+  shifts: string;
+}
+
+export interface OeeNodeItem {
+  id: string;
+  title: string;
+  metric: string;
+  percentage: number;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  description: string;
+  children?: OeeNodeItem[];
+}
+
+export const ComprehensiveProductionReportView: React.FC = () => {
+  // Horizon Filter: Today, Yesterday, Current Week, Monthly
+  const [selectedHorizon, setSelectedHorizon] = useState<'TODAY' | 'YESTERDAY' | 'WEEKLY' | 'MONTHLY'>('TODAY');
+  const [selectedHall, setSelectedHall] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [expandedOeeNodes, setExpandedOeeNodes] = useState<Record<string, boolean>>({
+    oee_root: true,
+    oee_avail: true,
+    oee_perf: true,
+    oee_qual: true,
+  });
+
+  // Selected Machine for timeline inspection
+  const [inspectedMachine, setInspectedMachine] = useState<string | null>(null);
+
+  // -------------------------------------------------------------
+  // Data: Machine Downtime Timeline (24 Hours / Shift)
+  // -------------------------------------------------------------
+  const machineDowntimes: MachineDowntimeEvent[] = useMemo(
+    () => [
+      {
+        id: 'DT-01',
+        machineCode: 'SHR-GUI-01',
+        machineName: 'قیچی گیوتین ۶ متری ۱',
+        hall: 'سالن برش',
+        category: 'SETUP_CHANGE',
+        categoryLabel: 'تنظیم تیغه و فیکسچربندی برش',
+        startHour: '07:30',
+        durationMinutes: 45,
+        reason: 'تعویض لبه تیغه گیوتین جهت برش ورق گرید DC04 با ضخامت ۲ میل',
+        actionTaken: 'تنظیم لقی تیغه به میزان ۰.۱۸ میلیمتر و تست اولیه ۵ قطعه',
+        color: 'bg-amber-500',
+      },
+      {
+        id: 'DT-02',
+        machineCode: 'PRS-250T-01',
+        machineName: 'پرس ۲۵۰ تن ۱ (کشش/بلنک)',
+        hall: 'سالن پرس',
+        category: 'UNPLANNED_BREAKDOWN',
+        categoryLabel: 'خرابی اضطراری هیدرولیک',
+        startHour: '10:15',
+        durationMinutes: 70,
+        reason: 'نشت شیلنگ فشارقوی پمپ مدار کمکی بالشتک کشش (Die Cushion)',
+        actionTaken: 'تیم نت (PM) شیلنگ هیدرولیک تعویض و هواگیری هیدرولیک انجام داد',
+        color: 'bg-rose-600',
+      },
+      {
+        id: 'DT-03',
+        machineCode: 'PRS-160T-01',
+        machineName: 'پرس ۱۶۰ تن ۱ (پانچ/خم)',
+        hall: 'سالن پرس',
+        category: 'SETUP_CHANGE',
+        categoryLabel: 'تعویض قالب (SMED)',
+        startHour: '12:30',
+        durationMinutes: 35,
+        reason: 'خروج قالب بلنک مکمل پژو ۲۰۶ و بارگذاری قالب خم لبه براکت',
+        actionTaken: 'استفاده از کلمپ پنوماتیک و استقرار قالب در ۳۵ دقیقه (زیر ۴۰ دقیقه استاندارد)',
+        color: 'bg-amber-500',
+      },
+      {
+        id: 'DT-04',
+        machineCode: 'PRS-160T-02',
+        machineName: 'پرس ۱۶۰ تن ۲ (فرم/پانچ)',
+        hall: 'سالن پرس',
+        category: 'MINOR_STOP',
+        categoryLabel: 'توقف جزئی / گیرکردن قطعه در قالب',
+        startHour: '14:20',
+        durationMinutes: 20,
+        reason: 'عدم پرش کامل قطعه از روی سنبه به علت نقص در فنر پران (Ejector Pin)',
+        actionTaken: 'روغن‌کاری پین پران و پاکسازی پلیسه‌های سطح ماتریس توسط اپراتور',
+        color: 'bg-orange-500',
+      },
+      {
+        id: 'DT-05',
+        machineCode: 'WLD-SPOT-01',
+        machineName: 'پرس‌جوش مقاومتی ۱ (مهره‌جوش M6)',
+        hall: 'سالن جوشکاری',
+        category: 'MATERIAL_SHORTAGE',
+        categoryLabel: 'تأخیر در تغذیه مهره جوشی M6',
+        startHour: '15:10',
+        durationMinutes: 30,
+        reason: 'اتمام بافر تغذیه اتوماتیک مهره جوشی کاسه‌ای (Vibratory Feeder)',
+        actionTaken: 'شارژ سریع کارتن مهره جوش استاندارد از انبار قطعات مصرفی',
+        color: 'bg-indigo-500',
+      },
+      {
+        id: 'DT-06',
+        machineCode: 'WLD-CO2-ST01',
+        machineName: 'کابین جوش CO2 شماره ۱',
+        hall: 'سالن جوشکاری',
+        category: 'UNPLANNED_BREAKDOWN',
+        categoryLabel: 'سوختن نازل و گیرکردن سیم جوش',
+        startHour: '16:45',
+        durationMinutes: 25,
+        reason: 'جرقه بیش از حد و انسداد نازل تورچ جوشکاری CO2',
+        actionTaken: 'تعویض نازل تماسی و اسپری ضدجرقه (Anti-Spatter)',
+        color: 'bg-rose-600',
+      },
+    ],
+    []
+  );
+
+  // -------------------------------------------------------------
+  // Data: Schedule Adherence (انحراف از برنامه تولید)
+  // -------------------------------------------------------------
+  const adherenceList: ScheduleAdherenceRecord[] = useMemo(
+    () => [
+      {
+        orderCode: 'MO-1404-3101',
+        partCode: 'SAPCO-ASY-ECU-BRK-01',
+        partName: 'مجموعه براکت ضدسرقت رایانه موتور',
+        carModel: 'پژو ۲۰۶',
+        plannedQty: 1500,
+        actualProducedQty: 1420,
+        scrapQty: 18,
+        plannedStartHour: '07:00',
+        plannedEndHour: '15:00',
+        actualStartHour: '07:15',
+        actualEndHour: '15:25',
+        adherencePercent: 94.7,
+        varianceUnits: -80,
+        status: 'ON_TRACK',
+        delayRootCause: 'تأخیر جزئی در تغذیه مهره جوش M6 در شیفت صبح',
+        shifts: 'شیفت صبح و عصر',
+      },
+      {
+        orderCode: 'MO-1404-3102',
+        partCode: 'WIP-ECU-MAIN-PLATE',
+        partName: 'صفحه اصلی براکت ضدسرقت (پرس‌کاری)',
+        carModel: 'پژو ۲۰۶',
+        plannedQty: 1500,
+        actualProducedQty: 1530,
+        scrapQty: 12,
+        plannedStartHour: '07:00',
+        plannedEndHour: '14:30',
+        actualStartHour: '07:00',
+        actualEndHour: '14:15',
+        adherencePercent: 102.0,
+        varianceUnits: +30,
+        status: 'AHEAD',
+        delayRootCause: 'تولید بالاتر از برنامه با افزایش ریتم پرس‌کاری',
+        shifts: 'شیفت صبح',
+      },
+      {
+        orderCode: 'MO-1404-3103',
+        partCode: 'WIP-ECU-COMP-BRK',
+        partName: 'مکمل براکت ضدسرقت (بلنک و خم)',
+        carModel: 'پژو ۲۰۶',
+        plannedQty: 1500,
+        actualProducedQty: 1310,
+        scrapQty: 22,
+        plannedStartHour: '08:00',
+        plannedEndHour: '16:00',
+        actualStartHour: '08:30',
+        actualEndHour: '16:30',
+        adherencePercent: 87.3,
+        varianceUnits: -190,
+        status: 'DELAYED',
+        delayRootCause: 'توقف ۳۵ دقیقه‌ای تعویض قالب و شکستگی یک عدد پین پران',
+        shifts: 'شیفت صبح و عصر',
+      },
+      {
+        orderCode: 'MO-1404-3201',
+        partCode: 'SAPCO-ASY-TARA-BRK-01',
+        partName: 'مجموعه براکت تقویتی تارا با کاتافورز ED',
+        carModel: 'تارا',
+        plannedQty: 1200,
+        actualProducedQty: 1180,
+        scrapQty: 9,
+        plannedStartHour: '07:30',
+        plannedEndHour: '15:30',
+        actualStartHour: '07:30',
+        actualEndHour: '15:40',
+        adherencePercent: 98.3,
+        varianceUnits: -20,
+        status: 'ON_TRACK',
+        delayRootCause: 'تطابق مطلوب با برنامه زمان‌بندی خط کاتافورز ED',
+        shifts: 'شیفت صبح و عصر',
+      },
+      {
+        orderCode: 'MO-1404-3301',
+        partCode: 'SAPCO-SEAT-BACK-LH',
+        partName: 'اسکلت پشتی صندلی چپ (قالب مشترک)',
+        carModel: 'پژو پارس',
+        plannedQty: 1000,
+        actualProducedQty: 740,
+        scrapQty: 31,
+        plannedStartHour: '09:00',
+        plannedEndHour: '17:00',
+        actualStartHour: '10:15',
+        actualEndHour: '17:00',
+        adherencePercent: 74.0,
+        varianceUnits: -260,
+        status: 'CRITICAL_LAG',
+        delayRootCause: 'توقف ۷۰ دقیقه‌ای پرس ۲۵۰ تن به دلیل نشتی بالشتک هیدرولیک کشش',
+        shifts: 'شیفت صبح و عصر',
+      },
+      {
+        orderCode: 'MO-1404-3302',
+        partCode: 'SAPCO-SEAT-BACK-RH',
+        partName: 'اسکلت پشتی صندلی راست (قالب مشترک)',
+        carModel: 'پژو پارس',
+        plannedQty: 1000,
+        actualProducedQty: 740,
+        scrapQty: 28,
+        plannedStartHour: '09:00',
+        plannedEndHour: '17:00',
+        actualStartHour: '10:15',
+        actualEndHour: '17:00',
+        adherencePercent: 74.0,
+        varianceUnits: -260,
+        status: 'CRITICAL_LAG',
+        delayRootCause: 'توقف همزمان با قطعه چپ در پرس ۲۵۰ تن کشش قالب مشترک',
+        shifts: 'شیفت صبح و عصر',
+      },
+      {
+        orderCode: 'MO-1404-3401',
+        partCode: 'SAPCO-CROSS-MEMBER-01',
+        partName: 'رام زیر موتور پژو ۲۰۶ و ۲۰۷',
+        carModel: 'پژو ۲۰۷',
+        plannedQty: 800,
+        actualProducedQty: 790,
+        scrapQty: 8,
+        plannedStartHour: '08:00',
+        plannedEndHour: '16:00',
+        actualStartHour: '08:10',
+        actualEndHour: '16:05',
+        adherencePercent: 98.8,
+        varianceUnits: -10,
+        status: 'ON_TRACK',
+        delayRootCause: 'بهره‌برداری کامل از ریتم تولید پرس ۴۰۰ تن کشش سنگین',
+        shifts: 'شیفت صبح و عصر',
+      },
+    ],
+    []
+  );
+
+  // -------------------------------------------------------------
+  // Data: Tree-Structured OEE Breakdown
+  // OEE = Availability × Performance × Quality
+  // -------------------------------------------------------------
+  const oeeTree: OeeNodeItem = useMemo(
+    () => ({
+      id: 'oee_root',
+      title: 'شاخص اثربخشی کلی تجهیزات (OEE کل کارخانه)',
+      metric: '۷۱.۶٪',
+      percentage: 71.6,
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50',
+      borderColor: 'border-amber-300',
+      description: 'حاصل‌ضرب سه مؤلفه: دسترس‌پذیری (۸۸.۴٪) × راندمان عملکرد (۸۲.۵٪) × کیفیت سالم (۹۸.۲٪)',
+      children: [
+        {
+          id: 'oee_avail',
+          title: '۱. نرخ دسترس‌پذیری ماشین‌آلات (Availability)',
+          metric: '۸۸.۴٪',
+          percentage: 88.4,
+          color: 'text-blue-700',
+          bgColor: 'bg-blue-50',
+          borderColor: 'border-blue-300',
+          description: 'زمان خالص کارکرد ماشین تقسیم بر زمان برنامه‌ریزی‌شده (کسر توقفات نت و تعویض قالب)',
+          children: [
+            {
+              id: 'avail_planned_downtime',
+              title: 'توقفات برنامه‌ریزی‌شده / تعویض قالب (SMED)',
+              metric: '۵.۵٪ زمان کل (۵۲ دقیقه)',
+              percentage: 5.5,
+              color: 'text-slate-700',
+              bgColor: 'bg-slate-50',
+              borderColor: 'border-slate-200',
+              description: 'میانگین ۳۴ دقیقه زمان استقرار قالب‌های جدید روی پرس‌های ۱۶۰ و ۲۵۰ تن',
+            },
+            {
+              id: 'avail_unplanned_breakdown',
+              title: 'خرابی‌های اضطراری مکانیکی و هیدرولیکی',
+              metric: '۶.۱٪ زمان کل (۵۸ دقیقه)',
+              percentage: 6.1,
+              color: 'text-rose-700',
+              bgColor: 'bg-rose-50',
+              borderColor: 'border-rose-200',
+              description: 'نشت شیلنگ هیدرولیک پرس ۲۵۰ تن (۷۰ دقیقه) و نقص نازل تورچ CO2',
+            },
+          ],
+        },
+        {
+          id: 'oee_perf',
+          title: '۲. راندمان عملکرد و ریتم ضرب (Performance Rate)',
+          metric: '۸۲.۵٪',
+          percentage: 82.5,
+          color: 'text-indigo-700',
+          bgColor: 'bg-indigo-50',
+          borderColor: 'border-indigo-300',
+          description: 'میزان تولید واقعی ضرب پرس در مقایسه با سرعت اسمی استاندارد کاتالوگ قالب',
+          children: [
+            {
+              id: 'perf_minor_stops',
+              title: 'توقفات میکرو (زیر ۵ دقیقه) و پران قطعه',
+              metric: '۹.۵٪ افت سرعت',
+              percentage: 9.5,
+              color: 'text-amber-700',
+              bgColor: 'bg-amber-50',
+              borderColor: 'border-amber-200',
+              description: 'گیرکردن قطعه روی ماتریس، مکث تغذیه نوار ورق و لغزش دست اپراتور',
+            },
+            {
+              id: 'perf_reduced_speed',
+              title: 'کاهش ریتم به علت سختی ورق DC04/DC01A',
+              metric: '۸.۰٪ افت سرعت',
+              percentage: 8.0,
+              color: 'text-indigo-700',
+              bgColor: 'bg-indigo-50',
+              borderColor: 'border-indigo-200',
+              description: 'احتیاط اپراتور در پرسکاری ورق‌های با ضخامت ۲ میل جهت جلوگیری از چروک‌خوردگی',
+            },
+          ],
+        },
+        {
+          id: 'oee_qual',
+          title: '۳. نرخ کیفیت و تولید سالم (Quality Rate)',
+          metric: '۹۸.۲٪',
+          percentage: 98.2,
+          color: 'text-emerald-700',
+          bgColor: 'bg-emerald-50',
+          borderColor: 'border-emerald-300',
+          description: 'نسبت قطعات تاییدشده سالم به کل قطعات ورودی پرس (تنها ۱.۸٪ ضایعات)',
+          children: [
+            {
+              id: 'qual_setup_scrap',
+              title: 'ضایعات قطعات تنظیمی ابتدای شیفت',
+              metric: '۰.۶٪ (۴۲ قطعه)',
+              percentage: 0.6,
+              color: 'text-emerald-700',
+              bgColor: 'bg-emerald-50',
+              borderColor: 'border-emerald-200',
+              description: 'قطعات تست اولیه پس از کلمپ قالب جهت کنترل ابعادی با کولیس و گیج کنترلی',
+            },
+            {
+              id: 'qual_process_defects',
+              title: 'ضایعات حین فرایند (پلیسه، ترک و پارگی کشش)',
+              metric: '۱.۲٪ (۸۵ قطعه)',
+              percentage: 1.2,
+              color: 'text-rose-700',
+              bgColor: 'bg-rose-50',
+              borderColor: 'border-rose-200',
+              description: 'ترک لبه در ناحیه کشش عمیق صندلی چپ و جوش سرد در چند مهره جوشی M6',
+            },
+          ],
+        },
+      ],
+    }),
+    []
+  );
+
+  // Toggle OEE Node Expansion
+  const toggleNode = (nodeId: string) => {
+    setExpandedOeeNodes(prev => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }));
+  };
+
+  // Filtered Adherence List
+  const filteredAdherence = useMemo(() => {
+    return adherenceList.filter(item => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const match =
+          item.orderCode.toLowerCase().includes(q) ||
+          item.partCode.toLowerCase().includes(q) ||
+          item.partName.toLowerCase().includes(q) ||
+          item.carModel.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [adherenceList, searchQuery]);
+
+  // Filtered Downtime Events
+  const filteredDowntimes = useMemo(() => {
+    return machineDowntimes.filter(ev => {
+      if (selectedHall !== 'ALL' && ev.hall !== selectedHall) return false;
+      if (inspectedMachine && ev.machineCode !== inspectedMachine) return false;
+      return true;
+    });
+  }, [machineDowntimes, selectedHall, inspectedMachine]);
+
+  // Overall Adherence Metric
+  const totalPlannedPcs = adherenceList.reduce((acc, r) => acc + r.plannedQty, 0);
+  const totalActualPcs = adherenceList.reduce((acc, r) => acc + r.actualProducedQty, 0);
+  const overallAdherencePercent = Math.round((totalActualPcs / Math.max(1, totalPlannedPcs)) * 1000) / 10;
+  const totalDowntimeMinutes = machineDowntimes.reduce((acc, ev) => acc + ev.durationMinutes, 0);
+
+  // Unique Machines for Timeline Row
+  const uniqueMachines = Array.from(new Set(machineDowntimes.map(ev => ev.machineCode))).map(code => {
+    const found = machineDowntimes.find(ev => ev.machineCode === code);
+    return {
+      code,
+      name: found?.machineName || code,
+      hall: found?.hall || '',
+    };
+  });
+
+  // Print Isolated Report (A4 Landscape)
+  const handlePrintReport = () => {
+    const existing = document.getElementById('comprehensive-report-print-frame') as HTMLIFrameElement | null;
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'comprehensive-report-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    const rowsHtml = adherenceList
+      .map(
+        (r, idx) => `
+      <tr>
+        <td>${toPersianDigits(idx + 1)}</td>
+        <td style="font-family: monospace; font-weight: bold;">${r.orderCode}</td>
+        <td><strong>${r.partName}</strong><br/><span style="font-size:10px; color:#555;">${r.partCode} (${r.carModel})</span></td>
+        <td>${formatNumber(r.plannedQty)}</td>
+        <td style="font-weight: bold; color: #047857;">${formatNumber(r.actualProducedQty)}</td>
+        <td style="color: #dc2626;">${formatNumber(r.scrapQty)}</td>
+        <td style="font-weight: bold;">${toPersianDigits(r.adherencePercent)}٪</td>
+        <td>${r.varianceUnits >= 0 ? '+' + formatNumber(r.varianceUnits) : formatNumber(r.varianceUnits)}</td>
+        <td>${r.status === 'AHEAD' ? 'جلوتر از برنامه' : r.status === 'ON_TRACK' ? 'منطبق با برنامه' : r.status === 'DELAYED' ? 'دارای تأخیر' : 'تأخیر بحرانی'}</td>
+        <td style="font-size: 10px;">${r.delayRootCause || '-'}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const downtimesHtml = machineDowntimes
+      .map(
+        (dt, idx) => `
+      <tr>
+        <td>${toPersianDigits(idx + 1)}</td>
+        <td><strong>${dt.machineName}</strong> (${dt.machineCode})</td>
+        <td>${dt.hall}</td>
+        <td>${dt.categoryLabel}</td>
+        <td>ساعت ${dt.startHour}</td>
+        <td style="font-weight: bold;">${toPersianDigits(dt.durationMinutes)} دقیقه</td>
+        <td style="font-size: 10px;">${dt.reason}</td>
+        <td style="font-size: 10px;">${dt.actionTaken}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="fa" dir="rtl">
+      <head>
+        <meta charset="UTF-8" />
+        <title>گزارش جامع شاخص‌های بهره‌وری (OEE)، توقفات ماشین‌آلات و انحراف برنامه</title>
+        <style>
+          body { font-family: Tahoma, Arial, sans-serif; padding: 16px; color: #111; direction: rtl; }
+          .header { border: 2px solid #111; padding: 12px; border-radius: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+          h1 { margin: 0 0 6px 0; font-size: 15px; }
+          .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; font-size: 11px; }
+          .kpi-card { border: 1px solid #444; padding: 8px; border-radius: 6px; background: #f8fafc; }
+          table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 14px; }
+          th, td { border: 1px solid #333; padding: 5px 6px; text-align: right; }
+          th { background: #f1f5f9; font-weight: bold; }
+          h2 { font-size: 12px; margin: 12px 0 6px 0; border-bottom: 1px solid #999; padding-bottom: 4px; }
+          @media print { @page { size: A4 landscape; margin: 8mm; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1>گزارش جامع شاخص‌های بهره‌وری (OEE)، توقفات ماشین‌آلات و انحراف از برنامه (Schedule Adherence)</h1>
+            <div>شرکت قطعات محوری کوثر — واحد برنامه‌ریزی، کنترل تولید و تضمین کیفیت (PPC & QC)</div>
+          </div>
+          <div style="text-align: left; font-size: 11px;">
+            <div><strong>شاخص کل OEE:</strong> ۷۱.۶٪</div>
+            <div><strong>انطباق با برنامه (Adherence):</strong> ${toPersianDigits(overallAdherencePercent)}٪</div>
+            <div><strong>کل زمان توقف ثبت‌شده:</strong> ${toPersianDigits(totalDowntimeMinutes)} دقیقه</div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card"><strong>دسترس‌پذیری (Availability):</strong> ۸۸.۴٪</div>
+          <div class="kpi-card"><strong>راندمان عملکرد (Performance):</strong> ۸۲.۵٪</div>
+          <div class="kpi-card"><strong>نرخ کیفیت سالم (Quality):</strong> ۹۸.۲٪</div>
+          <div class="kpi-card"><strong>انحراف کل تولید:</strong> ${formatNumber(totalActualPcs - totalPlannedPcs)} عدد</div>
+        </div>
+
+        <h2>۱. جدول انحراف از برنامه تولید به تفکیک دستور کار و قطعه (Schedule Adherence)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>دستور کار</th>
+              <th>نام و کد قطعه</th>
+              <th>هدف</th>
+              <th>تولید سالم</th>
+              <th>ضایعات</th>
+              <th>تحقق (%)</th>
+              <th>انحراف</th>
+              <th>وضعیت</th>
+              <th>علت ریشه‌ای تأخیر</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <h2>۲. گزارش زمانی توقفات ثبت‌شده ماشین‌آلات و پرس‌ها (Downtime Log)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>دستگاه و پرس</th>
+              <th>سالن</th>
+              <th>دسته‌بندی توقف</th>
+              <th>ساعت وقوع</th>
+              <th>مدت توقف</th>
+              <th>شرح علت ریشه‌ای خرابی</th>
+              <th>اقدام اصلاحی انجام‌شده</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${downtimesHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }, 300);
+  };
+
+  // Export CSV of Adherence & Downtime
+  const handleExportCsv = () => {
+    const headers = [
+      'شماره دستور کار',
+      'کد قطعه',
+      'نام قطعه',
+      'خودرو',
+      'تیراژ برنامه‌ریزی‌شده',
+      'تولید واقعی سالم',
+      'ضایعات',
+      'درصد تحقق برنامه (Adherence %)',
+      'انحراف تیراژ',
+      'وضعیت انطباق',
+      'علت ریشه‌ای تأخیر',
+    ];
+    const rows = adherenceList.map(r => [
+      r.orderCode,
+      r.partCode,
+      r.partName,
+      r.carModel,
+      r.plannedQty,
+      r.actualProducedQty,
+      r.scrapQty,
+      `${r.adherencePercent}%`,
+      r.varianceUnits,
+      r.status,
+      r.delayRootCause || '',
+    ]);
+    exportToCsv(`گزارش_انحراف_برنامه_و_OEE_${selectedHorizon}`, headers, rows);
+  };
+
+  return (
+    <div className="space-y-6 text-right font-sans" dir="rtl">
+      {/* ==================================================================== */}
+      {/* HEADER: COMPREHENSIVE PRODUCTION PERFORMANCE & ADHERENCE            */}
+      {/* ==================================================================== */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
+              <Activity className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                  داشبورد گزارش‌دهی جامع تولید: شاخص‌های بهره‌وری (OEE)، توقفات ماشین‌آلات و انحراف برنامه (Schedule Adherence)
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                  نمودارهای ساختار درختی و محور زمانی (Timeline)
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                رصد بلادرنگ زنجیره ارزش تولید: ساختار سلسله‌مراتبی OEE (دسترس‌پذیری × عملکرد × کیفیت)، توقفات سالن‌های پرس بر روی خط زمان (Gantt/Timeline) و تحلیل شکاف زمانی و مقداری دستورهای ساخت (MO).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrintReport}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-amber-400" />
+              <span>چاپ رسمی گزارش (A4 ایزوله)</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>خروجی اکسل (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Global Control Filters */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-slate-700">بازه زمانی گزارش:</span>
+            {[
+              { id: 'TODAY' as const, label: 'امروز (شیفت فعال)' },
+              { id: 'YESTERDAY' as const, label: 'روز قبل' },
+              { id: 'WEEKLY' as const, label: 'هفته جاری (تجمعی)' },
+              { id: 'MONTHLY' as const, label: 'ماهانه (۳۰ روز)' },
+            ].map(h => (
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => setSelectedHorizon(h.id)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                  selectedHorizon === h.id
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {h.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 font-medium">فیلتر سالن:</span>
+            <select
+              value={selectedHall}
+              onChange={e => setSelectedHall(e.target.value)}
+              className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-900 focus:outline-none"
+            >
+              <option value="ALL">همه سالن‌های کارخانه</option>
+              <option value="سالن برش">سالن برش و گیوتین</option>
+              <option value="سالن پرس">سالن پرس و فرم‌دهی</option>
+              <option value="سالن جوشکاری">سالن جوشکاری و پرس‌جوش</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* TOP KPI OVERVIEW CARDS                                               */}
+      {/* ==================================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: OEE */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">شاخص کل OEE کارخانه</span>
+            <Gauge className="w-5 h-5 text-amber-500" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900 font-mono">۷۱.۶٪</span>
+            <span className="text-xs font-bold text-emerald-600">روند مثبت (+۲.۴٪)</span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            هدف استاندارد ساپکو: بالای ۷۰٪ | دسترس‌پذیری ۸۸.۴٪ × عملکرد ۸۲.۵٪ × کیفیت ۹۸.۲٪
+          </p>
+        </div>
+
+        {/* KPI 2: Schedule Adherence */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">انطباق با برنامه (Adherence)</span>
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-slate-900 font-mono">
+              {toPersianDigits(overallAdherencePercent)}٪
+            </span>
+            <span className="text-xs font-bold text-slate-500">
+              تولید {formatNumber(totalActualPcs)} از {formatNumber(totalPlannedPcs)}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            کسری نهایی خط: {formatNumber(Math.abs(totalActualPcs - totalPlannedPcs))} قطعه (عمدتاً به دلیل توقف پرس ۲۵۰ تن)
+          </p>
+        </div>
+
+        {/* KPI 3: Total Downtimes */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">مجموع زمان توقفات ماشین‌آلات</span>
+            <Clock className="w-5 h-5 text-rose-600" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-rose-700 font-mono">
+              {toPersianDigits(totalDowntimeMinutes)}
+            </span>
+            <span className="text-xs font-bold text-slate-600">دقیقه ({toPersianDigits((totalDowntimeMinutes / 60).toFixed(1))} ساعت)</span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            توقف اضطراری: ۹۵ دقیقه (۴۳٪) | تعویض قالب و ستاپ: ۸۰ دقیقه (۳۶٪) | سایر: ۴۵ دقیقه
+          </p>
+        </div>
+
+        {/* KPI 4: Quality & Scrap Rate */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">نرخ کیفیت و تولید سالم</span>
+            <ShieldAlert className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-emerald-700 font-mono">۹۸.۲٪</span>
+            <span className="text-xs font-bold text-rose-600">ضایعات: ۱.۸٪ (۱۲۸ عدد)</span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            بیشترین ضایعات در قالب کشش صندلی چپ (۳۱ قطعه) به علت نوسان فشار بالشتک پرس
+          </p>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* SECTION 1: TREE-STRUCTURED OEE BREAKDOWN CHART (نمودار درختی OEE)    */}
+      {/* ==================================================================== */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center">
+              <GitBranch className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                ۱. نمودار ساختار درختی شکست شاخص اثربخشی کلی تجهیزات (Tree-Structured OEE Breakdown)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                نمایش علل ریشه‌ای افت OEE در قالب شاخه‌های دسترس‌پذیری، عملکرد و کیفیت و دلایل فرعی مربوط به هر شاخه
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedOeeNodes({
+                  oee_root: true,
+                  oee_avail: true,
+                  oee_perf: true,
+                  oee_qual: true,
+                })
+              }
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold cursor-pointer"
+            >
+              باز کردن همه شاخه‌ها
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedOeeNodes({
+                  oee_root: true,
+                  oee_avail: false,
+                  oee_perf: false,
+                  oee_qual: false,
+                })
+              }
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold cursor-pointer"
+            >
+              بستن شاخه‌ها
+            </button>
+          </div>
+        </div>
+
+        {/* Tree Root Node */}
+        <div className="space-y-4 pt-2">
+          {/* Level 0: Root Node */}
+          <div className={`p-4 rounded-xl border-2 ${oeeTree.borderColor} ${oeeTree.bgColor} shadow-2xs transition-all`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => toggleNode(oeeTree.id)}
+                  className="w-7 h-7 rounded-lg bg-white border border-amber-300 text-amber-900 flex items-center justify-center cursor-pointer shadow-2xs"
+                >
+                  {expandedOeeNodes[oeeTree.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+                <div>
+                  <span className="font-bold text-sm text-slate-900 block">{oeeTree.title}</span>
+                  <span className="text-xs text-slate-600">{oeeTree.description}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="w-48 bg-white border border-amber-200 rounded-full h-3 overflow-hidden p-0.5">
+                  <div
+                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${oeeTree.percentage}%` }}
+                  />
+                </div>
+                <span className="font-mono font-black text-xl text-amber-900">{oeeTree.metric}</span>
+              </div>
+            </div>
+
+            {/* Level 1: Three Pillars (Availability, Performance, Quality) */}
+            {expandedOeeNodes[oeeTree.id] && oeeTree.children && (
+              <div className="mt-4 pt-4 border-t border-amber-200/80 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {oeeTree.children.map(pillar => {
+                  const isExpanded = expandedOeeNodes[pillar.id];
+                  return (
+                    <div
+                      key={pillar.id}
+                      className={`p-3.5 rounded-xl border ${pillar.borderColor} ${pillar.bgColor} flex flex-col justify-between space-y-3`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleNode(pillar.id)}
+                            className="flex items-center gap-1.5 text-xs font-bold text-slate-900 hover:text-slate-700 cursor-pointer text-right"
+                          >
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                            <span>{pillar.title}</span>
+                          </button>
+                          <span className={`font-mono font-bold text-sm ${pillar.color}`}>{pillar.metric}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">{pillar.description}</p>
+                      </div>
+
+                      {/* Level 2 Sub-branches (Root Causes) */}
+                      {isExpanded && pillar.children && (
+                        <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                          {pillar.children.map(sub => (
+                            <div
+                              key={sub.id}
+                              className={`p-2.5 rounded-lg border ${sub.borderColor} ${sub.bgColor} space-y-1 text-xs`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-800 text-[11px]">{sub.title}</span>
+                                <span className="font-mono font-bold text-[11px] text-slate-900">{sub.metric}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 leading-normal">{sub.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* SECTION 2: MACHINE DOWNTIME TIMELINE (نمودار زمانی توقفات ماشین‌آلات) */}
+      {/* ==================================================================== */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                ۲. نمودار زمانی توقفات ماشین‌آلات و خطوط تولید (Machine Downtime Timeline / Gantt)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                نمایش توقفات شیفت بر روی خط زمان ۲۴ ساعته (ساعت ۰۷:۰۰ الی ۱۹:۰۰) به تفکیک خرابی اضطراری، تعویض قالب (SMED) و کمبود متریال
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-rose-600 inline-block" />
+              <span className="text-slate-600">خرابی اضطراری</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
+              <span className="text-slate-600">تعویض قالب (SMED)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-orange-500 inline-block" />
+              <span className="text-slate-600">توقف جزئی پران</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" />
+              <span className="text-slate-600">کمبود مهره جوش / تغذیه</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline Axis (Hours 07:00 to 19:00) */}
+        <div className="overflow-x-auto border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-4">
+          <div className="min-w-[850px] space-y-3">
+            {/* Hour Rulers */}
+            <div className="grid grid-cols-12 gap-1 text-[11px] font-mono text-slate-500 border-b border-slate-200 pb-2 text-center">
+              <span>۰۷:۰۰</span>
+              <span>۰۸:۰۰</span>
+              <span>۰۹:۰۰</span>
+              <span>۱۰:۰۰</span>
+              <span>۱۱:۰۰</span>
+              <span>۱۲:۰۰</span>
+              <span>۱۳:۰۰</span>
+              <span>۱۴:۰۰</span>
+              <span>۱۵:۰۰</span>
+              <span>۱۶:۰۰</span>
+              <span>۱۷:۰۰</span>
+              <span>۱۸:۰۰</span>
+            </div>
+
+            {/* Machine Rows */}
+            {uniqueMachines.map(mch => {
+              const events = machineDowntimes.filter(ev => ev.machineCode === mch.code);
+              return (
+                <div key={mch.code} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-900">
+                      {mch.name} <span className="font-mono text-slate-500 font-normal">({mch.code} — {mch.hall})</span>
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      مجموع توقف: {toPersianDigits(events.reduce((sum, e) => sum + e.durationMinutes, 0))} دقیقه
+                    </span>
+                  </div>
+
+                  {/* 12-hour bar track */}
+                  <div className="relative h-8 bg-white border border-slate-200 rounded-lg overflow-hidden flex items-center">
+                    {/* Background Grid Lines */}
+                    <div className="absolute inset-0 grid grid-cols-12 pointer-events-none divide-x divide-slate-100 divide-x-reverse" />
+
+                    {/* Render Events as blocks along 12 hours (7:00 to 19:00 = 720 minutes) */}
+                    {events.map(ev => {
+                      const [hStr, mStr] = ev.startHour.split(':');
+                      const startTotalMinutes = (parseInt(hStr, 10) - 7) * 60 + parseInt(mStr, 10);
+                      const leftPercent = Math.max(0, Math.min(100, (startTotalMinutes / 720) * 100));
+                      const widthPercent = Math.max(2, Math.min(100 - leftPercent, (ev.durationMinutes / 720) * 100));
+
+                      return (
+                        <div
+                          key={ev.id}
+                          style={{
+                            right: `${leftPercent}%`,
+                            width: `${widthPercent}%`,
+                          }}
+                          title={`${ev.categoryLabel} (${ev.startHour} به مدت ${ev.durationMinutes} دقیقه): ${ev.reason}`}
+                          className={`absolute h-6 rounded px-1.5 text-[10px] text-white font-bold flex items-center justify-center truncate cursor-pointer shadow-xs ${ev.color}`}
+                        >
+                          {ev.durationMinutes}m
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Detailed Downtime Log Table */}
+        <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-slate-100 border-b border-slate-200 text-slate-700">
+              <tr>
+                <th className="py-2.5 px-3">کد ماشین</th>
+                <th className="py-2.5 px-3">نام دستگاه و پرس</th>
+                <th className="py-2.5 px-3">سالن</th>
+                <th className="py-2.5 px-3">نوع توقف</th>
+                <th className="py-2.5 px-3">ساعت شروع</th>
+                <th className="py-2.5 px-3">مدت (دقیقه)</th>
+                <th className="py-2.5 px-3">علت ریشه‌ای خرابی</th>
+                <th className="py-2.5 px-3">اقدام اصلاحی انجام‌شده (Action)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {filteredDowntimes.map(ev => (
+                <tr key={ev.id} className="hover:bg-slate-50">
+                  <td className="py-2 px-3 font-mono font-bold text-slate-900">{ev.machineCode}</td>
+                  <td className="py-2 px-3 font-bold text-slate-900">{ev.machineName}</td>
+                  <td className="py-2 px-3 text-slate-600">{ev.hall}</td>
+                  <td className="py-2 px-3">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      <span className={`w-2 h-2 rounded-full ${ev.color}`} />
+                      <span>{ev.categoryLabel}</span>
+                    </span>
+                  </td>
+                  <td className="py-2 px-3 font-mono font-bold text-slate-700">{ev.startHour}</td>
+                  <td className="py-2 px-3 font-mono font-bold text-rose-700">{toPersianDigits(ev.durationMinutes)} min</td>
+                  <td className="py-2 px-3 text-slate-700 text-[11px] leading-snug">{ev.reason}</td>
+                  <td className="py-2 px-3 text-emerald-800 text-[11px] leading-snug">{ev.actionTaken}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* SECTION 3: SCHEDULE ADHERENCE (انحراف از برنامه تولید و زمان‌بندی)    */}
+      {/* ==================================================================== */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                ۳. ماتریس انحراف از برنامه تولید و تطابق زمان‌بندی (Schedule Adherence & Variance Analysis)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                مقایسه دقیق تیراژ مصوب و تیراژ تولید سالم به همراه افق زمانی برنامه‌ریزی‌شده و ریشه‌یابی تأخیرات
+              </p>
+            </div>
+          </div>
+
+          <div className="relative w-64 text-xs">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="جستجوی دستور کار یا نام قطعه..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg pr-8 pl-2.5 py-1.5 text-slate-900 focus:outline-none focus:bg-white"
+            />
+          </div>
+        </div>
+
+        {/* Schedule Adherence Table */}
+        <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-slate-100 border-b border-slate-200 text-slate-700">
+              <tr>
+                <th className="py-2.5 px-3">شماره دستور کار</th>
+                <th className="py-2.5 px-3">نام و مشخصات قطعه</th>
+                <th className="py-2.5 px-3">خودرو</th>
+                <th className="py-2.5 px-3">زمان مصوب</th>
+                <th className="py-2.5 px-3">زمان واقعی</th>
+                <th className="py-2.5 px-3">تیراژ مصوب</th>
+                <th className="py-2.5 px-3 text-emerald-800">تولید سالم</th>
+                <th className="py-2.5 px-3 text-rose-700">ضایعات</th>
+                <th className="py-2.5 px-3">درصد تحقق (Adherence)</th>
+                <th className="py-2.5 px-3">انحراف (تعداد)</th>
+                <th className="py-2.5 px-3">وضعیت انطباق</th>
+                <th className="py-2.5 px-3">علت ریشه‌ای تأخیر</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {filteredAdherence.map(item => {
+                const statusBadge =
+                  item.status === 'AHEAD'
+                    ? { bg: 'bg-emerald-50 text-emerald-800 border-emerald-200', text: 'جلوتر از برنامه' }
+                    : item.status === 'ON_TRACK'
+                    ? { bg: 'bg-blue-50 text-blue-800 border-blue-200', text: 'منطبق با برنامه' }
+                    : item.status === 'DELAYED'
+                    ? { bg: 'bg-amber-50 text-amber-800 border-amber-200', text: 'دارای تأخیر' }
+                    : { bg: 'bg-rose-50 text-rose-800 border-rose-200', text: 'تأخیر بحرانی' };
+
+                return (
+                  <tr key={item.orderCode} className="hover:bg-slate-50">
+                    <td className="py-2 px-3 font-mono font-bold text-slate-900">{item.orderCode}</td>
+                    <td className="py-2 px-3">
+                      <div className="font-bold text-slate-900">{item.partName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{item.partCode}</div>
+                    </td>
+                    <td className="py-2 px-3 text-slate-700">{item.carModel}</td>
+                    <td className="py-2 px-3 font-mono text-slate-600 text-[11px]">
+                      {item.plannedStartHour} تا {item.plannedEndHour}
+                    </td>
+                    <td className="py-2 px-3 font-mono text-slate-900 text-[11px]">
+                      {item.actualStartHour} تا {item.actualEndHour}
+                    </td>
+                    <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                      {formatNumber(item.plannedQty)}
+                    </td>
+                    <td className="py-2 px-3 font-mono font-bold text-emerald-700">
+                      {formatNumber(item.actualProducedQty)}
+                    </td>
+                    <td className="py-2 px-3 font-mono text-rose-700">
+                      {formatNumber(item.scrapQty)}
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              item.adherencePercent >= 95
+                                ? 'bg-emerald-600'
+                                : item.adherencePercent >= 85
+                                ? 'bg-amber-500'
+                                : 'bg-rose-600'
+                            }`}
+                            style={{ width: `${Math.min(100, item.adherencePercent)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono font-bold text-slate-900">{toPersianDigits(item.adherencePercent)}٪</span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-3 font-mono font-bold">
+                      <span className={item.varianceUnits >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
+                        {item.varianceUnits >= 0 ? `+${formatNumber(item.varianceUnits)}` : formatNumber(item.varianceUnits)}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${statusBadge.bg}`}>
+                        {statusBadge.text}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-600 leading-snug">
+                      {item.delayRootCause || '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -27,10 +27,13 @@ import {
   ArrowRightLeft,
   ChevronLeft,
   ChevronRight,
+  GitBranch,
 } from 'lucide-react';
 import { Part, Routing, DetailedStockBalance, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits, exportToCsv } from '../../utils/formatters';
 import { SearchableSelect } from '../common/SearchableSelect';
+import { ComprehensiveProductionReportView } from '../reports/ComprehensiveProductionReportView';
+import { ProductionWorkflowDocumentationView } from '../planning/ProductionWorkflowDocumentationView';
 
 export interface ScheduledOpStep {
   opId: string;
@@ -506,9 +509,14 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   parts,
   onRefreshData,
 }) => {
-  // 4 Major Operational Sub-Modules
+  // Major Operational Sub-Modules
   const [activeModuleTab, setActiveModuleTab] = useState<
-    'MULTI_PART_SCHEDULER' | 'DAILY_DISPATCH_SHEET' | 'LIVE_WIP_OP_TRACKER' | 'KPI_OEE_REPORTS'
+    | 'MULTI_PART_SCHEDULER'
+    | 'DAILY_DISPATCH_SHEET'
+    | 'LIVE_WIP_OP_TRACKER'
+    | 'KPI_OEE_REPORTS'
+    | 'TREE_TIMELINE_REPORT'
+    | 'SAP_PP_WORKFLOW'
   >('MULTI_PART_SCHEDULER');
 
   // Master Schedule State (20+ Parts, each with 3 to 5 staggered OPs)
@@ -1211,32 +1219,44 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
           </div>
         </div>
 
-        {/* 4 Core Module Navigation Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {/* 6 Core Module Navigation Tabs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
           {[
             {
               id: 'MULTI_PART_SCHEDULER' as const,
-              title: '۱. ماتریس برنامه‌ریزی چندقطعه‌ای و مراحل (OP)',
-              subtitle: `${toPersianDigits(scheduleItems.length)} قطعه فعال × زمان‌بندی پله‌ای روزها`,
+              title: '۱. ماتریس زمان‌بندی مراحل',
+              subtitle: `${toPersianDigits(scheduleItems.length)} قطعه × پله‌ای`,
               icon: Calendar,
             },
             {
               id: 'DAILY_DISPATCH_SHEET' as const,
-              title: '۲. برنامه روزانه خط و برگه چاپی سرپرست سالن',
-              subtitle: `${toPersianDigits(dailyScheduledOperations.length)} عملیات (OP) در روز انتخابی`,
+              title: '۲. برنامه روزانه خط',
+              subtitle: `${toPersianDigits(dailyScheduledOperations.length)} عملیات چاپی`,
               icon: Printer,
             },
             {
               id: 'LIVE_WIP_OP_TRACKER' as const,
-              title: '۳. رهگیر موجودی مراحل (WIP) و رسید خودکار انبار',
-              subtitle: `موجودی بین‌مرحله‌ای: ${formatNumber(kpiSummary.totalWipInLinePcs)} قطعه در خط`,
+              title: '۳. رهگیر موجودی مراحل (WIP)',
+              subtitle: `${formatNumber(kpiSummary.totalWipInLinePcs)} در خط + رسید انبار`,
               icon: ArrowRightLeft,
             },
             {
               id: 'KPI_OEE_REPORTS' as const,
-              title: '۴. گزارش‌های روزانه/هفتگی/ماهانه، OEE، PM و بهره‌وری',
-              subtitle: `OEE: ${toPersianDigits(kpiSummary.oeePct)}٪ | تحقق برنامه: ${toPersianDigits(kpiSummary.attainmentPct)}٪`,
+              title: '۴. شاخص‌های OEE، نت و بهره‌وری',
+              subtitle: `OEE: ${toPersianDigits(kpiSummary.oeePct)}٪`,
               icon: Gauge,
+            },
+            {
+              id: 'TREE_TIMELINE_REPORT' as const,
+              title: '۵. نمودار درختی OEE و زمان توقفات',
+              subtitle: 'درخت OEE، تایم‌لاین توقف، Adherence',
+              icon: Activity,
+            },
+            {
+              id: 'SAP_PP_WORKFLOW' as const,
+              title: '۶. مستند جریان کار (SAP PP)',
+              subtitle: 'BOM، زمان‌بندی، WIP، رسید انبار',
+              icon: GitBranch,
             },
           ].map(tab => {
             const Icon = tab.icon;
@@ -2356,6 +2376,20 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
             </div>
           </div>
         </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 5: TREE-STRUCTURED OEE & MACHINE DOWNTIME TIMELINE & ADHERENCE   */}
+      {/* ==================================================================== */}
+      {activeModuleTab === 'TREE_TIMELINE_REPORT' && (
+        <ComprehensiveProductionReportView />
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 6: SAP PP-ALIGNED TECHNICAL WORKFLOW SPECIFICATION & DIAGRAM     */}
+      {/* ==================================================================== */}
+      {activeModuleTab === 'SAP_PP_WORKFLOW' && (
+        <ProductionWorkflowDocumentationView />
       )}
 
       {/* ==================================================================== */}

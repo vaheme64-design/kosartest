@@ -52,6 +52,8 @@ import { OeeModuleView } from './OeeModuleView';
 import { MachineUtilizationView } from './MachineUtilizationView';
 import { ConsumablesForecastView } from '../planning/ConsumablesForecastView';
 import { MrpModuleView } from '../planning/MrpModuleView';
+import { ComprehensiveProductionReportView } from './ComprehensiveProductionReportView';
+import { ProductionWorkflowDocumentationView } from '../planning/ProductionWorkflowDocumentationView';
 import { TableSkeleton, KpiCardsSkeleton, ChartSkeleton } from '../ui/Skeleton';
 
 export type ReportTypeKey =
@@ -74,7 +76,9 @@ export type ReportTypeKey =
   | 'oee_module'
   | 'machine_utilization'
   | 'consumables_forecast'
-  | 'mrp_forecast';
+  | 'mrp_forecast'
+  | 'comprehensive_production'
+  | 'production_workflow';
 
 interface ManagementReportsModuleViewProps {
   parts: Part[];
@@ -139,13 +143,17 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
     { id: 'machine_utilization', title: '۱۸. ماژول گزارش بهره ماشین و کارکرد پرس‌ها', category: 'ماشین‌آلات', description: 'تحلیل ساعات کارکرد مفید، تعویض قالب SMED، توقفات اضطراری و راندمان ضرب در دقیقه (SPM)' },
     { id: 'consumables_forecast', title: '۱۹. ماژول پیش‌بینی مواد مصرفی کارگاه (Consumables)', category: 'مواد', description: 'پیش‌بینی نرخ مصرف سیم جوش، گاز CO2، روغن کشش و قطعات یدکی قالب با نقطه سفارش ROP' },
     { id: 'mrp_forecast', title: '۲۰. پیش‌بینی نیازمندی مواد و موازنه کلاف (MRP)', category: 'مواد', description: 'انفجار چندسطحی BOM، کسری خالص ورق و پیش‌بینی نیازمندی کلاف بر اساس سفارشات ساپکو' },
+    { id: 'comprehensive_production', title: '۲۱. گزارش جامع تولید: شاخص‌های بهره‌وری (OEE)، توقفات و انحراف برنامه', category: 'تولید', description: 'نمودار درختی شکست OEE، خط زمان (Timeline) توقفات شیفت و ماتریس انحراف از برنامه (Schedule Adherence)' },
+    { id: 'production_workflow', title: '۲۲. مستند فنی و جریان فرآیند تولید (Workflow استاندارد SAP PP)', category: 'تولید', description: 'دیاگرام تعاملی فرآیند دریافت سفارش، انفجار مواد BOM، زمان‌بندی پله‌ای، رهگیری WIP و صدور خودکار رسید انبار' },
   ];
 
   const isStandaloneModule =
     activeReport === 'oee_module' ||
     activeReport === 'machine_utilization' ||
     activeReport === 'consumables_forecast' ||
-    activeReport === 'mrp_forecast';
+    activeReport === 'mrp_forecast' ||
+    activeReport === 'comprehensive_production' ||
+    activeReport === 'production_workflow';
 
   const fetchActiveReport = async () => {
     if (isStandaloneModule) return;
@@ -671,6 +679,8 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
             {/* Featured Quick Tags (Compact Grafana Tag Pills) */}
             <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
+                { id: 'comprehensive_production', label: 'گزارش جامع OEE و توقفات' },
+                { id: 'production_workflow', label: 'جریان فرآیند SAP PP' },
                 { id: 'oee_module', label: 'داشبورد OEE' },
                 { id: 'machine_utilization', label: 'بهره ماشین' },
                 { id: 'consumables_forecast', label: 'پیش‌بینی مصرفی' },
@@ -717,6 +727,8 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
       </div>
 
       {/* Standalone Analytical & Forecasting Modules */}
+      {activeReport === 'comprehensive_production' && <ComprehensiveProductionReportView />}
+      {activeReport === 'production_workflow' && <ProductionWorkflowDocumentationView />}
       {activeReport === 'oee_module' && <OeeModuleView machines={machines} />}
       {activeReport === 'machine_utilization' && <MachineUtilizationView machines={machines} />}
       {activeReport === 'consumables_forecast' && <ConsumablesForecastView />}

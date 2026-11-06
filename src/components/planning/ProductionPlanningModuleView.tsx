@@ -33,6 +33,7 @@ import { MrpModuleView } from './MrpModuleView';
 import { ConsumablesForecastView } from './ConsumablesForecastView';
 import { DailyProductionScheduleView } from './DailyProductionScheduleView';
 import { ErpProductionWorkbenchView } from '../production/ErpProductionWorkbenchView';
+import { ProductionWorkflowDocumentationView } from './ProductionWorkflowDocumentationView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
@@ -52,6 +53,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
     | 'erp_workbench'
+    | 'workflow_doc'
     | 'dashboard'
     | 'daily_schedule'
     | 'mrp'
@@ -283,6 +285,9 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                 <option value="erp_workbench">
                   میز کار ۵ مرحله‌ای تولید (SAP / Odoo — ۵,۰۰۰ عدد تا انتقال مانده روزانه)
                 </option>
+                <option value="workflow_doc">
+                  مستند فنی و جریان فرآیند تولید (Workflow استاندارد SAP PP)
+                </option>
                 <option value="dashboard">داشبورد موازنه تقاضا و ظرفیت</option>
                 <option value="daily_schedule">برنامه روزانه شرکت به تفکیک سالن (Daily Dispatch)</option>
                 <option value="mrp">پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</option>
@@ -302,6 +307,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
                 { id: 'erp_workbench', label: 'میز کار ۵ مرحله‌ای (SAP / Odoo)' },
+                { id: 'workflow_doc', label: 'جریان فرآیند SAP PP' },
                 { id: 'dashboard', label: 'موازنه تقاضا' },
                 { id: 'daily_schedule', label: 'برنامه روزانه سالن' },
                 { id: 'mrp', label: 'نیازسنجی MRP' },
@@ -346,6 +352,9 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
       {activeSubTab === 'erp_workbench' && (
         <ErpProductionWorkbenchView parts={parts} routings={[]} onRefreshData={loadPlanningData} />
       )}
+
+      {/* Sub-Tab: SAP PP Production Workflow Documentation */}
+      {activeSubTab === 'workflow_doc' && <ProductionWorkflowDocumentationView />}
 
       {/* 1. Dashboard Sub-Tab */}
       {activeSubTab === 'dashboard' && (
