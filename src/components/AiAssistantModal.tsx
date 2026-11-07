@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS: AiSettings = {
   ollamaEndpoint: 'http://localhost:11434',
   ollamaModel: 'qwen2.5:7b',
   groqApiKey: '',
-  groqModel: 'llama-3.3-70b-versatile',
+  groqModel: 'llama-3.1-8b-instant',
   openRouterApiKey: '',
   openRouterModel: 'meta-llama/llama-3.2-3b-instruct:free',
   geminiApiKey: '',
@@ -588,15 +588,31 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                     <Cloud className="w-4 h-4 text-amber-600" />
                     <span>تنظیمات کلید رایگان Groq (groq.com)</span>
                   </div>
-                  <div>
-                    <label className="block text-slate-600 mb-1">کلید API (API Key):</label>
-                    <input
-                      type="password"
-                      value={settings.groqApiKey}
-                      onChange={e => handleSaveSettings({ ...settings, groqApiKey: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs"
-                      placeholder="gsk_..."
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-600 mb-1">کلید API (API Key):</label>
+                      <input
+                        type="password"
+                        value={settings.groqApiKey}
+                        onChange={e => handleSaveSettings({ ...settings, groqApiKey: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs"
+                        placeholder="gsk_..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 mb-1">مدل Groq:</label>
+                      <select
+                        value={settings.groqModel || 'llama-3.1-8b-instant'}
+                        onChange={e => handleSaveSettings({ ...settings, groqModel: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs cursor-pointer"
+                      >
+                        <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (سریع و استاندارد)</option>
+                        <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                        <option value="llama3-70b-8192">llama3-70b-8192</option>
+                        <option value="llama3-8b-8192">llama3-8b-8192</option>
+                        <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}

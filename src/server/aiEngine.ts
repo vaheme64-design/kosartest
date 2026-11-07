@@ -337,26 +337,52 @@ Output MUST BE STRICT VALID JSON (without markdown fences if possible, or inside
     else if (provider === 'GROQ') {
       const apiKey = settings.groqApiKey;
       if (!apiKey) throw new Error('کلید API سرویس Groq وارد نشده است.');
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: settings.groqModel || 'llama-3.3-70b-versatile',
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`Groq error HTTP ${res.status}: ${await res.text()}`);
+
+      const groqCandidates = Array.from(
+        new Set([
+          settings.groqModel || 'llama-3.1-8b-instant',
+          'llama-3.3-70b-versatile',
+          'llama-3.1-8b-instant',
+          'llama3-70b-8192',
+          'llama3-8b-8192',
+          'mixtral-8x7b-32768',
+        ])
+      );
+
+      let lastErrText = '';
+      for (const modelCandidate of groqCandidates) {
+        try {
+          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: modelCandidate,
+              response_format: { type: 'json_object' },
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt },
+              ],
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            rawJsonResponse = data?.choices?.[0]?.message?.content || '';
+            if (rawJsonResponse) break;
+          } else {
+            lastErrText = await res.text();
+          }
+        } catch (err: any) {
+          lastErrText = err.message;
+        }
       }
-      const data = await res.json();
-      rawJsonResponse = data?.choices?.[0]?.message?.content || '';
+
+      if (!rawJsonResponse) {
+        throw new Error(`Groq API error: ${lastErrText}`);
+      }
     }
 
     // 4. OpenRouter (Free Tier - openrouter.ai)

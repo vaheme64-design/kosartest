@@ -471,6 +471,9 @@ export default function App() {
   };
 
   const handleExecuteAiAction = (action: AiActionPayload) => {
+    // Explicitly reset any pending inventory modal popups
+    setPendingInventoryModal(null);
+
     if (action.actionType === 'OPEN_RECEIPT') {
       setActiveTab('inventory');
       setActiveInventorySubTab('DASHBOARD');
@@ -505,9 +508,19 @@ export default function App() {
       setActiveTab('inventory');
       setActiveInventorySubTab('ALERTS');
     } else if (action.actionType === 'NAVIGATE' && action.targetTab) {
-      setActiveTab(action.targetTab as TabKey);
-      if (action.targetSubTab) {
+      const target = action.targetTab as TabKey;
+      setActiveTab(target);
+      if (target === 'inventory' && action.targetSubTab) {
         setActiveInventorySubTab(action.targetSubTab as InventorySubTab);
+      } else if (target === 'machines' && action.targetSubTab) {
+        setActiveMachineSubTab(action.targetSubTab as any);
+      } else if (target === 'production') {
+        setProductionViewMode('ERP_WORKBENCH');
+        if (action.targetSubTab) {
+          setActiveProductionModuleTab(action.targetSubTab as any);
+        }
+      } else if (target === 'planning' && action.targetSubTab) {
+        setActivePlanningSubTab(action.targetSubTab as any);
       }
     } else if (action.actionType === 'QUERY_STOCK') {
       setActiveTab('inventory');

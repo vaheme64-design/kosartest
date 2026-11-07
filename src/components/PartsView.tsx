@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   X,
   Check,
+  Pin,
 } from 'lucide-react';
 import { Part, PartCategory, UnitOfMeasure, CarModel } from '../types/inventory';
 import { formatNumber, formatWeightKg, exportToCsv, toPersianDigits } from '../utils/formatters';
@@ -67,7 +68,8 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
 
   const filteredParts = useMemo(() => {
     return parts.filter(p => {
-      if (categoryFilter !== 'ALL' && p.category !== categoryFilter) return false;
+      if (categoryFilter === 'PINNED' && !p.isPinned) return false;
+      if (categoryFilter !== 'ALL' && categoryFilter !== 'PINNED' && p.category !== categoryFilter) return false;
       if (carModelFilter !== 'ALL' && p.carModel !== carModelFilter) return false;
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
@@ -221,9 +223,10 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500 font-semibold"
           >
             <option value="ALL">همه دسته‌بندی‌ها</option>
+            <option value="PINNED">📌 قطعات کلیدی نشانه‌گذاری‌شده (VIP)</option>
             <option value="RAW_MATERIAL">مواد اولیه (ورق و کویل ساپکو)</option>
             <option value="WIP_PART">قطعات نیمه‌ساخته (WIP)</option>
             <option value="FINISHED_GOOD">محصولات نهایی آماده تحویل</option>
@@ -233,7 +236,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
           <select
             value={carModelFilter}
             onChange={e => setCarModelFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500 font-semibold"
           >
             <option value="ALL">همه خودروها</option>
             {carModels.map(m => (
@@ -255,6 +258,7 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
           <table className="w-full text-right text-xs">
             <thead>
               <tr className="bg-white border-b border-slate-200 text-slate-400 font-semibold">
+                <th className="py-3 px-2 w-8 text-center">📌</th>
                 <th className="py-3 px-3">کد کاتالوگ</th>
                 <th className="py-3 px-3">عنوان قطعه / ماده اولیه</th>
                 <th className="py-3 px-3">دسته‌بندی</th>
@@ -272,10 +276,34 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                 const isRaw = p.category === 'RAW_MATERIAL';
                 const isFinished = p.category === 'FINISHED_GOOD';
                 return (
-                  <tr key={p.id} className="hover:bg-slate-100 transition-colors">
+                  <tr
+                    key={p.id}
+                    className={`transition-colors ${
+                      p.isPinned ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-100'
+                    }`}
+                  >
+                    <td className="py-3 px-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onSavePart({ id: p.id, isPinned: !p.isPinned })}
+                        className={`p-1 rounded transition-colors cursor-pointer ${
+                          p.isPinned ? 'text-amber-600 hover:text-amber-800' : 'text-slate-300 hover:text-slate-600'
+                        }`}
+                        title={p.isPinned ? 'حذف نشانه‌گذاری قطعه' : 'نشانه‌گذاری قطعه کلیدی (VIP)'}
+                      >
+                        <Pin className={`w-3.5 h-3.5 ${p.isPinned ? 'fill-amber-500' : ''}`} />
+                      </button>
+                    </td>
                     <td className="py-3 px-3 font-mono font-bold text-amber-400">{p.code}</td>
                     <td className="py-3 px-3 text-slate-900 font-medium max-w-xs">
-                      <div>{p.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span>{p.name}</span>
+                        {p.isPinned && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                            VIP
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-3">
                       <span
