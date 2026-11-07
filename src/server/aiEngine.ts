@@ -25,22 +25,23 @@ export function processLocalNlpCommand(
   const rawText = promptText.trim();
   const normalizedText = convertPersianDigitsToEnglish(rawText).toLowerCase();
 
-  // 1. Detect Intent
-  const isReceipt = /رسید|ورود|وارد|تحویل انبار|خرید|پذیرش|رسید کالا/i.test(rawText);
-  const isIssue = /حواله|خروج|مصرف|تحویل سالن|ارسال به خط|خارج/i.test(rawText);
-  const isTransfer = /انتقال|جابجایی|بین انبار/i.test(rawText);
-  const isReorderCheck = /کسری|نقطه سفارش|کمبود|سفارش گذاری|بحرانی/i.test(rawText);
-  const isStockQuery = /موجودی|چقدر داریم|استعلام|موجود/i.test(rawText) && !isReceipt && !isIssue;
-  const isNavigate = /برو به|باز کن|نمایش بده|صفحه/i.test(rawText) && !isReceipt && !isIssue;
+  // 1. Detect Intent with strict priority
+  const isCreateMo = /دستور\s*تولید|دستور\s*ساخت|برنامه\s*تولید|صدور\s*mo|ساخت\s*قطعه|تولید\s*جدید|تولید\s*بیار|بچ\s*تولید|mo-[0-9]+/i.test(rawText);
+  const isTrackOrder = /پیگیری|ردیابی\s*دستور|وضعیت\s*دستور|کد\s*پیگیری|ارسال\s*به\s*خط/i.test(rawText) && !isCreateMo;
+  const isHeatTrace = /شماره\s*ذوب|ذوب|هیت|heat|شجره\s*نامه|ذوب\s*ساپکو/i.test(rawText) && !isCreateMo;
+
+  const isExplicitReceipt = /رسید\s*انبار|رسید\s*کالا|ورود\s*ورق|ورود\s*کالا|پذیرش\s*انبار|خرید\s*ورق|تحویل\s*به\s*انبار/i.test(rawText) || (/رسید|ورود/i.test(rawText) && !isCreateMo);
+  const isExplicitIssue = /حواله\s*خروج|خروج\s*از\s*انبار|مصرف\s*ورق|تحویل\s*به\s*پرس|ارسال\s*به\s*ساپکو/i.test(rawText) || (/حواله|خروج/i.test(rawText) && !isCreateMo);
+  const isReorderCheck = /کسری|نقطه\s*سفارش|کمبود|سفارش\s*گذاری|بحرانی|آلارم/i.test(rawText);
+  const isStockQuery = /موجودی|چقدر\s*داریم|استعلام|موجود/i.test(rawText) && !isExplicitReceipt && !isExplicitIssue;
+  const isNavigate = /برو\s*به|باز\s*کن|نمایش\s*بده|صفحه|ماژول/i.test(rawText);
 
   // 2. Extract Numbers (Quantity / Weight)
-  // Look for patterns like: 4500 کیلو, 4,500 کیلوگرم, 4500kg, 120 عدد, وزن 3200
   let extractedQuantity: number | undefined;
-  const qtyMatch = normalizedText.match(/(?:وزن\s*[:=]?\s*|تعداد\s*[:=]?\s*)?([0-9]+(?:[\.,][0-9]+)?)\s*(?:کیلوگرم|کیلو|تن|عدد|kg|pcs)?/i);
+  const qtyMatch = normalizedText.match(/(?:وزن\s*[:=]?\s*|تعداد\s*[:=]?\s*|تیراژ\s*[:=]?\s*)?([0-9]+(?:[\.,][0-9]+)?)\s*(?:کیلوگرم|کیلو|تن|عدد|kg|pcs)?/i);
   if (qtyMatch && qtyMatch[1]) {
     const parsed = parseFloat(qtyMatch[1].replace(/,/g, ''));
     if (!isNaN(parsed) && parsed > 0) {
-      // If prompt specifically said 'تن' (tons), convert to kg
       if (/تن/i.test(rawText) && parsed < 100) {
         extractedQuantity = parsed * 1000;
       } else {
@@ -58,7 +59,6 @@ export function processLocalNlpCommand(
       extractedCoilPack = `CP-${extractedCoilPack}`;
     }
   } else {
-    // Check for direct CP-xxxx pattern
     const directCp = normalizedText.match(/\b(cp-[a-z0-9\-]+)\b/i);
     if (directCp) extractedCoilPack = directCp[1].toUpperCase();
   }
@@ -82,7 +82,6 @@ export function processLocalNlpCommand(
     }
   }
 
-  // If no direct part matched, check common grades like st12, dc04, st14, st37, dx51d
   if (!matchedPart) {
     const commonGrades = ['st12', 'dc04', 'st14', 'st37', 'dx51d', 'st52'];
     for (const g of commonGrades) {
@@ -100,8 +99,40 @@ export function processLocalNlpCommand(
   const isCustomer = /مشتری|ایران خودرو|سایپا/i.test(rawText);
   const ownership = isCustomer ? 'CUSTOMER_SUPPLIED' : isSapco ? 'SAPCO_SUPPLIER_OWNED' : 'COMPANY_OWNED';
 
-  // 7. Route to Actions
-  if (isReceipt || (extractedQuantity && !isIssue && !isStockQuery)) {
+  // 7. Route to Actions based on exact user intent
+
+  // A. Create Work Order (MO) Intent
+  if (isCreateMo) {
+    const partName = matchedPart ? matchedPart.name : 'قطعه انتخابی';
+    const qtyText = extractedQuantity ? `${extractedQuantity.toLocaleString('fa-IR')} عدد` : 'تیراژ مشخص‌شده';
+    return {
+      actionType: 'OPEN_CREATE_MO',
+      targetTab: 'production',
+      targetSubTab: 'MULTI_PART_SCHEDULER',
+      message: `دستور تولید جدید (MO) برای «${partName}» با تیراژ ${qtyText} شناسایی شد. انتقال به فرم صدور دستور تولید...`,
+    };
+  }
+
+  // B. Track Order Intent
+  if (isTrackOrder) {
+    return {
+      actionType: 'OPEN_TRACK_ORDER',
+      targetTab: 'production',
+      message: 'هدایت به پیشخوان تولید جهت پیگیری زنجیره کامل دستور ساخت.',
+    };
+  }
+
+  // C. Heat Traceability Intent
+  if (isHeatTrace) {
+    return {
+      actionType: 'OPEN_HEAT_TRACEABILITY',
+      targetTab: 'sapco',
+      message: `هدایت به ماژول شجره‌نامه شماره ذوب (${extractedHeatNumber || 'کلاف‌های ساپکو'}).`,
+    };
+  }
+
+  // D. Explicit Goods Receipt
+  if (isExplicitReceipt) {
     const partName = matchedPart ? matchedPart.name : 'ورق فولادی';
     const qtyText = extractedQuantity ? `${extractedQuantity.toLocaleString('fa-IR')} ${matchedPart?.unit || 'کیلوگرم'}` : 'مشخص‌نشده';
     return {
@@ -128,14 +159,15 @@ export function processLocalNlpCommand(
     };
   }
 
-  if (isIssue) {
+  // E. Explicit Goods Issue
+  if (isExplicitIssue) {
     const partName = matchedPart ? matchedPart.name : 'کالای انتخابی';
     const qtyText = extractedQuantity ? `${extractedQuantity.toLocaleString('fa-IR')} ${matchedPart?.unit || 'کیلوگرم'}` : 'مشخص‌نشده';
     return {
       actionType: 'OPEN_ISSUE',
       targetTab: 'inventory',
       targetSubTab: 'MOVEMENTS',
-      message: `فرم حواله خروج برای «${partName}» با مقدار ${qtyText} آماده شد. لطفاً انبار مقصد و جزییات را بررسی و تایید فرمایید.`,
+      message: `فرم حواله خروج برای «${partName}» با مقدار ${qtyText} آماده شد. لطفاً انبار مقصد را بررسی و تایید فرمایید.`,
       prefillIssue: {
         partId: matchedPart?.id,
         partCode: matchedPart?.code,
@@ -150,6 +182,7 @@ export function processLocalNlpCommand(
     };
   }
 
+  // F. Reorder / Safety Stock Check
   if (isReorderCheck) {
     return {
       actionType: 'CHECK_REORDER',
@@ -159,15 +192,17 @@ export function processLocalNlpCommand(
     };
   }
 
-  if (isStockQuery && matchedPart) {
+  // G. Stock Inquiry
+  if (isStockQuery) {
+    const partName = matchedPart ? matchedPart.name : 'کالای انتخابی';
     return {
       actionType: 'QUERY_STOCK',
       targetTab: 'inventory',
       targetSubTab: 'BALANCES',
-      message: `استعلام موجودی برای کالا «${matchedPart.name}» (کد ${matchedPart.code}).`,
+      message: `استعلام موجودی برای کالا «${partName}».`,
       queryResults: {
-        summary: `کالای ${matchedPart.name} با کد ${matchedPart.code} در انبار مواد اولیه و خطوط تعریف شده است.`,
-        items: [{ code: matchedPart.code, name: matchedPart.name, stock: matchedPart.minStock || 0, unit: matchedPart.unit }],
+        summary: `اطلاعات موجودی کالا در انبارها و خطوط تولید آماده گردید.`,
+        items: matchedPart ? [{ code: matchedPart.code, name: matchedPart.name, stock: matchedPart.minStock || 0, unit: matchedPart.unit }] : [],
       },
     };
   }

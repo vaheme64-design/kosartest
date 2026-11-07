@@ -473,18 +473,34 @@ export default function App() {
   const handleExecuteAiAction = (action: AiActionPayload) => {
     if (action.actionType === 'OPEN_RECEIPT') {
       setActiveTab('inventory');
-      setActiveInventorySubTab('MOVEMENT');
+      setActiveInventorySubTab('DASHBOARD');
       if (action.prefillReceipt) {
         setAiReceiptDraft(action.prefillReceipt);
       }
       setPendingInventoryModal('RECEIPT');
     } else if (action.actionType === 'OPEN_ISSUE') {
       setActiveTab('inventory');
-      setActiveInventorySubTab('MOVEMENT');
+      setActiveInventorySubTab('DASHBOARD');
       if (action.prefillIssue) {
         setAiIssueDraft(action.prefillIssue);
       }
       setPendingInventoryModal('ISSUE');
+    } else if (action.actionType === 'OPEN_CREATE_MO') {
+      setActiveTab('production');
+      setProductionViewMode('ERP_WORKBENCH');
+      setActiveProductionModuleTab('MULTI_PART_SCHEDULER');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('kpims:contextual-action', { detail: { actionType: 'OPEN_CREATE_MO' } }));
+      }, 120);
+    } else if (action.actionType === 'OPEN_TRACK_ORDER') {
+      setActiveTab('production');
+      setProductionViewMode('ERP_WORKBENCH');
+      setActiveProductionModuleTab('MULTI_PART_SCHEDULER');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('kpims:contextual-action', { detail: { actionType: 'OPEN_TRACK_FIRST_ORDER' } }));
+      }, 120);
+    } else if (action.actionType === 'OPEN_HEAT_TRACEABILITY') {
+      setActiveTab('sapco');
     } else if (action.actionType === 'CHECK_REORDER') {
       setActiveTab('inventory');
       setActiveInventorySubTab('ALERTS');
