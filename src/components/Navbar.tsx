@@ -39,6 +39,7 @@ import { formatToJalali } from '../utils/jalali';
 import { toPersianDigits } from '../utils/formatters';
 import { TabKey } from './Sidebar';
 import { InventorySubTab } from './inventory/InventoryModuleView';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 interface NavbarProps {
   activeTab: TabKey;
@@ -112,6 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showAppMatrix, setShowAppMatrix] = useState(false);
   const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false);
   const [showQuickCreateMenu, setShowQuickCreateMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const themeMeta = COLOR_THEMES[colorTheme];
@@ -361,8 +363,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* CENTER: Universal Global Search Bar & Quick Create Button */}
-        <div className="relative w-full lg:max-w-lg flex items-center gap-2">
+        {/* CENTER: Universal Global Search Bar */}
+        <div className="relative w-full lg:max-w-md flex items-center gap-2">
           <div
             onClick={() => setIsSearchPaletteOpen(true)}
             className={`flex-1 relative flex items-center rounded-xl pr-9 pl-14 py-2 text-xs cursor-pointer transition-all select-none ${
@@ -377,7 +379,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             />
             <span className="truncate text-slate-400 text-xs">
-              جستجو در تمام کالاها، کویل‌ها، قراردادها، اسناد و ماشین‌آلات…
+              جستجوی سراسری قطعات، دستور کار، کویل و اسناد…
             </span>
             <kbd
               className={`absolute left-2.5 top-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-medium pointer-events-none ${
@@ -389,132 +391,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               Ctrl+K
             </kbd>
           </div>
-
-          {/* Quick Create Button (همانند Quick-Create در kosar_za) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowQuickCreateMenu(!showQuickCreateMenu)}
-              title="ایجاد سریع درجا (Quick Create)"
-              className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium cursor-pointer shadow-xs transition-colors shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">ثبت سریع</span>
-            </button>
-
-            {showQuickCreateMenu && (
-              <div
-                className="absolute left-0 top-full mt-1.5 w-60 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-2xl p-1.5 z-50 text-xs space-y-1 animate-in fade-in"
-                onClick={() => setShowQuickCreateMenu(false)}
-              >
-                <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-100">
-                  ثبت سریع و درجا (بدون خروج از صفحه)
-                </div>
-                <button
-                  onClick={() => onNavigate?.('master_data')}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 text-right cursor-pointer text-slate-800"
-                >
-                  <Boxes className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>تعریف کالا / ورق جدید</span>
-                </button>
-                <button
-                  onClick={() => onNavigate?.('inventory', 'COILS')}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 text-right cursor-pointer text-slate-800"
-                >
-                  <Disc className="w-3.5 h-3.5 text-blue-600" />
-                  <span>ورود کویل و رول جدید</span>
-                </button>
-                <button
-                  onClick={() => onNavigate?.('wip')}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 text-right cursor-pointer text-slate-800"
-                >
-                  <Layers className="w-3.5 h-3.5 text-purple-600" />
-                  <span>صدور دستور کار ساخت (MO)</span>
-                </button>
-                <button
-                  onClick={() => onNavigate?.('inventory', 'DASHBOARD', 'RECEIPT')}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 text-right cursor-pointer text-slate-800"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-600" />
-                  <span>ثبت رسید ورود کالا به انبار</span>
-                </button>
-                <button
-                  onClick={() => onNavigate?.('inventory', 'DASHBOARD', 'ISSUE')}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 text-right cursor-pointer text-slate-800"
-                >
-                  <Zap className="w-3.5 h-3.5 text-rose-600" />
-                  <span>صدور حواله خروج کالا و ورق</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-
-
-
-        {/* LEFT SIDE: Template Switcher, Reorder Alert Pill, Role, Clock/Date */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Top Reorder Point Alert Pill -> Navigates directly to Inventory ALERTS page */}
+        {/* LEFT SIDE: Serene Executive Controls (PWA Install, Quiet Alerts, Bell & User Menu) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <PWAInstallButton />
+          {/* Reorder Point Alert Pill (Subtle & Informative) */}
           {reorderAlertsCount > 0 && (
             <button
               type="button"
               onClick={() => {
                 if (onNavigate) onNavigate('inventory', 'ALERTS');
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
                 criticalAlertsCount > 0
-                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
-                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
               }`}
-              title="مشاهده فهرست اقلام زیر نقطه سفارش و کسری موجودی"
+              title="مشاهده فهرست اقلام زیر نقطه سفارش"
             >
-              <BellRing
-                className={`w-3.5 h-3.5 ${
-                  criticalAlertsCount > 0 ? 'text-rose-600' : 'text-amber-600'
-                }`}
-              />
-              <span>{toPersianDigits(reorderAlertsCount)} کسری نقطه سفارش</span>
+              <BellRing className="w-3.5 h-3.5" />
+              <span>{toPersianDigits(reorderAlertsCount)} کسری موجودی</span>
             </button>
           )}
 
-          {/* Role Workspace Selector */}
-          <div
-            className={`hidden xl:flex items-center rounded-xl px-2.5 py-1.5 border ${
-              isDarkHeader
-                ? 'bg-white/10 border-white/15 text-white'
-                : 'bg-slate-50 border-slate-200 text-slate-800'
-            }`}
-          >
-            <UserCheck
-              className={`w-3.5 h-3.5 ml-1.5 shrink-0 ${
-                isDarkHeader ? 'text-emerald-400' : 'text-emerald-600'
-              }`}
-            />
-            <select
-              value={currentUser.role}
-              onChange={e => onRoleChange(e.target.value as UserRoleProfile['role'])}
-              className="bg-transparent text-xs font-bold focus:outline-none cursor-pointer"
-            >
-              {Object.entries(roleLabels).map(([roleKey, label]) => (
-                <option key={roleKey} value={roleKey} className="bg-white text-slate-900">
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Notifications Popover */}
+          {/* Operational Notifications Popover */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowNotifications(!showNotifications)}
-              className={`p-2 rounded-xl border transition-colors cursor-pointer relative ${
+              className={`p-2 rounded-lg border transition-colors cursor-pointer relative ${
                 isDarkHeader
-                  ? 'bg-white/10 hover:bg-white/20 text-white border-white/15'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  ? 'bg-white/10 hover:bg-white/15 text-white border-white/15'
+                  : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200 shadow-2xs'
               }`}
-              title="اعلان‌ها و هشدارهای عملیاتی"
+              title="اعلان‌های خط تولید و انبار"
             >
               <Bell className="w-4 h-4" />
               {reorderAlertsCount > 0 && (
@@ -523,9 +434,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {showNotifications && (
-              <div className="absolute left-0 top-full mt-1.5 w-80 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-lg p-3.5 z-50 text-xs space-y-2.5">
+              <div className="absolute left-0 top-full mt-2 w-80 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-xl p-3 z-50 text-xs space-y-2 animate-in fade-in">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="font-bold text-slate-900">اعلان‌ها و هشدارهای کارخانه</span>
+                  <span className="font-bold text-slate-900">اعلان‌ها و رویدادهای کارخانه</span>
                   <button
                     type="button"
                     onClick={() => setShowNotifications(false)}
@@ -534,7 +445,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ✕
                   </button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {reorderAlertsCount > 0 && (
                     <button
                       type="button"
@@ -542,13 +453,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                         if (onNavigate) onNavigate('inventory', 'ALERTS');
                         setShowNotifications(false);
                       }}
-                      className="w-full text-right p-2.5 bg-rose-50/70 hover:bg-rose-100/70 rounded-lg border border-rose-200 cursor-pointer block"
+                      className="w-full text-right p-2.5 bg-rose-50/60 hover:bg-rose-100/70 rounded-lg border border-rose-200 cursor-pointer block"
                     >
                       <div className="font-bold text-rose-900">
-                        هشدار نقطه سفارش ({toPersianDigits(reorderAlertsCount)} قلم کالا)
+                        هشدار کسری نقطه سفارش ({toPersianDigits(reorderAlertsCount)} قلم کالا)
                       </div>
                       <div className="text-[11px] text-rose-700 mt-0.5">
-                        برای مشاهده جدول کامل کسری‌ها و ثبت رسید جبرانی کلیک کنید ←
+                        بررسی جدول کسری‌ها و صدور دستور خرید یا تولید جبرانی ←
                       </div>
                     </button>
                   )}
@@ -559,11 +470,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                       if (onNavigate) onNavigate('inventory', 'COILS');
                       setShowNotifications(false);
                     }}
-                    className="w-full text-right p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200/70 cursor-pointer block"
+                    className="w-full text-right p-2.5 bg-slate-50 hover:bg-slate-100/80 rounded-lg border border-slate-100 cursor-pointer block"
                   >
-                    <div className="font-semibold text-slate-800">وضعیت رول‌های ورق و کویل‌پک</div>
+                    <div className="font-semibold text-slate-800">موجودی کلاف‌های ورق در انبار</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">
-                      {toPersianDigits(coilsCount)} رول فیزیکی در انبار ثبت شده و آماده رهگیری قرارداد است.
+                      {toPersianDigits(coilsCount)} رول فیزیکی با برچسب و کویل‌پک آماده برش در سالن است.
                     </div>
                   </button>
                 </div>
@@ -571,92 +482,147 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Database & Demo Controls */}
-          <button
-            onClick={onOpenErpModal}
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-xl transition-colors cursor-pointer ${
-              isDarkHeader
-                ? 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/15'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-            }`}
-            title="مشاهده وضعیت پایگاه داده و تنظیمات ERP"
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-medium">
-              {dbStatus?.isConnected ? 'PostgreSQL' : 'پایگاه داده'}
-            </span>
-          </button>
-
-          <button
-            onClick={onSeedDemo}
-            disabled={loading}
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-xl transition-colors disabled:opacity-50 cursor-pointer ${
-              isDarkHeader
-                ? 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/15'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-            }`}
-            title="بازنشانی اطلاعات نمونه کارخانه"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>داده نمونه</span>
-          </button>
-
-          {/* Clean Demo Data Button */}
-          {!showConfirmClean ? (
+          {/* Consolidated User Profile & System Menu (Odoo / SAP Fiori Style) */}
+          <div className="relative">
             <button
-              onClick={() => setShowConfirmClean(true)}
-              disabled={loading}
-              className={`p-1.5 border rounded-xl transition-colors disabled:opacity-50 cursor-pointer ${
+              type="button"
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className={`flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg border transition-all cursor-pointer ${
                 isDarkHeader
-                  ? 'bg-white/10 hover:bg-rose-500/20 text-slate-300 border-white/15'
-                  : 'text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-200'
+                  ? 'bg-white/10 hover:bg-white/15 text-white border-white/15'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200 shadow-2xs'
               }`}
-              title="پاکسازی داده‌های نمونه"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs text-slate-900">
-              <span className="text-rose-700 text-[11px]">حذف نمونه؟</span>
-              <button
-                onClick={async () => {
-                  await onCleanDemo();
-                  setShowConfirmClean(false);
-                }}
-                className="text-rose-700 hover:text-rose-900 font-bold px-1.5 py-0.5 rounded text-[11px] cursor-pointer"
-              >
-                بله
-              </button>
-              <button
-                onClick={() => setShowConfirmClean(false)}
-                className="text-slate-600 hover:text-slate-900 px-1.5 py-0.5 text-[11px] cursor-pointer"
-              >
-                لغو
-              </button>
-            </div>
-          )}
-
-          {/* Clock / Date (Image 1 style) or User / Exit (Image 2 style) */}
-          {layoutTemplate === 'HUB_WORKSPACE' ? (
-            <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-medium pl-1 tabular-nums">
-              <span>{jalaliNumeric}</span>
-              <span className="text-slate-300">|</span>
-              <span>{timeStr}</span>
-            </div>
-          ) : (
-            isDarkHeader && (
-              <div className="hidden md:flex items-center gap-3 pr-2 border-r border-slate-700 text-xs">
-                <div className="text-left leading-tight">
-                  <div className="font-bold text-white">مدیر سیستم</div>
-                  <div className="text-[10px] text-slate-400">مدیر سیستم</div>
-                </div>
-                <span className="inline-flex items-center gap-1 text-slate-300 hover:text-white cursor-pointer">
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>خروج</span>
-                </span>
+              <div className="w-6 h-6 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[11px]">
+                {currentUser.displayName ? currentUser.displayName[0] : 'ک'}
               </div>
-            )
-          )}
+              <div className="hidden md:block text-right leading-tight">
+                <div className="text-xs font-bold text-slate-900 truncate max-w-[130px]">
+                  {currentUser.displayName || 'مدیر تولید'}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate max-w-[130px]">
+                  {roleLabels[currentUser.role] || 'مدیر سیستم'}
+                </div>
+              </div>
+            </button>
+
+            {showUserMenu && (
+              <div
+                className="absolute left-0 top-full mt-2 w-72 bg-white text-slate-900 border border-slate-200 rounded-xl shadow-xl p-3 z-50 text-xs space-y-3 animate-in fade-in"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* User Info Header */}
+                <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-slate-900">{currentUser.displayName || 'مدیر کارخانه کوثر'}</div>
+                    <div className="text-[11px] text-slate-500">{roleLabels[currentUser.role]}</div>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono tabular-nums">
+                    {timeStr} · {jalaliNumeric}
+                  </div>
+                </div>
+
+                {/* Role Switcher */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    تغییر نقش کاربری (دسترسی):
+                  </label>
+                  <select
+                    value={currentUser.role}
+                    onChange={e => {
+                      onRoleChange(e.target.value as UserRoleProfile['role']);
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                  >
+                    {Object.entries(roleLabels).map(([roleKey, label]) => (
+                      <option key={roleKey} value={roleKey}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* System & Database Quick Links */}
+                <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onOpenErpModal();
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-50 text-slate-700 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-slate-500" />
+                      <span>وضعیت پایگاه داده (PostgreSQL)</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-600 font-bold">متصل</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await onSeedDemo();
+                      setShowUserMenu(false);
+                    }}
+                    disabled={loading}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 text-slate-700 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-blue-500 ${loading ? 'animate-spin' : ''}`} />
+                    <span>بازنشانی داده‌های نمونه کارخانه</span>
+                  </button>
+
+                  {!showConfirmClean ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmClean(true)}
+                      disabled={loading}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>پاکسازی داده‌های نمونه</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-lg text-xs">
+                      <span className="text-rose-700 text-[11px] font-bold">تأیید پاکسازی داده‌ها؟</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await onCleanDemo();
+                            setShowConfirmClean(false);
+                            setShowUserMenu(false);
+                          }}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-2 py-0.5 rounded text-[10px] cursor-pointer"
+                        >
+                          بله، حذف
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmClean(false)}
+                          className="text-slate-600 hover:text-slate-900 px-1.5 py-0.5 text-[10px] cursor-pointer"
+                        >
+                          انصراف
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>سامانه صنعتی کوثر · ویرایش سازمانی</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowUserMenu(false)}
+                    className="text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
+                  >
+                    بستن
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

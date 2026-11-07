@@ -4931,35 +4931,490 @@ apiRouter.post('/consumables/update-stock', (req: Request, res: Response) => {
 });
 
 // =========================================================================
-// 22. RECURSIVE PRODUCT STRUCTURES (ProductStructure Persistence)
+// 23. PLANT MAINTENANCE & TPM MODULE (Odoo Maintenance & ERPNext Maintenance)
 // =========================================================================
-let productStructuresStore: any[] = [];
+let maintenanceRequestsStore: any[] = [
+  {
+    id: 'MR-01',
+    requestCode: 'MR-1404-0101',
+    title: 'افت فشار مدار هیدرولیک و نشت سیلندر بالشتک پرس ۸۰۰ تن',
+    machineId: 'MCH-01',
+    machineCode: 'PRS-800T-G1',
+    machineName: 'پرس هیدرولیک کشش عمیق ۸۰۰ تن',
+    dieMoldId: 'DIE-01',
+    dieMoldName: 'قالب کشش عمیق کاسه سرکمک ۲۰۶',
+    type: 'CORRECTIVE',
+    priority: 'HIGH',
+    stage: 'IN_PROGRESS',
+    failureCategory: 'HYDRAULIC',
+    description: 'در حین کشش مرحله اول کاسه سرکمک، فشار مدار به زیر ۱۱۰ بار افت کرده و روغن هیدرولیک از پکینگ جک بالشتک نشتی دارد.',
+    reportedBy: 'مهندس رضایی (سرپرست شیفت پرس سنگین)',
+    assignedTechnician: 'تکنیسین اکبری',
+    team: 'تیم هیدرولیک و مکانیک',
+    requestedDate: '۱۴۰۴/۰۲/۲۰ - ۰۹:۳۰',
+    startedDate: '۱۴۰۴/۰۲/۲۰ - ۱۰:۰۰',
+    downtimeMinutes: 45,
+    sparePartsUsed: [
+      { partId: 'SP-01', partCode: 'SEAL-HYD-800', partName: 'کیت پکینگ جک بالشتک هیدرولیک', quantity: 1, unitCost: 32000000 },
+    ],
+    rootCauseNotes: 'فرسودگی کاسه‌نمد حرارتی به دلیل گرمای بیش از حد روغن و کارکرد مداوم در شیفت شب',
+    preventiveActionNotes: 'بررسی رادیاتور خنک‌کن روغن هیدرولیک و تعویض فیلتر خط برگشت',
+    costEstimate: 45000000,
+  },
+  {
+    id: 'MR-02',
+    requestCode: 'MR-1404-0102',
+    title: 'شکست فنر نیتروژنی (Gas Spring) قالب فرم رام رادیاتور',
+    machineId: 'MCH-02',
+    machineCode: 'PRS-400T-G2',
+    machineName: 'پرس مکانیکی فرم‌دهی ۴۰۰ تن',
+    dieMoldId: 'DIE-02',
+    dieMoldName: 'قالب فرم کانالی رام رادیاتور سمند',
+    type: 'CORRECTIVE',
+    priority: 'CRITICAL',
+    stage: 'WAITING_SPARES',
+    failureCategory: 'DIE_MOLD',
+    description: 'سنبه قالب در مرحله برگشت گیرپاژ کرده و یکی از فنرهای گازی نیتروژن کالیبره خالی کرده است.',
+    reportedBy: 'مهدی کریمی (اپراتور ارشد پرس)',
+    assignedTechnician: 'استاد احمدی',
+    team: 'تیم قالب‌سازی و نگهداری قالب',
+    requestedDate: '۱۴۰۴/۰۲/۱۹ - ۱۴:۱۵',
+    startedDate: '۱۴۰۴/۰۲/۱۹ - ۱۵:۰۰',
+    downtimeMinutes: 70,
+    sparePartsUsed: [
+      { partId: 'SP-02', partCode: 'GAS-SPR-FIBRO-50', partName: 'فنر گازی نیتروژنی فیبرو سایز ۵۰', quantity: 2, unitCost: 18500000 },
+    ],
+    rootCauseNotes: 'تخلیه گاز نیتروژن پس از ۱۸۰,۰۰۰ ضرب کارکرد متوالی',
+    preventiveActionNotes: 'افزودن تست فشار گاز فنرهای قالب در چک‌لیست سرویس ۵۰ هزار ضرب قالب',
+    costEstimate: 37000000,
+  },
+  {
+    id: 'MR-03',
+    requestCode: 'MR-1404-0103',
+    title: 'خطای اینترلاک و پرده نوری ایمنی اپراتور قیچی گیوتین ۶ متری',
+    machineId: 'MCH-03',
+    machineCode: 'SHR-GUI-01',
+    machineName: 'قیچی گیوتین هیدرولیک ۶ متری',
+    type: 'CORRECTIVE',
+    priority: 'MEDIUM',
+    stage: 'REPAIRED',
+    failureCategory: 'ELECTRICAL',
+    description: 'فرستنده پرده نوری سمت راست به علت لرزش ناشی از برش ورق ۴ میل از کالیبراسیون خارج شده بود.',
+    reportedBy: 'حسینی (اپراتور سالن برش)',
+    assignedTechnician: 'مهندس نجفی',
+    team: 'تیم برق و اتوماسیون صنعتی',
+    requestedDate: '۱۴۰۴/۰۲/۱۸ - ۱۱:۰۰',
+    startedDate: '۱۴۰۴/۰۲/۱۸ - ۱۱:۱۵',
+    completedDate: '۱۴۰۴/۰۲/۱۸ - ۱۱:۴۵',
+    downtimeMinutes: 30,
+    rootCauseNotes: 'شل شدن براکت نگهدارنده سنسور نوری ناشی از ارتعاشات شاسی گیوتین',
+    preventiveActionNotes: 'استفاده از پیچ‌های آلن قفل‌کننده فنری و چسب قفل رزوه Loctite',
+    costEstimate: 2000000,
+  },
+  {
+    id: 'MR-04',
+    requestCode: 'MR-1404-0104',
+    title: 'سایش لنت ترمز کلاچ پنوماتیک پرس ۱۶۰ تن ضربه‌ای',
+    machineId: 'MCH-04',
+    machineCode: 'PRS-160T-01',
+    machineName: 'پرس ضربه‌ای ۱۶۰ تن شماره ۱',
+    type: 'PREVENTIVE',
+    priority: 'LOW',
+    stage: 'CLOSED',
+    failureCategory: 'PNEUMATIC',
+    description: 'در بازرسی دوره‌ای ماهانه، ضخامت لنت ترمز به ۲.۱ میلیمتر رسیده بود (حد تعویض ۲ میلیمتر). تعویض لنت با موفقیت انجام شد.',
+    reportedBy: 'مهندس کاظمی (مسئول نت پیشگیرانه PM)',
+    assignedTechnician: 'تکنیسین محمدی',
+    team: 'تیم هیدرولیک و مکانیک',
+    requestedDate: '۱۴۰۴/۰۲/۱۵ - ۰۸:۰۰',
+    startedDate: '۱۴۰۴/۰۲/۱۵ - ۰۸:۳۰',
+    completedDate: '۱۴۰۴/۰۲/۱۵ - ۱۰:۰۰',
+    downtimeMinutes: 0, // انجام‌شده در زمان توقف برنامه‌ریزی‌شده
+    sparePartsUsed: [
+      { partId: 'SP-03', partCode: 'BRK-LINING-160', partName: 'دست کامل لنت ترمز کلاچ ارتوگل', quantity: 1, unitCost: 14000000 },
+    ],
+    rootCauseNotes: 'استهلاک طبیعی لنت ترمز پس از ۶ ماه کارکرد مداوم',
+    preventiveActionNotes: 'ثبت در کارتکس ماشین و بازرسی بعدی در آبان ۱۴۰۴',
+    costEstimate: 14000000,
+  },
+];
 
-apiRouter.get('/production/product-structures', (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    data: productStructuresStore,
-  });
+let pmPlansStore: any[] = [
+  {
+    id: 'PM-01',
+    planCode: 'PM-W-PRS800',
+    machineId: 'MCH-01',
+    machineCode: 'PRS-800T-G1',
+    machineName: 'پرس هیدرولیک کشش عمیق ۸۰۰ تن',
+    title: 'سرویس هفتگی سیستم هیدرولیک و روانکاری اسلاید پرس ۸۰۰ تن',
+    frequency: 'WEEKLY',
+    estimatedDurationMinutes: 60,
+    assignedTeam: 'تیم مکانیک و هیدرولیک',
+    lastPerformedDate: '۱۴۰۴/۰۲/۱۴',
+    nextDueDate: '۱۴۰۴/۰۲/۲۱',
+    status: 'SCHEDULED',
+    checklistItems: [
+      { id: 'CHK-01', taskDescription: 'بررسی سطح روغن مخزن اصلی هیدرولیک و درجه شفافیت', checkType: 'VISUAL', standardValue: 'نشانگر بالای گیج (سطح ماکزیمم)' },
+      { id: 'CHK-02', taskDescription: 'اندازه‌گیری فشار کاری پمپ پیستونی دبی متغیر', checkType: 'MEASURE', standardValue: '۲۵۰ الی ۲۸۰ بار در کورس کشش' },
+      { id: 'CHK-03', taskDescription: 'گریس‌کاری نقاط ۴ گانه گایدهای برنز و اسلاید رام پرس', checkType: 'LUBRICATE', standardValue: 'گریس نسوز صابون لیتیوم EP2' },
+      { id: 'CHK-04', taskDescription: 'تست عملکرد کلید قارچی توقف اضطراری (E-Stop) و سنسورهای نوری', checkType: 'VISUAL', standardValue: 'توقف آنی در زیر ۰.۱۵ ثانیه' },
+    ],
+  },
+  {
+    id: 'PM-02',
+    planCode: 'PM-M-PRS400',
+    machineId: 'MCH-02',
+    machineCode: 'PRS-400T-G2',
+    machineName: 'پرس مکانیکی فرم‌دهی ۴۰۰ تن',
+    title: 'سرویس ماهانه کلاچ پنوماتیک، شاتون و لقی میل‌لنگ پرس ۴۰۰ تن',
+    frequency: 'MONTHLY',
+    estimatedDurationMinutes: 90,
+    assignedTeam: 'تیم مکانیک پرس سنگین',
+    lastPerformedDate: '۱۴۰۴/۰۱/۲۵',
+    nextDueDate: '۱۴۰۴/۰۲/۲۵',
+    status: 'DUE',
+    checklistItems: [
+      { id: 'CHK-05', taskDescription: 'بررسی میزان لقی یاتاقان‌های شاتون و میل‌لنگ با ساعت اندیکاتور', checkType: 'MEASURE', standardValue: 'کمتر از ۰.۰۸ میلیمتر' },
+      { id: 'CHK-06', taskDescription: 'چک کردن فشار هوای رگلاتور کلاچ/ترمز پنوماتیک', checkType: 'MEASURE', standardValue: '۵.۵ الی ۶.۲ بار' },
+      { id: 'CHK-07', taskDescription: 'شستشو و تخلیه رطوبت‌گیر فیلتر هوای فستو', checkType: 'CLEAN', standardValue: 'بدون قطرات آب و ذرات روغن سوخته' },
+      { id: 'CHK-08', taskDescription: 'آچارکشی پیچ‌های میز پرس و پیچ‌های فونداسیون', checkType: 'TIGHTEN', standardValue: 'گشتاور ۴۲۰ نیوتن‌متر' },
+    ],
+  },
+  {
+    id: 'PM-03',
+    planCode: 'PM-STRK-DIE-ECU',
+    machineId: 'MCH-04',
+    machineCode: 'PRS-160T-01',
+    machineName: 'پرس ۱۶۰ تن ضربه‌ای',
+    title: 'سرویس و پولیش دوره‌ای قالب بلنکینگ براکت ECU (هر ۵۰ هزار ضرب)',
+    frequency: 'STROKE_BASED',
+    strokeInterval: 50000,
+    currentStrokeCounter: 47850,
+    estimatedDurationMinutes: 45,
+    assignedTeam: 'تیم قالب‌سازی',
+    lastPerformedDate: '۱۴۰۴/۰۱/۱۸',
+    nextDueDate: 'پس از ۲,۱۵۰ ضرب دیگر',
+    status: 'IN_PROGRESS',
+    checklistItems: [
+      { id: 'CHK-09', taskDescription: 'بازرسی چشمی لبه برنده سنبه و ماتریس از نظر پلیسه و لب‌پریدگی', checkType: 'VISUAL', standardValue: 'لبه تیز بدون پریدگی بالای ۰.۰۵ میلیمتر' },
+      { id: 'CHK-10', taskDescription: 'روان‌کاری بوش‌ها و لیدرهای راهنمای قالب (Guide Pillars)', checkType: 'LUBRICATE', standardValue: 'روغن هیدرولیک مخصوص قالب HLP-46' },
+      { id: 'CHK-11', taskDescription: 'بررسی صحت عملکرد پین‌های پران و فنرهای کششی', checkType: 'VISUAL', standardValue: 'برگشت کامل بدون تاخیر' },
+    ],
+  },
+  {
+    id: 'PM-04',
+    planCode: 'PM-D-SHR6M',
+    machineId: 'MCH-03',
+    machineCode: 'SHR-GUI-01',
+    machineName: 'قیچی گیوتین ۶ متری',
+    title: 'چک‌لیست روزانه اپراتوری و فیلرگیری تیغه‌های گیوتین',
+    frequency: 'DAILY',
+    estimatedDurationMinutes: 15,
+    assignedTeam: 'اپراتور شیفت / تکنسین کشیک',
+    lastPerformedDate: '۱۴۰۴/۰۲/۱۹',
+    nextDueDate: '۱۴۰۴/۰۲/۲۰ (امروز)',
+    status: 'SCHEDULED',
+    checklistItems: [
+      { id: 'CHK-12', taskDescription: 'تمیزکاری خط‌کش دیجیتال گِیج عقب و پاکسازی پلیسه‌های ورق', checkType: 'CLEAN', standardValue: 'سطح سنسور تمیز و عاری از براده' },
+      { id: 'CHK-13', taskDescription: 'بررسی فاصله فیلر بین تیغه بالا و پایین بر اساس ضخامت ورق روز', checkType: 'MEASURE', standardValue: '۰.۱۵ تا ۰.۲۵ میلیمتر برای ورق ۲ میل' },
+    ],
+  },
+];
+
+let sparePartsStore: any[] = [
+  {
+    id: 'SP-01',
+    code: 'SEAL-HYD-800',
+    name: 'کیت پکینگ و سیلندر جک بالشتک پرس ۸۰۰ تن',
+    category: 'SEALS',
+    currentStock: 4,
+    minStockAlert: 2,
+    unit: 'دست',
+    compatibleMachines: ['PRS-800T-G1'],
+    storageLocation: 'قفسه B-01 انبار قطعات یدکی نت',
+    unitPrice: 32000000,
+  },
+  {
+    id: 'SP-02',
+    code: 'GAS-SPR-FIBRO-50',
+    name: 'فنر گازی نیتروژنی فیبرو سایز ۵۰ (Fibro Gas Spring)',
+    category: 'MECHANICAL',
+    currentStock: 3,
+    minStockAlert: 4,
+    unit: 'عدد',
+    compatibleMachines: ['PRS-800T-G1', 'PRS-400T-G2', 'PRS-250T-01'],
+    storageLocation: 'قفسه A-04 انبار قالب و سنبه',
+    unitPrice: 18500000,
+  },
+  {
+    id: 'SP-03',
+    code: 'BRK-LINING-160',
+    name: 'دست کامل لنت ترمز کلاچ پنوماتیک پرس ۱۶۰ تن',
+    category: 'PNEUMATIC',
+    currentStock: 2,
+    minStockAlert: 2,
+    unit: 'دست',
+    compatibleMachines: ['PRS-160T-01', 'PRS-160T-02'],
+    storageLocation: 'قفسه C-02 انبار فنی نت',
+    unitPrice: 14000000,
+  },
+  {
+    id: 'SP-04',
+    code: 'OIL-HYD-VG68',
+    name: 'روغن هیدرولیک صنعتی بهران هیدرولیک H-68 (بشکه ۲۰۸ لیتر)',
+    category: 'LUBRICANT',
+    currentStock: 5,
+    minStockAlert: 3,
+    unit: 'بشکه',
+    compatibleMachines: ['PRS-800T-G1', 'SHR-GUI-01', 'PRS-250T-01'],
+    storageLocation: 'انبار روغن و روانکارهای خط پرسکاری',
+    unitPrice: 22000000,
+  },
+  {
+    id: 'SP-05',
+    code: 'SENS-LIGHT-SICK',
+    name: 'فرستنده و گیرنده پرده نوری ایمنی SICK مدل deTec4',
+    category: 'ELECTRICAL',
+    currentStock: 1,
+    minStockAlert: 2,
+    unit: 'جفت',
+    compatibleMachines: ['SHR-GUI-01', 'PRS-250T-01', 'PRS-160T-01'],
+    storageLocation: 'کمد ابزاردقیق انبار برق',
+    unitPrice: 48000000,
+  },
+  {
+    id: 'SP-06',
+    code: 'VALV-PROP-REX',
+    name: 'شیر برقی پروپورشنال کنترل جهت و دبی رکسروت Rexroth',
+    category: 'HYDRAULIC',
+    currentStock: 2,
+    minStockAlert: 1,
+    unit: 'عدد',
+    compatibleMachines: ['PRS-800T-G1'],
+    storageLocation: 'قفسه B-03 انبار هیدرولیک',
+    unitPrice: 65000000,
+  },
+];
+
+// Maintenance Requests Endpoints
+apiRouter.get('/maintenance/requests', (_req: Request, res: Response) => {
+  res.json({ success: true, data: maintenanceRequestsStore });
 });
 
-apiRouter.post('/production/product-structures', (req: Request, res: Response) => {
+apiRouter.post('/maintenance/requests', (req: Request, res: Response) => {
   try {
-    const { structures } = req.body || {};
-    if (Array.isArray(structures)) {
-      productStructuresStore = structures;
+    const payload = req.body || {};
+    const newRequest = {
+      id: `MR-${Date.now()}`,
+      requestCode: payload.requestCode || `MR-1404-${Math.floor(1000 + Math.random() * 9000)}`,
+      title: payload.title || 'درخواست تعمیرات تجهیز',
+      machineId: payload.machineId || 'MCH-01',
+      machineCode: payload.machineCode || 'PRS-800T-G1',
+      machineName: payload.machineName || 'پرس هیدرولیک ۸۰۰ تن',
+      dieMoldId: payload.dieMoldId,
+      dieMoldName: payload.dieMoldName,
+      type: payload.type || 'CORRECTIVE',
+      priority: payload.priority || 'HIGH',
+      stage: payload.stage || 'NEW',
+      failureCategory: payload.failureCategory || 'MECHANICAL',
+      description: payload.description || '',
+      reportedBy: payload.reportedBy || 'سرپرست شیفت',
+      assignedTechnician: payload.assignedTechnician || '',
+      team: payload.team || 'تیم مکانیک و هیدرولیک',
+      requestedDate: payload.requestedDate || '۱۴۰۴/۰۲/۲۰',
+      startedDate: payload.startedDate,
+      completedDate: payload.completedDate,
+      downtimeMinutes: Number(payload.downtimeMinutes) || 0,
+      sparePartsUsed: Array.isArray(payload.sparePartsUsed) ? payload.sparePartsUsed : [],
+      rootCauseNotes: payload.rootCauseNotes || '',
+      preventiveActionNotes: payload.preventiveActionNotes || '',
+      costEstimate: Number(payload.costEstimate) || 0,
+    };
+    maintenanceRequestsStore = [newRequest, ...maintenanceRequestsStore];
+    res.status(201).json({
+      success: true,
+      message: `درخواست تعمیرات ${newRequest.requestCode} با موفقیت ثبت و به تیم نت ارجاع گردید.`,
+      data: newRequest,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در ثبت درخواست تعمیرات' });
+  }
+});
+
+apiRouter.put('/maintenance/requests/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const payload = req.body || {};
+    let found = false;
+    maintenanceRequestsStore = maintenanceRequestsStore.map(item => {
+      if (item.id === id || item.requestCode === id) {
+        found = true;
+        return { ...item, ...payload };
+      }
+      return item;
+    });
+    if (!found) {
+      return res.status(404).json({ success: false, error: 'درخواست تعمیرات یافت نشد.' });
     }
     res.json({
       success: true,
-      message: 'ساختار درختی محصولات با موفقیت ذخیره و در برنامه‌ریزی تولید (MRP) بروزرسانی شد.',
-      data: productStructuresStore,
+      message: 'دستور کار تعمیرات با موفقیت بروزرسانی شد.',
+      data: maintenanceRequestsStore.find(i => i.id === id || i.requestCode === id),
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'خطا در ذخیره ساختار درختی محصول',
-    });
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در بروزرسانی درخواست نت' });
   }
 });
+
+apiRouter.delete('/maintenance/requests/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    maintenanceRequestsStore = maintenanceRequestsStore.filter(i => i.id !== id && i.requestCode !== id);
+    res.json({ success: true, message: 'درخواست تعمیرات با موفقیت حذف گردید.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در حذف درخواست نت' });
+  }
+});
+
+// Preventive Maintenance (PM) Endpoints
+apiRouter.get('/maintenance/pm-plans', (_req: Request, res: Response) => {
+  res.json({ success: true, data: pmPlansStore });
+});
+
+apiRouter.post('/maintenance/pm-plans', (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {};
+    const newPlan = {
+      id: `PM-${Date.now()}`,
+      planCode: payload.planCode || `PM-${Math.floor(1000 + Math.random() * 9000)}`,
+      machineId: payload.machineId,
+      machineCode: payload.machineCode,
+      machineName: payload.machineName,
+      title: payload.title,
+      frequency: payload.frequency || 'MONTHLY',
+      strokeInterval: payload.strokeInterval,
+      currentStrokeCounter: payload.currentStrokeCounter || 0,
+      estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 60,
+      assignedTeam: payload.assignedTeam || 'تیم مکانیک',
+      lastPerformedDate: payload.lastPerformedDate,
+      nextDueDate: payload.nextDueDate || '۱۴۰۴/۰۲/۳۰',
+      status: payload.status || 'SCHEDULED',
+      checklistItems: Array.isArray(payload.checklistItems) ? payload.checklistItems : [],
+    };
+    pmPlansStore = [newPlan, ...pmPlansStore];
+    res.status(201).json({
+      success: true,
+      message: 'برنامه نت پیشگیرانه جدید در تقویم سرویس کارخانه ثبت شد.',
+      data: newPlan,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در تعریف برنامه نت پیشگیرانه' });
+  }
+});
+
+apiRouter.post('/maintenance/pm-plans/:id/complete', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { executionDate, notes, technician } = req.body || {};
+    let updatedPlan: any = null;
+    pmPlansStore = pmPlansStore.map(plan => {
+      if (plan.id === id || plan.planCode === id) {
+        updatedPlan = {
+          ...plan,
+          status: 'COMPLETED',
+          lastPerformedDate: executionDate || '۱۴۰۴/۰۲/۲۰',
+          nextDueDate: '۱۴۰۴/۰۳/۲۰',
+          checklistItems: plan.checklistItems.map((c: any) => ({ ...c, isDone: true })),
+        };
+        return updatedPlan;
+      }
+      return plan;
+    });
+    if (!updatedPlan) {
+      return res.status(404).json({ success: false, error: 'برنامه نت پیشگیرانه یافت نشد.' });
+    }
+    res.json({
+      success: true,
+      message: `سرویس دوره‌ای «${updatedPlan.title}» ثبت و موعد بعدی بازتراز گردید.`,
+      data: updatedPlan,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در ثبت انجام سرویس نت' });
+  }
+});
+
+// Spare Parts Endpoints
+apiRouter.get('/maintenance/spare-parts', (_req: Request, res: Response) => {
+  res.json({ success: true, data: sparePartsStore });
+});
+
+apiRouter.post('/maintenance/spare-parts', (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {};
+    const newSpare = {
+      id: `SP-${Date.now()}`,
+      code: payload.code || `SP-${Date.now().toString().slice(-4)}`,
+      name: payload.name,
+      category: payload.category || 'MECHANICAL',
+      currentStock: Number(payload.currentStock) || 0,
+      minStockAlert: Number(payload.minStockAlert) || 2,
+      unit: payload.unit || 'عدد',
+      compatibleMachines: Array.isArray(payload.compatibleMachines) ? payload.compatibleMachines : [],
+      storageLocation: payload.storageLocation || 'انبار فنی نت',
+      unitPrice: Number(payload.unitPrice) || 0,
+    };
+    sparePartsStore = [newSpare, ...sparePartsStore];
+    res.status(201).json({
+      success: true,
+      message: 'قطعه یدکی جدید در انبار نت ثبت گردید.',
+      data: newSpare,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در ثبت قطعه یدکی' });
+  }
+});
+
+// TPM Metrics Summary Endpoint
+apiRouter.get('/maintenance/tpm-metrics', (_req: Request, res: Response) => {
+  try {
+    const totalDowntimeMin = maintenanceRequestsStore.reduce((acc, curr) => acc + (Number(curr.downtimeMinutes) || 0), 0);
+    const breakdownCount = maintenanceRequestsStore.filter(r => r.type === 'CORRECTIVE').length;
+    const completedPmCount = pmPlansStore.filter(p => p.status === 'COMPLETED').length;
+    const totalPmCount = pmPlansStore.length;
+
+    const causesMap: Record<string, { count: number; min: number }> = {};
+    maintenanceRequestsStore.forEach(r => {
+      const cat = r.failureCategory || 'MECHANICAL';
+      if (!causesMap[cat]) causesMap[cat] = { count: 0, min: 0 };
+      causesMap[cat].count += 1;
+      causesMap[cat].min += Number(r.downtimeMinutes) || 0;
+    });
+
+    const topFailureCauses = Object.entries(causesMap).map(([cause, val]) => ({
+      cause,
+      downtimeMinutes: val.min,
+      count: val.count,
+      percentage: totalDowntimeMin > 0 ? Math.round((val.min / totalDowntimeMin) * 100) : 0,
+    })).sort((a, b) => b.downtimeMinutes - a.downtimeMinutes);
+
+    const metrics = {
+      mtbfHours: breakdownCount > 0 ? Math.round((480 - totalDowntimeMin / 60) / breakdownCount) : 120,
+      mttrHours: breakdownCount > 0 ? Math.round((totalDowntimeMin / 60 / breakdownCount) * 10) / 10 : 1.2,
+      availabilityRatePercent: Math.round(((480 - totalDowntimeMin / 60) / 480) * 1000) / 10,
+      overallOeePercent: 78.4,
+      totalDowntimeHours: Math.round((totalDowntimeMin / 60) * 10) / 10,
+      breakdownCount,
+      preventiveComplianceRate: totalPmCount > 0 ? Math.round((completedPmCount / totalPmCount) * 100) : 92,
+      pmpRatio: Math.round((pmPlansStore.length / Math.max(1, pmPlansStore.length + breakdownCount)) * 100),
+      topFailureCauses,
+    };
+
+    res.json({ success: true, data: metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در محاسبه شاخص‌های TPM' });
+  }
+});
+
 
 
 

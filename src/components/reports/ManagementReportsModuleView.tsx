@@ -54,6 +54,7 @@ import { ConsumablesForecastView } from '../planning/ConsumablesForecastView';
 import { MrpModuleView } from '../planning/MrpModuleView';
 import { ComprehensiveProductionReportView } from './ComprehensiveProductionReportView';
 import { ProductionWorkflowDocumentationView } from '../planning/ProductionWorkflowDocumentationView';
+import { PlantMaintenanceModuleView } from '../maintenance/PlantMaintenanceModuleView';
 import { TableSkeleton, KpiCardsSkeleton, ChartSkeleton } from '../ui/Skeleton';
 
 export type ReportTypeKey =
@@ -78,7 +79,8 @@ export type ReportTypeKey =
   | 'consumables_forecast'
   | 'mrp_forecast'
   | 'comprehensive_production'
-  | 'production_workflow';
+  | 'production_workflow'
+  | 'tpm_maintenance';
 
 interface ManagementReportsModuleViewProps {
   parts: Part[];
@@ -145,6 +147,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
     { id: 'mrp_forecast', title: '۲۰. پیش‌بینی نیازمندی مواد و موازنه کلاف (MRP)', category: 'مواد', description: 'انفجار چندسطحی BOM، کسری خالص ورق و پیش‌بینی نیازمندی کلاف بر اساس سفارشات ساپکو' },
     { id: 'comprehensive_production', title: '۲۱. گزارش جامع تولید: شاخص‌های بهره‌وری (OEE)، توقفات و انحراف برنامه', category: 'تولید', description: 'نمودار درختی شکست OEE، خط زمان (Timeline) توقفات شیفت و ماتریس انحراف از برنامه (Schedule Adherence)' },
     { id: 'production_workflow', title: '۲۲. مستند فنی و جریان فرآیند تولید (Workflow استاندارد SAP PP)', category: 'تولید', description: 'دیاگرام تعاملی فرآیند دریافت سفارش، انفجار مواد BOM، زمان‌بندی پله‌ای، رهگیری WIP و صدور خودکار رسید انبار' },
+    { id: 'tpm_maintenance', title: '۲۳. مدیریت نگهداری و تعمیرات (TPM)، دستورکارها، MTBF و توقفات تجهیزات', category: 'ماشین‌آلات', description: 'کانبان دستورکارهای تعمیرات شکست CM، برنامه‌ریزی سرویس‌های دوره‌ای PM، پارتو علل خرابی و شاخص‌های قابلیت اطمینان MTBF/MTTR (استاندارد Odoo/ERPNext)' },
   ];
 
   const isStandaloneModule =
@@ -153,7 +156,8 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
     activeReport === 'consumables_forecast' ||
     activeReport === 'mrp_forecast' ||
     activeReport === 'comprehensive_production' ||
-    activeReport === 'production_workflow';
+    activeReport === 'production_workflow' ||
+    activeReport === 'tpm_maintenance';
 
   const fetchActiveReport = async () => {
     if (isStandaloneModule) return;
@@ -729,6 +733,7 @@ export const ManagementReportsModuleView: React.FC<ManagementReportsModuleViewPr
       {/* Standalone Analytical & Forecasting Modules */}
       {activeReport === 'comprehensive_production' && <ComprehensiveProductionReportView />}
       {activeReport === 'production_workflow' && <ProductionWorkflowDocumentationView />}
+      {activeReport === 'tpm_maintenance' && <PlantMaintenanceModuleView machines={machines} />}
       {activeReport === 'oee_module' && <OeeModuleView machines={machines} />}
       {activeReport === 'machine_utilization' && <MachineUtilizationView machines={machines} />}
       {activeReport === 'consumables_forecast' && <ConsumablesForecastView />}

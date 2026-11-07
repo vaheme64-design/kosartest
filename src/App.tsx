@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
-import { Sidebar, TabKey } from './components/Sidebar';
+import { Sidebar, TabKey, SubModuleNavParams, MachineSubTabKey } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { TransactionsVouchersView } from './components/TransactionsVouchersView';
 import { InventoryModuleView, InventorySubTab } from './components/inventory/InventoryModuleView';
@@ -9,12 +9,14 @@ import { MachinesView } from './components/MachinesView';
 import { UserManagementView } from './components/UserManagementView';
 import { SapcoMaterialsView } from './components/SapcoMaterialsView';
 import { ProductionWipModuleView } from './components/wip/ProductionWipModuleView';
-import { ProductionPlanningModuleView } from './components/planning/ProductionPlanningModuleView';
-import { ErpProductionWorkbenchView } from './components/production/ErpProductionWorkbenchView';
+import { ProductionPlanningModuleView, PlanningSubTabKey } from './components/planning/ProductionPlanningModuleView';
+import { ErpProductionWorkbenchView, ProductionWorkbenchSubTab } from './components/production/ErpProductionWorkbenchView';
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
 import { TemplateSwitcherModal } from './components/TemplateSwitcherModal';
 import { AiAssistantModal } from './components/AiAssistantModal';
+import { ContextualActionMenu } from './components/common/ContextualActionMenu';
+import { OfflineIndicator } from './components/pwa/PWAInstallButton';
 import { AiActionPayload } from './types/ai';
 import { ErpLayoutTemplate, ErpColorTheme } from './types/theme';
 
@@ -44,6 +46,9 @@ export default function App() {
   const [aiReceiptDraft, setAiReceiptDraft] = useState<any>(null);
   const [aiIssueDraft, setAiIssueDraft] = useState<any>(null);
   const [productionViewMode, setProductionViewMode] = useState<'ERP_WORKBENCH' | 'VOUCHERS'>('ERP_WORKBENCH');
+  const [activeProductionModuleTab, setActiveProductionModuleTab] = useState<ProductionWorkbenchSubTab>('MULTI_PART_SCHEDULER');
+  const [activePlanningSubTab, setActivePlanningSubTab] = useState<PlanningSubTabKey>('erp_workbench');
+  const [activeMachineSubTab, setActiveMachineSubTab] = useState<MachineSubTabKey>('machines');
 
   // Multi-Template & Color Theme Engine (Persisted in localStorage)
   const [layoutTemplate, setLayoutTemplate] = useState<ErpLayoutTemplate>(() => {
@@ -124,7 +129,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch all data from server
+  // Fetch all data from server with Offline Factory Floor Cache fallback
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
@@ -162,8 +167,46 @@ export default function App() {
       if (hallsRes.success) setHalls(hallsRes.data);
       if (plansRes.success) setPlans(plansRes.data);
       if (coilsRes.success) setCoils(coilsRes.data);
+
+      try {
+        localStorage.setItem(
+          'kpims_offline_erp_snapshot',
+          JSON.stringify({
+            summary: sumRes.data,
+            transactions: txRes.data,
+            parts: partsRes.data,
+            machines: machinesRes.data,
+            routings: routingsRes.data,
+            dies: diesRes.data,
+            operators: opsRes.data,
+            halls: hallsRes.data,
+            plans: plansRes.data,
+            coils: coilsRes.data,
+          })
+        );
+      } catch {
+        // ignore quota errors
+      }
     } catch (err) {
-      console.error('Error fetching data from server:', err);
+      console.warn('Network unavailable — loading factory data from offline snapshot:', err);
+      try {
+        const cached = localStorage.getItem('kpims_offline_erp_snapshot');
+        if (cached) {
+          const snap = JSON.parse(cached);
+          if (snap.summary) setSummary(snap.summary);
+          if (snap.transactions) setTransactions(snap.transactions);
+          if (snap.parts) setParts(snap.parts);
+          if (snap.machines) setMachines(snap.machines);
+          if (snap.routings) setRoutings(snap.routings);
+          if (snap.dies) setDies(snap.dies);
+          if (snap.operators) setOperators(snap.operators);
+          if (snap.halls) setHalls(snap.halls);
+          if (snap.plans) setPlans(snap.plans);
+          if (snap.coils) setCoils(snap.coils);
+        }
+      } catch {
+        // ignore
+      }
     } finally {
       setLoading(false);
     }
@@ -173,7 +216,7 @@ export default function App() {
     loadAllData();
   }, [loadAllData]);
 
-  // Handle Voucher Submission
+  // Handle Voucher Submission (Online + Offline Queue Support)
   const handleSubmitVoucher = async (payload: any) => {
     try {
       const enrichedPayload = {
@@ -196,6 +239,19 @@ export default function App() {
       await loadAllData();
       return { success: true, message: data.message };
     } catch (err) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        try {
+          const q = JSON.parse(localStorage.getItem('kpims_offline_voucher_queue') || '[]');
+          q.push({ ...payload, queuedAt: new Date().toISOString() });
+          localStorage.setItem('kpims_offline_voucher_queue', JSON.stringify(q));
+        } catch {
+          // ignore
+        }
+        return {
+          success: true,
+          message: 'سند در صف آفلاین کارگاه ذخیره شد و به محض اتصال به شبکه همگام‌سازی می‌شود.',
+        };
+      }
       return {
         success: false,
         message: err instanceof Error ? err.message : 'خطای ارتباط با سرور',
@@ -404,6 +460,16 @@ export default function App() {
     }
   };
 
+  const handleSubModuleNavigate = (tab: TabKey, navParams?: SubModuleNavParams) => {
+    setActiveTab(tab);
+    if (!navParams) return;
+    if (navParams.inventorySubTab) setActiveInventorySubTab(navParams.inventorySubTab);
+    if (navParams.productionViewMode) setProductionViewMode(navParams.productionViewMode);
+    if (navParams.productionModuleTab) setActiveProductionModuleTab(navParams.productionModuleTab);
+    if (navParams.planningSubTab) setActivePlanningSubTab(navParams.planningSubTab);
+    if (navParams.machineSubTab) setActiveMachineSubTab(navParams.machineSubTab);
+  };
+
   const handleExecuteAiAction = (action: AiActionPayload) => {
     if (action.actionType === 'OPEN_RECEIPT') {
       setActiveTab('inventory');
@@ -486,11 +552,24 @@ export default function App() {
     <Sidebar
       activeTab={activeTab}
       activeInventorySubTab={activeInventorySubTab}
+      activeProductionViewMode={productionViewMode}
+      activeProductionModuleTab={activeProductionModuleTab}
+      activePlanningSubTab={activePlanningSubTab}
+      activeMachineSubTab={activeMachineSubTab}
       layoutTemplate={layoutTemplate}
       colorTheme={colorTheme}
-      onTabChange={(tab, invSubTab) => {
+      onTabChange={(tab, navParams) => {
         setActiveTab(tab);
-        if (invSubTab) setActiveInventorySubTab(invSubTab);
+        if (!navParams) return;
+        if (typeof navParams === 'string') {
+          setActiveInventorySubTab(navParams as InventorySubTab);
+          return;
+        }
+        if (navParams.inventorySubTab) setActiveInventorySubTab(navParams.inventorySubTab);
+        if (navParams.productionViewMode) setProductionViewMode(navParams.productionViewMode);
+        if (navParams.productionModuleTab) setActiveProductionModuleTab(navParams.productionModuleTab);
+        if (navParams.planningSubTab) setActivePlanningSubTab(navParams.planningSubTab);
+        if (navParams.machineSubTab) setActiveMachineSubTab(navParams.machineSubTab);
       }}
       onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
       onOpenAiAssistant={() => setIsAiModalOpen(true)}
@@ -512,8 +591,15 @@ export default function App() {
           summary={summary}
           recentTransactions={transactions}
           machines={machines}
+          parts={parts}
+          routings={routings}
+          dies={dies}
+          halls={halls}
+          coils={coils}
           onNavigateToTab={handleDeepNavigate}
+          onNavigateSubModule={handleSubModuleNavigate}
           onOpenNewVoucher={handleOpenVoucherWithType}
+          onSubmitVoucher={handleSubmitVoucher}
         />
       )}
 
@@ -576,35 +662,40 @@ export default function App() {
           {/* 4. Production */}
           {activeTab === 'production' && (
             <div className="space-y-4">
-              <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap items-center gap-2 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setProductionViewMode('ERP_WORKBENCH')}
-                  className={`flex-1 min-w-[240px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    productionViewMode === 'ERP_WORKBENCH'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  ۱. فرآیند جامع تولید از سفارش تا برنامه روزانه و انتقال مانده کار (استاندارد SAP / Odoo)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProductionViewMode('VOUCHERS')}
-                  className={`flex-1 min-w-[240px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    productionViewMode === 'VOUCHERS'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  ۲. ثبت تکی اسناد کارگاهی (ورود ورق، تولید ایستگاهی و ضایعات)
-                </button>
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setProductionViewMode('ERP_WORKBENCH')}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      productionViewMode === 'ERP_WORKBENCH'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    میز کار و برنامه تولید
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProductionViewMode('VOUCHERS')}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      productionViewMode === 'VOUCHERS'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    ثبت قبض تکی کارگاه
+                  </button>
+                </div>
               </div>
 
               {productionViewMode === 'ERP_WORKBENCH' ? (
                 <ErpProductionWorkbenchView
                   parts={parts}
                   routings={routings}
+                  machines={machines}
+                  initialModuleTab={activeProductionModuleTab}
+                  onModuleTabChange={setActiveProductionModuleTab}
                   onRefreshData={loadAllData}
                 />
               ) : (
@@ -618,6 +709,7 @@ export default function App() {
                   initialPartId={initialPartId}
                   initialStageId={initialStageId}
                   onSubmitVoucher={handleSubmitVoucher}
+                  onTrackVoucher={() => handleDeepNavigate('inventory', 'MOVEMENT')}
                 />
               )}
             </div>
@@ -638,8 +730,11 @@ export default function App() {
           {activeTab === 'planning' && (
             <ProductionPlanningModuleView
               parts={parts}
+              routings={routings}
               machines={machines}
               dies={dies}
+              initialSubTab={activePlanningSubTab}
+              onSubTabChange={setActivePlanningSubTab}
               onGlobalRefresh={loadAllData}
             />
           )}
@@ -652,6 +747,8 @@ export default function App() {
               operators={operators}
               halls={halls}
               parts={parts}
+              initialSubTab={activeMachineSubTab}
+              onSubTabChange={setActiveMachineSubTab}
               onSaveMachine={handleSaveMachine}
               onSaveDie={handleSaveDie}
               onDeleteDie={handleDeleteDie}
@@ -711,6 +808,17 @@ export default function App() {
           </div>
         </>
       )}
+
+      {/* Contextual Action Floating Menu (Bottom-Right of Each View) */}
+      <ContextualActionMenu
+        activeTab={activeTab}
+        onNavigate={handleDeepNavigate}
+        onSubModuleNavigate={handleSubModuleNavigate}
+        onOpenNewVoucher={handleOpenVoucherWithType}
+      />
+
+      {/* Offline Mode Indicator for Factory Floor Operations */}
+      <OfflineIndicator />
 
       {/* Template & Color Theme Switcher + UX/UI Analysis Modal */}
       <TemplateSwitcherModal

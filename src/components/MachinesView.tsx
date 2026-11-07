@@ -39,6 +39,7 @@ import {
 import { toPersianDigits, formatNumber } from '../utils/formatters';
 import { OeeModuleView } from './reports/OeeModuleView';
 import { MachineUtilizationView } from './reports/MachineUtilizationView';
+import { PlantMaintenanceModuleView } from './maintenance/PlantMaintenanceModuleView';
 import { MasterDataSkeleton } from './ui/Skeleton';
 import { StandardTable, StandardTableHeader, StandardTableRow, StandardTableCell, StandardTableHeadCell } from './common/StandardTable';
 import { SearchableSelect } from './common/SearchableSelect';
@@ -55,7 +56,8 @@ interface MachinesViewProps {
   onSaveOperator?: (op: Partial<Operator>) => Promise<{ success: boolean; message?: string; error?: string }>;
   onDeleteOperator?: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   onSaveHall?: (hall: Partial<FactoryHall>) => Promise<{ success: boolean; message?: string; error?: string }>;
-  initialSubTab?: 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
+  initialSubTab?: 'machines' | 'maintenance' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
+  onSubTabChange?: (tab: 'machines' | 'maintenance' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators') => void;
 }
 
 export const MachinesView: React.FC<MachinesViewProps> = ({
@@ -71,8 +73,9 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   onDeleteOperator,
   onSaveHall,
   initialSubTab = 'machines',
+  onSubTabChange,
 }) => {
-  type SubTab = 'machines' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
+  type SubTab = 'machines' | 'maintenance' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
   const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialSubTab);
 
   useEffect(() => {
@@ -80,6 +83,11 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
+  const handleSelectSubTab = (tab: SubTab) => {
+    setActiveSubTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
+  };
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -425,28 +433,33 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
       shortLabel: 'پرس‌ها و ماشین‌آلات',
     },
     {
+      id: 'maintenance',
+      label: '۲. نگهداری و تعمیرات، دستورکارها و TPM (استاندارد Odoo / ERPNext)',
+      shortLabel: 'نگهداری و تعمیرات (TPM)',
+    },
+    {
       id: 'oee',
-      label: '۲. ماژول OEE و ۶ ضایعه بزرگ',
+      label: '۳. ماژول OEE و ۶ ضایعه بزرگ',
       shortLabel: 'داشبورد OEE',
     },
     {
       id: 'utilization',
-      label: '۳. گزارش بهره ماشین و کارکرد',
+      label: '۴. گزارش بهره ماشین و کارکرد',
       shortLabel: 'بهره ماشین',
     },
     {
       id: 'dies',
-      label: `۴. قالب‌های پرس و فیکسچرها (${toPersianDigits(dies.length)} قالب)`,
+      label: `۵. قالب‌های پرس و فیکسچرها (${toPersianDigits(dies.length)} قالب)`,
       shortLabel: 'قالب‌های پرس',
     },
     {
       id: 'halls',
-      label: `۵. سالن‌ها و نواحی کارخانه (${toPersianDigits(halls.length)} سالن)`,
+      label: `۶. سالن‌ها و نواحی کارخانه (${toPersianDigits(halls.length)} سالن)`,
       shortLabel: 'سالن‌های کارخانه',
     },
     {
       id: 'operators',
-      label: `۶. اپراتورها و پرسنل خطوط (${toPersianDigits(operators.length)} نفر)`,
+      label: `۷. اپراتورها و پرسنل خطوط (${toPersianDigits(operators.length)} نفر)`,
       shortLabel: 'اپراتورها و پرسنل',
     },
   ];
@@ -510,7 +523,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
               <span className="text-slate-500 font-medium">انتخاب بخش ماشین‌آلات و ظرفیت:</span>
               <select
                 value={activeSubTab}
-                onChange={e => setActiveSubTab(e.target.value as SubTab)}
+                onChange={e => handleSelectSubTab(e.target.value as SubTab)}
                 className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
                 {subTabsList.map(tab => (
@@ -527,7 +540,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveSubTab(tab.id)}
+                  onClick={() => handleSelectSubTab(tab.id)}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer border ${
                     activeSubTab === tab.id
                       ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
@@ -545,6 +558,15 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* TAB MAINTENANCE & TPM MODULE (Odoo Maintenance & ERPNext Asset Maintenance) */}
+      {activeSubTab === 'maintenance' && (
+        <PlantMaintenanceModuleView
+          machines={machines}
+          dies={dies}
+          operators={operators}
+        />
+      )}
 
       {/* TAB OEE MODULE */}
       {activeSubTab === 'oee' && <OeeModuleView machines={machines} />}

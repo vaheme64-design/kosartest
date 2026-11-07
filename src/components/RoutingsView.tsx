@@ -50,6 +50,8 @@ interface RoutingsViewProps {
   onSaveRouting: (routing: Partial<Routing>) => Promise<{ success: boolean; message?: string; error?: string }>;
   onDeleteRouting?: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   onDirectProduce?: (partId: string, stageId?: string, machineId?: string) => void;
+  onSaveMachine?: (mch: Partial<Machine>) => Promise<{ success: boolean; message?: string; error?: string }>;
+  onSaveDie?: (die: Partial<DieMold>) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 export const RoutingsView: React.FC<RoutingsViewProps> = ({
@@ -60,6 +62,8 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
   onSaveRouting,
   onDeleteRouting,
   onDirectProduce,
+  onSaveMachine,
+  onSaveDie,
 }) => {
   const [selectedRoutingId, setSelectedRoutingId] = useState<string>(routings[0]?.id || '');
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
@@ -90,6 +94,24 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
+
+  // Quick Add Machine / Press Modal State
+  const [isQuickMachineModalOpen, setIsQuickMachineModalOpen] = useState(false);
+  const [quickMachineCode, setQuickMachineCode] = useState('');
+  const [quickMachineName, setQuickMachineName] = useState('');
+  const [quickMachineTonnage, setQuickMachineTonnage] = useState<number>(250);
+  const [quickMachineHall, setQuickMachineHall] = useState('سالن پرس');
+  const [savingQuickMachine, setSavingQuickMachine] = useState(false);
+
+  // Quick Add Die / Mold Modal State
+  const [isQuickDieModalOpen, setIsQuickDieModalOpen] = useState(false);
+  const [quickDieCode, setQuickDieCode] = useState('');
+  const [quickDieName, setQuickDieName] = useState('');
+  const [quickDieTonnage, setQuickDieTonnage] = useState<number>(250);
+  const [savingQuickDie, setSavingQuickDie] = useState(false);
+
+  // Toggle for showing all dies vs only part-correlated dies
+  const [showAllDies, setShowAllDies] = useState(false);
 
   // New Routing Form State
   const [newRoutingPartId, setNewRoutingPartId] = useState('');
@@ -152,6 +174,118 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
     }
     return filteredRoutings[0] || routings[0] || null;
   }, [routings, selectedRoutingId, filteredRoutings]);
+
+  // ERP/MES Concept: Part-Die Correlation (همبستگی قطعه با قالب)
+  // Only dies specifically tagged or correlated with this routing's part (by partId, partCode or name match)
+  const correlatedDies = useMemo(() => {
+    if (!activeRouting) return dies;
+    const partId = activeRouting.partId;
+    const partCode = (activeRouting.partCode || '').toLowerCase();
+    const partName = (activeRouting.partName || '').toLowerCase();
+
+    const matched = dies.filter(d => {
+      if (d.partId && d.partId === partId) return true;
+      if (d.partCode && d.partCode.toLowerCase() === partCode) return true;
+      // Heuristic correlation by name/code substring
+      if (partCode && d.code.toLowerCase().includes(partCode)) return true;
+      if (partCode && d.name.toLowerCase().includes(partCode)) return true;
+      if (partName && d.name.toLowerCase().includes(partName)) return true;
+      return false;
+    });
+
+    return matched;
+  }, [dies, activeRouting]);
+
+  // Quick Add Machine / Press Handler (ERPNext / Odoo workcenter creation pattern)
+  const handleCreateQuickMachine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickMachineName.trim()) return;
+    setSavingQuickMachine(true);
+    try {
+      const generatedCode = quickMachineCode.trim() || `PRS-${quickMachineTonnage}T-${Date.now().toString().slice(-3)}`;
+      const newMch: Partial<Machine> = {
+        code: generatedCode,
+        name: quickMachineName.trim(),
+        tonnage: quickMachineTonnage,
+        processType: (stepData.processType as ProcessType) || 'BLANKING',
+        capabilities: [(stepData.processType as ProcessType) || 'BLANKING'],
+        location: quickMachineHall,
+        status: 'ACTIVE',
+      };
+
+      if (onSaveMachine) {
+        await onSaveMachine(newMch);
+      } else {
+        await fetch('/api/machines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMch),
+        });
+      }
+
+      setStepData(prev => ({
+        ...prev,
+        machineId: generatedCode,
+        machineName: quickMachineName.trim(),
+        requiredTonnage: quickMachineTonnage,
+      }));
+      setIsQuickMachineModalOpen(false);
+      setQuickMachineName('');
+      setQuickMachineCode('');
+    } catch (err) {
+      console.error('Failed to quick add machine:', err);
+    } finally {
+      setSavingQuickMachine(false);
+    }
+  };
+
+  // Quick Add Die / Mold Handler (Frappe/ERPNext Tool/Die creation pattern)
+  const handleCreateQuickDie = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickDieName.trim()) return;
+    setSavingQuickDie(true);
+    try {
+      const partCode = activeRouting?.partCode || 'PART';
+      const generatedCode = quickDieCode.trim() || `DIE-${partCode}-${Date.now().toString().slice(-3)}`;
+      const newDie: Partial<DieMold> = {
+        code: generatedCode,
+        name: quickDieName.trim(),
+        partId: activeRouting?.partId || '',
+        partCode: activeRouting?.partCode || '',
+        partName: activeRouting?.partName || '',
+        processType: (stepData.processType as ProcessType) || 'BLANKING',
+        requiredTonnage: quickDieTonnage,
+        status: 'READY',
+        strokeLifeTarget: 500000,
+        currentStrokes: 0,
+        location: 'انبار قالب‌ها — ردیف A',
+      };
+
+      if (onSaveDie) {
+        await onSaveDie(newDie);
+      } else {
+        await fetch('/api/dies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newDie),
+        });
+      }
+
+      setStepData(prev => ({
+        ...prev,
+        dieMoldId: generatedCode,
+        dieMoldName: quickDieName.trim(),
+        requiredTonnage: quickDieTonnage,
+      }));
+      setIsQuickDieModalOpen(false);
+      setQuickDieName('');
+      setQuickDieCode('');
+    } catch (err) {
+      console.error('Failed to quick add die:', err);
+    } finally {
+      setSavingQuickDie(false);
+    }
+  };
 
   // Open Step Modal for Add or Edit
   const handleOpenAddStep = () => {
@@ -1020,7 +1154,18 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">پرس / دستگاه انتسابی</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-medium text-slate-700">پرس / دستگاه انتسابی</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickMachineModalOpen(true)}
+                      className="text-[10px] text-indigo-700 hover:text-indigo-900 font-bold flex items-center gap-0.5 cursor-pointer"
+                      title="افزودن سریع پرس جدید بدون خروج از این صفحه"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>+ پرس جدید</span>
+                    </button>
+                  </div>
                   <select
                     value={stepData.machineId || ''}
                     onChange={e => setStepData({ ...stepData, machineId: e.target.value })}
@@ -1038,19 +1183,56 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">قالب پرس متصل به این مرحله</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-medium text-slate-700">قالب پرس متصل (همبسته با قطعه)</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickDieModalOpen(true)}
+                      className="text-[10px] text-amber-700 hover:text-amber-900 font-bold flex items-center gap-0.5 cursor-pointer"
+                      title="افزودن سریع قالب جدید متصل به این قطعه"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>+ قالب جدید</span>
+                    </button>
+                  </div>
                   <select
                     value={stepData.dieMoldId || ''}
-                    onChange={e => setStepData({ ...stepData, dieMoldId: e.target.value })}
+                    onChange={e => {
+                      const dId = e.target.value;
+                      const selectedDie = dies.find(d => d.id === dId || d.code === dId);
+                      setStepData({
+                        ...stepData,
+                        dieMoldId: dId,
+                        requiredTonnage: selectedDie?.requiredTonnage || stepData.requiredTonnage,
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">-- بدون قالب اختصاصی --</option>
-                    {dies.map(d => (
+                    {/* Display correlated dies first, or all if toggled or none found */}
+                    {(showAllDies || correlatedDies.length === 0 ? dies : correlatedDies).map(d => (
                       <option key={d.id} value={d.id}>
                         [{d.code}] {d.name} ({d.requiredTonnage}T)
+                        {d.partCode ? ` • قطعه: ${d.partCode}` : ''}
                       </option>
                     ))}
                   </select>
+
+                  {/* Part-Die Correlation Hint & Toggle */}
+                  <div className="flex items-center justify-between mt-1 text-[10px]">
+                    <span className="text-slate-500">
+                      {correlatedDies.length > 0 && !showAllDies
+                        ? `نمایش ${toPersianDigits(correlatedDies.length)} قالب اختصاصی «${activeRouting?.partName || 'این قطعه'}»`
+                        : `نمایش کل ${toPersianDigits(dies.length)} قالب کارخانه`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDies(!showAllDies)}
+                      className="text-indigo-600 hover:underline cursor-pointer font-medium"
+                    >
+                      {showAllDies ? 'فقط قالب‌های مرتبط با این قطعه' : 'نمایش همه قالب‌ها'}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">تناژ اسمی مورد نیاز (تن)</label>
@@ -1061,6 +1243,9 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                     placeholder="400"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    تنظیم خودکار بر اساس ظرفیت قالب یا پرس انتخابی
+                  </span>
                 </div>
               </div>
 
@@ -1193,6 +1378,181 @@ export const RoutingsView: React.FC<RoutingsViewProps> = ({
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
                   {loading ? 'در حال ذخیره...' : 'ذخیره گام عملیاتی'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: QUICK ADD MACHINE / PRESS */}
+      {isQuickMachineModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4 text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-indigo-600" />
+                <span>تعریف سریع پرس / دستگاه جدید</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsQuickMachineModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateQuickMachine} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">نام و مشخصات پرس / دستگاه *</label>
+                <input
+                  type="text"
+                  required
+                  value={quickMachineName}
+                  onChange={e => setQuickMachineName(e.target.value)}
+                  placeholder="مثال: پرس ضربه‌ای ۲۵۰ تن کوماتسو شماره ۴"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">کد دستگاه (اختیاری)</label>
+                  <input
+                    type="text"
+                    value={quickMachineCode}
+                    onChange={e => setQuickMachineCode(e.target.value)}
+                    placeholder="PRS-250T-04"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">تناژ اسمی (تن) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={quickMachineTonnage}
+                    onChange={e => setQuickMachineTonnage(Number(e.target.value) || 250)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-500 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">سالن استقرار</label>
+                <select
+                  value={quickMachineHall}
+                  onChange={e => setQuickMachineHall(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="سالن برش">سالن برش</option>
+                  <option value="سالن پرس">سالن پرس</option>
+                  <option value="سالن پرس سنگین">سالن پرس سنگین</option>
+                  <option value="سالن جوشکاری">سالن جوشکاری</option>
+                  <option value="سالن رنگ">سالن رنگ</option>
+                  <option value="سالن کیفیت">سالن کیفیت</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickMachineModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingQuickMachine}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {savingQuickMachine ? 'در حال ثبت...' : 'ثبت سریع و انتخاب پرس'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: QUICK ADD DIE / MOLD */}
+      {isQuickDieModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4 text-right">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-amber-600" />
+                  <span>تعریف سریع قالب اختصاصی قطعه</span>
+                </h3>
+                <span className="text-[11px] text-slate-500 mt-0.5 block">
+                  همبسته به قطعه: <strong className="text-slate-800">{activeRouting?.partName || 'قطعه جاری'}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuickDieModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateQuickDie} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">نام قالب پرس *</label>
+                <input
+                  type="text"
+                  required
+                  value={quickDieName}
+                  onChange={e => setQuickDieName(e.target.value)}
+                  placeholder={`قالب سنبه ماتریس مرحله ${stepData.stepCode || 'OP'} ${activeRouting?.partName || ''}`}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">کد قالب (اختیاری)</label>
+                  <input
+                    type="text"
+                    value={quickDieCode}
+                    onChange={e => setQuickDieCode(e.target.value)}
+                    placeholder={`DIE-${activeRouting?.partCode || 'PART'}-01`}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">تناژ مورد نیاز (تن) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={quickDieTonnage}
+                    onChange={e => setQuickDieTonnage(Number(e.target.value) || 250)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-amber-500 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 text-[11px] leading-relaxed">
+                این قالب مستقیماً به کد قطعه <strong>{activeRouting?.partCode}</strong> انتساب می‌یابد تا هنگام انتخاب قالب برای این قطعه، در صدر لیست و با همبستگی فنی نمایش داده شود.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickDieModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingQuickDie}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {savingQuickDie ? 'در حال ثبت...' : 'ثبت سریع و انتخاب قالب'}
                 </button>
               </div>
             </form>

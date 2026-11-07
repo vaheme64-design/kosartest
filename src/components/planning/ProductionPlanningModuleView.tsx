@@ -25,7 +25,7 @@ import {
   ProductionPlanSuggestion,
   PlanningDashboardMetrics,
 } from '../../types/productionPlanning';
-import { Part, Machine, DieMold } from '../../types/inventory';
+import { Part, Machine, DieMold, Routing } from '../../types/inventory';
 import { PlanningDashboardView } from './PlanningDashboardView';
 import { MachineRecommendationView } from './MachineRecommendationView';
 import { NewCustomerOrderModal } from './NewCustomerOrderModal';
@@ -38,30 +38,50 @@ import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
 
+export type PlanningSubTabKey =
+  | 'erp_workbench'
+  | 'workflow_doc'
+  | 'dashboard'
+  | 'daily_schedule'
+  | 'mrp'
+  | 'consumables'
+  | 'recommendations'
+  | 'orders'
+  | 'approved_plans';
+
 interface ProductionPlanningModuleViewProps {
   parts: Part[];
+  routings?: Routing[];
   machines: Machine[];
   dies: DieMold[];
+  initialSubTab?: PlanningSubTabKey;
+  onSubTabChange?: (tab: PlanningSubTabKey) => void;
   onGlobalRefresh?: () => Promise<void>;
 }
 
 export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleViewProps> = ({
   parts,
+  routings = [],
   machines,
   dies,
+  initialSubTab = 'mrp',
+  onSubTabChange,
   onGlobalRefresh,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<
-    | 'erp_workbench'
-    | 'workflow_doc'
-    | 'dashboard'
-    | 'daily_schedule'
-    | 'mrp'
-    | 'consumables'
-    | 'recommendations'
-    | 'orders'
-    | 'approved_plans'
-  >('erp_workbench');
+  const [activeSubTab, setActiveSubTab] = useState<PlanningSubTabKey>(
+    initialSubTab === 'erp_workbench' ? 'mrp' : initialSubTab
+  );
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab === 'erp_workbench' ? 'mrp' : initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  const handleSelectSubTab = (tab: PlanningSubTabKey) => {
+    setActiveSubTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
+  };
 
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<PlanningDashboardMetrics | null>(null);
@@ -203,7 +223,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
         setSelectedSuggestionId(matchingSuggestion.id);
       }
     }
-    setActiveSubTab('recommendations');
+    handleSelectSubTab('recommendations');
   };
 
   const filteredOrders = customerOrders.filter(o => {
@@ -232,21 +252,16 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
   return (
     <div className="space-y-5">
-      {/* Grafana-Inspired Header & Flat Section Selector Bar */}
-      <div className="bg-white p-4 lg:p-5 rounded-xl border border-slate-200/90 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-base lg:text-lg font-bold text-slate-900">
-                برنامه‌ریزی تولید، نیازسنجی مواد (MRP) و ظرفیت خطوط
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                موازنه سفارشات خودروسازان با موجودی آزاد ورق، پیش‌بینی مواد مصرفی و صدور دستور کار کارگاهی
-              </p>
-            </div>
+      {/* Clean Enterprise Header & Section Tabs */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h1 className="text-base font-bold text-slate-900">
+              برنامه‌ریزی کلان تولید و نیازسنجی مواد (MRP)
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              سفارشات ساپکو، انفجار BOM، محاسبه نیاز خالص ورق و تخصیص پرس‌ها
+            </p>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -255,7 +270,6 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
               onClick={loadPlanningData}
               disabled={loading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-              title="بروزرسانی داده‌ها"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>بروزرسانی</span>
@@ -263,76 +277,35 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             <button
               type="button"
               onClick={() => setIsOrderModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 text-orange-400" />
-              <span>ثبت سفارش ساپکو / مشتری</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>ثبت سفارش مشتری</span>
             </button>
           </div>
         </div>
 
-        {/* Single Flat Section Filter Bar (Grafana Style — No Crowded Multi-Row Tabs) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-              <Filter className="w-3.5 h-3.5 text-orange-600" />
-              <span className="text-slate-500 font-medium">نمای بخش برنامه‌ریزی:</span>
-              <select
-                value={activeSubTab}
-                onChange={e => setActiveSubTab(e.target.value as any)}
-                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
-              >
-                <option value="erp_workbench">
-                  میز کار ۵ مرحله‌ای تولید (SAP / Odoo — ۵,۰۰۰ عدد تا انتقال مانده روزانه)
-                </option>
-                <option value="workflow_doc">
-                  مستند فنی و جریان فرآیند تولید (Workflow استاندارد SAP PP)
-                </option>
-                <option value="dashboard">داشبورد موازنه تقاضا و ظرفیت</option>
-                <option value="daily_schedule">برنامه روزانه شرکت به تفکیک سالن (Daily Dispatch)</option>
-                <option value="mrp">پیش‌بینی نیاز مواد و موازنه کلاف (MRP)</option>
-                <option value="consumables">پیش‌بینی مواد مصرفی کارگاه (ROP)</option>
-                <option value="recommendations">
-                  تخصیص ماشین‌آلات و پیشنهاد برنامه ({toPersianDigits(suggestions.length)})
-                </option>
-                <option value="orders">
-                  سفارشات مشتریان ({toPersianDigits(customerOrders.length)})
-                </option>
-                <option value="approved_plans">
-                  برنامه‌های مصوب و صدور MO ({toPersianDigits(approvedPlans.length)})
-                </option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              {[
-                { id: 'erp_workbench', label: 'میز کار ۵ مرحله‌ای (SAP / Odoo)' },
-                { id: 'workflow_doc', label: 'جریان فرآیند SAP PP' },
-                { id: 'dashboard', label: 'موازنه تقاضا' },
-                { id: 'daily_schedule', label: 'برنامه روزانه سالن' },
-                { id: 'mrp', label: 'نیازسنجی MRP' },
-                { id: 'consumables', label: 'مواد مصرفی' },
-                { id: 'recommendations', label: 'تخصیص پرس‌ها' },
-              ].map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveSubTab(item.id as any)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer border ${
-                    activeSubTab === item.id
-                      ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
-                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-[11px] text-slate-400">
-            پیشنهادهای فعال: {toPersianDigits(suggestions.length)} • سفارشات باز: {toPersianDigits(customerOrders.length)}
-          </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {[
+            { id: 'mrp', label: '۱. انفجار BOM و نیاز ورق (MRP)' },
+            { id: 'orders', label: `۲. سفارشات مشتریان (${toPersianDigits(customerOrders.length)})` },
+            { id: 'recommendations', label: `۳. پیشنهاد برنامه و پرس (${toPersianDigits(suggestions.length)})` },
+            { id: 'daily_schedule', label: '۴. تقویم روزانه سالن‌ها' },
+            { id: 'dashboard', label: '۵. موازنه تقاضا و ظرفیت' },
+          ].map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleSelectSubTab(item.id as any)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                activeSubTab === item.id
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/70'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -350,7 +323,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
       {/* Sub-Tab 0: ERP 5-Stage Workbench (SAP PP / Odoo MRP / Daily Roll-Forward) */}
       {activeSubTab === 'erp_workbench' && (
-        <ErpProductionWorkbenchView parts={parts} routings={[]} onRefreshData={loadPlanningData} />
+        <ErpProductionWorkbenchView parts={parts} routings={routings} onRefreshData={loadPlanningData} />
       )}
 
       {/* Sub-Tab: SAP PP Production Workflow Documentation */}

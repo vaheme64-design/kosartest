@@ -48,6 +48,7 @@ interface TransactionsVouchersViewProps {
   initialPartId?: string;
   initialStageId?: string;
   onSubmitVoucher: (payload: any) => Promise<{ success: boolean; message?: string; error?: string }>;
+  onTrackVoucher?: () => void;
   onCancel?: () => void;
 }
 
@@ -61,6 +62,7 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
   initialPartId,
   initialStageId,
   onSubmitVoucher,
+  onTrackVoucher,
 }) => {
   const [localParts, setLocalParts] = useState<Part[]>(initialParts);
   const [localCustomers, setLocalCustomers] = useState<CustomerDefinition[]>([]);
@@ -462,12 +464,23 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
         )}
 
         {successMessage && (
-          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2.5 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">ثبت موفق سند:</p>
-              <p className="mt-0.5 leading-relaxed">{successMessage}</p>
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">ثبت موفق سند:</p>
+                <p className="mt-0.5 leading-relaxed">{successMessage}</p>
+              </div>
             </div>
+            {onTrackVoucher && (
+              <button
+                type="button"
+                onClick={onTrackVoucher}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer shrink-0 self-end sm:self-center"
+              >
+                پیگیری سند در کاردکس / خط ⟵
+              </button>
+            )}
           </div>
         )}
 

@@ -24,6 +24,16 @@ import {
   Truck,
   Palette,
   Sparkles,
+  Wrench,
+  Printer,
+  Gauge,
+  TrendingUp,
+  UserCheck,
+  Activity,
+  CheckCircle2,
+  Clock,
+  Building,
+  BookOpen,
 } from 'lucide-react';
 import { UserRoleProfile } from '../types/inventory';
 import {
@@ -32,6 +42,8 @@ import {
   COLOR_THEMES,
 } from '../types/theme';
 import { InventorySubTab } from './inventory/InventoryModuleView';
+import { ProductionWorkbenchSubTab } from './production/ErpProductionWorkbenchView';
+import { PlanningSubTabKey } from './planning/ProductionPlanningModuleView';
 import { toPersianDigits } from '../utils/formatters';
 
 export type TabKey =
@@ -46,12 +58,45 @@ export type TabKey =
   | 'reports'
   | 'settings';
 
+export type MachineSubTabKey =
+  | 'machines'
+  | 'maintenance'
+  | 'oee'
+  | 'utilization'
+  | 'dies'
+  | 'halls'
+  | 'operators';
+
+export interface SubModuleNavParams {
+  inventorySubTab?: InventorySubTab;
+  productionViewMode?: 'ERP_WORKBENCH' | 'VOUCHERS';
+  productionModuleTab?: ProductionWorkbenchSubTab;
+  planningSubTab?: PlanningSubTabKey;
+  machineSubTab?: MachineSubTabKey;
+}
+
+export interface SubModuleLink {
+  id: string;
+  tab: TabKey;
+  inventorySubTab?: InventorySubTab;
+  navParams?: SubModuleNavParams;
+  label: string;
+  keywords: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+  badgeHighlight?: boolean;
+}
+
 interface SidebarProps {
   activeTab: TabKey;
   activeInventorySubTab?: InventorySubTab;
+  activeProductionViewMode?: 'ERP_WORKBENCH' | 'VOUCHERS';
+  activeProductionModuleTab?: ProductionWorkbenchSubTab;
+  activePlanningSubTab?: PlanningSubTabKey;
+  activeMachineSubTab?: MachineSubTabKey;
   layoutTemplate: ErpLayoutTemplate;
   colorTheme: ErpColorTheme;
-  onTabChange: (tab: TabKey, inventorySubTab?: InventorySubTab) => void;
+  onTabChange: (tab: TabKey, navParams?: SubModuleNavParams | InventorySubTab) => void;
   onOpenTemplateModal?: () => void;
   onOpenAiAssistant?: () => void;
   currentRole: UserRoleProfile['role'];
@@ -60,17 +105,6 @@ interface SidebarProps {
   plansCount: number;
   coilsCount: number;
   reorderAlertsCount?: number;
-}
-
-interface SubModuleLink {
-  id: string;
-  tab: TabKey;
-  inventorySubTab?: InventorySubTab;
-  label: string;
-  keywords: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: string;
-  badgeHighlight?: boolean;
 }
 
 interface NavGroup {
@@ -82,6 +116,7 @@ interface NavGroup {
     id: string;
     tab: TabKey;
     inventorySubTab?: InventorySubTab;
+    defaultNavParams?: SubModuleNavParams;
     label: string;
     flatLabel: string;
     keywords: string;
@@ -96,6 +131,10 @@ interface NavGroup {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   activeInventorySubTab,
+  activeProductionViewMode,
+  activeProductionModuleTab,
+  activePlanningSubTab,
+  activeMachineSubTab,
   layoutTemplate,
   colorTheme,
   onTabChange,
@@ -121,87 +160,212 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isDarkSidebar = false;
   const isFlatListMode = true;
 
+  // 1. Inventory Sub-Modules (انبار و موجودی - بدون تکرار)
   const inventorySubModules: SubModuleLink[] = useMemo(
     () => [
-      {
-        id: 'sub-inv-dashboard',
-        tab: 'inventory',
-        inventorySubTab: 'DASHBOARD',
-        label: 'پیشخوان و عملیات سریع انبار',
-        keywords: 'پیشخوان انبار رسید حواله برگشت انتقال',
-        icon: Boxes,
-      },
       {
         id: 'sub-inv-inquiry',
         tab: 'inventory',
         inventorySubTab: 'INQUIRY',
-        label: 'جستجو و استعلام موجودی',
-        keywords: 'استعلام موجودی فیلتر ضخامت جنس ورق کویل پک',
+        navParams: { inventorySubTab: 'INQUIRY' },
+        label: 'موجودی و کاردکس کالا',
+        keywords: 'استعلام موجودی فیلتر ضخامت جنس ورق کویل پک کاردکس کالا',
         icon: Search,
       },
       {
         id: 'sub-inv-coils',
         tab: 'inventory',
         inventorySubTab: 'COILS',
+        navParams: { inventorySubTab: 'COILS' },
         label: 'رول‌های ورق و کویل‌پک',
-        keywords: 'رول ورق کویل پک کلاف برش برگشت از خط',
+        keywords: 'رول ورق کویل پک کلاف برش برگشت از خط تسهیم',
         icon: Layers,
         badge: coilsCount > 0 ? toPersianDigits(coilsCount) : undefined,
+      },
+      {
+        id: 'sub-inv-dashboard',
+        tab: 'inventory',
+        inventorySubTab: 'DASHBOARD',
+        navParams: { inventorySubTab: 'DASHBOARD' },
+        label: 'ثبت رسید و حواله انبار',
+        keywords: 'پیشخوان انبار رسید حواله برگشت انتقال',
+        icon: Boxes,
       },
       {
         id: 'sub-inv-contracts',
         tab: 'inventory',
         inventorySubTab: 'CONTRACTS',
-        label: 'قراردادها و سهمیه مواد',
-        keywords: 'قرارداد ساپکو مشتری امانی سهمیه تخصیص',
+        navParams: { inventorySubTab: 'CONTRACTS' },
+        label: 'قراردادها و سهمیه ساپکو',
+        keywords: 'قرارداد ساپکو مشتری امانی سهمیه تخصیص شناسه',
         icon: FileSignature,
       },
       {
         id: 'sub-inv-alerts',
         tab: 'inventory',
         inventorySubTab: 'ALERTS',
-        label: 'هشدار نقطه سفارش و کسری‌ها',
+        navParams: { inventorySubTab: 'ALERTS' },
+        label: 'هشدار کسری موجودی',
         keywords: 'هشدار کسری نقطه سفارش حداقل موجودی اطمینان شارژ',
         icon: BellRing,
         badge: reorderAlertsCount > 0 ? toPersianDigits(reorderAlertsCount) : undefined,
         badgeHighlight: reorderAlertsCount > 0,
       },
-      {
-        id: 'sub-inv-movement',
-        tab: 'inventory',
-        inventorySubTab: 'MOVEMENT',
-        label: 'اسناد ورود و خروج (کاردکس)',
-        keywords: 'اسناد انبار کاردکس گردش ابطال رسید حواله',
-        icon: FileText,
-      },
-      {
-        id: 'sub-inv-excel',
-        tab: 'inventory',
-        inventorySubTab: 'IMPORT_EXPORT',
-        label: 'ورود و خروج اکسل (CSV)',
-        keywords: 'اکسل ورود اطلاعات خروجی فایل راهنما csv',
-        icon: Upload,
-      },
-      {
-        id: 'sub-inv-custom-reports',
-        tab: 'inventory',
-        inventorySubTab: 'CUSTOM_REPORTS',
-        label: 'گزارش‌ساز سفارشی انبار',
-        keywords: 'گزارش سفارشی شخصی سازی ستون کویل',
-        icon: FileSpreadsheet,
-      },
     ],
     [coilsCount, reorderAlertsCount]
   );
 
-  // Ordered flat 10 modules exactly matching Uploaded Images 1 & 2
-  const flatTenItems = useMemo(
+  // 2. Production Sub-Modules (اجرای خط تولید و ایستگاه‌ها - بدون تکرار)
+  const productionSubModules: SubModuleLink[] = useMemo(
+    () => [
+      {
+        id: 'sub-prod-scheduler',
+        tab: 'production',
+        navParams: {
+          productionViewMode: 'ERP_WORKBENCH',
+          productionModuleTab: 'MULTI_PART_SCHEDULER',
+        },
+        label: 'برنامه و مراحل تولید (OP)',
+        keywords: 'زمان بندی ماتریس 20 قطعه پرسکاری شیفت صبح عصر شب انتقال مانده',
+        icon: CalendarDays,
+      },
+      {
+        id: 'sub-prod-dispatch',
+        tab: 'production',
+        navParams: {
+          productionViewMode: 'ERP_WORKBENCH',
+          productionModuleTab: 'DAILY_DISPATCH_SHEET',
+        },
+        label: 'برگه کار روزانه شیفت',
+        keywords: 'کاربرگ دیسپچ پرینت چاپ برگه شیفت اپراتور تحویل کارگاهی',
+        icon: Printer,
+      },
+      {
+        id: 'sub-prod-wip-tracker',
+        tab: 'production',
+        navParams: {
+          productionViewMode: 'ERP_WORKBENCH',
+          productionModuleTab: 'LIVE_WIP_OP_TRACKER',
+        },
+        label: 'موجودی پای خط (WIP)',
+        keywords: 'رهگیری کار در جریان wip op گلوگاه انباشت پالت پای خط رسید خودکار',
+        icon: GitCommit,
+      },
+      {
+        id: 'sub-prod-vouchers',
+        tab: 'production',
+        navParams: {
+          productionViewMode: 'VOUCHERS',
+        },
+        label: 'ثبت قبض تکی کارگاه',
+        keywords: 'اسناد کارگاهی ثبت تولید سالم ورود ورق ضایعات قبض حواله کارگاه ایستگاهی',
+        icon: Hammer,
+      },
+    ],
+    []
+  );
+
+  // 3. Production Planning Sub-Modules (برنامه‌ریزی و نیازسنجی MRP - بدون تکرار)
+  const planningSubModules: SubModuleLink[] = useMemo(
+    () => [
+      {
+        id: 'sub-plan-mrp',
+        tab: 'planning',
+        navParams: { planningSubTab: 'mrp' },
+        label: 'انفجار BOM و نیاز ورق',
+        keywords: 'انفجار مواد bom mrp نیاز ناخالص خالص کسری قطعات ساخت ساختار درختی',
+        icon: Cpu,
+      },
+      {
+        id: 'sub-plan-orders',
+        tab: 'planning',
+        navParams: { planningSubTab: 'orders' },
+        label: 'سفارشات تحویل مشتری',
+        keywords: 'سفارش مشتری ساپکو قرارداد تعهدات تحویل ماهانه',
+        icon: Truck,
+      },
+      {
+        id: 'sub-plan-recommendations',
+        tab: 'planning',
+        navParams: { planningSubTab: 'recommendations' },
+        label: 'پیشنهاد برنامه و پرس‌ها',
+        keywords: 'پیشنهاد خرید مواد تخصیص پرس ها سفارش کویل ماشین آلات',
+        icon: Sparkles,
+      },
+    ],
+    []
+  );
+
+  // 4. Equipment & Maintenance Sub-Modules (ماشین‌آلات و تعمیرات PM - بدون تکرار)
+  const machineSubModules: SubModuleLink[] = useMemo(
+    () => [
+      {
+        id: 'sub-mach-machines',
+        tab: 'machines',
+        navParams: { machineSubTab: 'machines' },
+        label: 'پرس‌ها و خطوط تولید',
+        keywords: 'پرس هیدرولیک ضربه ای تناژ ابعاد میز تناژ ضربه قیچی گیوتین خط برش مشخصات فنی',
+        icon: Cpu,
+      },
+      {
+        id: 'sub-mach-maintenance',
+        tab: 'machines',
+        navParams: { machineSubTab: 'maintenance' },
+        label: 'تعمیرات و نگهداری (PM)',
+        keywords: 'تعمیرات نگهداری نت tpm pm کارتابل خرابی قطعات یدکی پیشگیرانه کانبان mtbf mttr بازرسی چک لیست',
+        icon: Wrench,
+      },
+      {
+        id: 'sub-mach-dies',
+        tab: 'machines',
+        navParams: { machineSubTab: 'dies' },
+        label: 'قالب‌ها و سنبه/ماتریس',
+        keywords: 'قالب سنبه ماتریس کشش برش خم کالیبره عمر ضربه سقف ضربات',
+        icon: Layers,
+      },
+    ],
+    []
+  );
+
+  const isSubItemActive = (sub: SubModuleLink) => {
+    if (activeTab !== sub.tab) return false;
+    if (sub.tab === 'inventory') {
+      const target = sub.navParams?.inventorySubTab || sub.inventorySubTab;
+      return activeInventorySubTab === target;
+    }
+    if (sub.tab === 'production') {
+      if (sub.navParams?.productionViewMode === 'VOUCHERS') {
+        return activeProductionViewMode === 'VOUCHERS';
+      }
+      return (
+        (activeProductionViewMode === 'ERP_WORKBENCH' || !activeProductionViewMode) &&
+        activeProductionModuleTab === (sub.navParams?.productionModuleTab || 'MULTI_PART_SCHEDULER')
+      );
+    }
+    if (sub.tab === 'planning') {
+      return activePlanningSubTab === (sub.navParams?.planningSubTab || 'mrp');
+    }
+    if (sub.tab === 'machines') {
+      return activeMachineSubTab === (sub.navParams?.machineSubTab || 'machines');
+    }
+    return false;
+  };
+
+  const handleTriggerNavigation = (
+    tab: TabKey,
+    params?: SubModuleNavParams | InventorySubTab
+  ) => {
+    onTabChange(tab, params);
+  };
+
+  // Minimal 7-Module Navigation (Zero Duplication)
+  const flatTenItems: NavGroup['items'] = useMemo(
     () => [
       {
         id: 'flat-dashboard',
         tab: 'dashboard' as TabKey,
-        label: 'داشبورد',
-        flatLabel: 'داشبورد',
+        label: 'پیشخوان کارخانه',
+        flatLabel: 'پیشخوان کارخانه',
         keywords: 'داشبورد خانه پیشخوان خلاصه وضعیت روزانه',
         icon: LayoutDashboard,
         roles: ['ADMIN', 'WAREHOUSE_KEEPER', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
@@ -209,9 +373,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {
         id: 'flat-master',
         tab: 'master_data' as TabKey,
-        label: 'اطلاعات پایه',
-        flatLabel: 'اطلاعات پایه',
-        keywords: 'اطلاعات پایه کالا قطعه ضخامت جنس ورق مسیر ساخت فرمول bom حداقل موجودی شیفت انبار مشتری',
+        label: 'اطلاعات پایه و BOM',
+        flatLabel: 'اطلاعات پایه و BOM',
+        keywords: 'اطلاعات پایه کالا قطعه ضخامت جنس ورق مسیر ساخت فرمول bom حداقل موجودی شیفت انبار مشتری ساختار درختی محصول',
         icon: ScrollText,
         count: toPersianDigits(partsCount),
         roles: ['ADMIN', 'PRODUCTION_MANAGER', 'WAREHOUSE_KEEPER'] as UserRoleProfile['role'][],
@@ -219,117 +383,85 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {
         id: 'flat-inventory',
         tab: 'inventory' as TabKey,
-        inventorySubTab: 'DASHBOARD' as InventorySubTab,
-        label: layoutTemplate === 'TABBED_WORKBENCH' ? 'انبار و موجودی' : 'انبار',
-        flatLabel: layoutTemplate === 'TABBED_WORKBENCH' ? 'انبار و موجودی' : 'انبار',
-        keywords: 'انبار موجودی ورق رول کویل پک قرارداد کاردکس اکسل کسری نقطه سفارش',
+        inventorySubTab: 'INQUIRY' as InventorySubTab,
+        defaultNavParams: { inventorySubTab: 'INQUIRY' as InventorySubTab },
+        label: 'انبار و رول ورق',
+        flatLabel: 'انبار و رول ورق',
+        keywords: 'انبار موجودی ورق رول کویل پک قرارداد کاردکس اکسل کسری نقطه سفارش استعلام موجودی کالا ساپکو',
         icon: Boxes,
         count: coilsCount > 0 ? `${toPersianDigits(coilsCount)} رول` : undefined,
         roles: ['ADMIN', 'WAREHOUSE_KEEPER', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
         subModules: inventorySubModules,
       },
       {
-        id: 'flat-production',
-        tab: 'production' as TabKey,
-        label: 'تولید',
-        flatLabel: 'تولید',
-        keywords: 'ثبت تولید مصرف ضایعات آمار روزانه شیفت پرسکاری',
-        icon: Hammer,
-        roles: ['ADMIN', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
-      },
-      {
-        id: 'flat-wip',
-        tab: 'wip' as TabKey,
-        label: layoutTemplate === 'TABBED_WORKBENCH' ? 'کار در جریان (WIP)' : 'قطعات در جریان ساخت',
-        flatLabel: layoutTemplate === 'TABBED_WORKBENCH' ? 'کار در جریان (WIP)' : 'قطعات در جریان ساخت',
-        keywords: 'کار در جریان ساخت wip ایستگاه دستور کار انتقال بین مراحل',
-        icon: GitCommit,
-        roles: ['ADMIN', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
-      },
-      {
         id: 'flat-planning',
         tab: 'planning' as TabKey,
-        label: 'برنامه‌ریزی تولید',
-        flatLabel: 'برنامه‌ریزی تولید',
-        keywords: 'برنامه ریزی تولید نیازسنجی مواد سفارشات مشتری ساپکو تخصیص ماشین آلات mrp',
+        defaultNavParams: {
+          planningSubTab: 'mrp',
+        },
+        label: 'برنامه‌ریزی و MRP',
+        flatLabel: 'برنامه‌ریزی و MRP',
+        keywords: 'برنامه ریزی تولید نیازسنجی مواد سفارشات مشتری ساپکو تخصیص ماشین آلات mrp انفجار مواد',
         icon: CalendarDays,
         count: plansCount > 0 ? toPersianDigits(plansCount) : undefined,
         roles: ['ADMIN', 'PRODUCTION_MANAGER', 'WAREHOUSE_KEEPER'] as UserRoleProfile['role'][],
+        subModules: planningSubModules,
+      },
+      {
+        id: 'flat-production',
+        tab: 'production' as TabKey,
+        defaultNavParams: {
+          productionViewMode: 'ERP_WORKBENCH',
+          productionModuleTab: 'MULTI_PART_SCHEDULER',
+        },
+        label: 'خط تولید و مراحل (OP)',
+        flatLabel: 'خط تولید و مراحل (OP)',
+        keywords: 'تولید فرآیند جامع سفارش تا برنامه روزانه مانده کار ثبت تکی اسناد کارگاهی پرسکاری wip دیسپچ',
+        icon: Hammer,
+        roles: ['ADMIN', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
+        subModules: productionSubModules,
       },
       {
         id: 'flat-machines',
         tab: 'machines' as TabKey,
-        label: 'ماشین‌آلات و ظرفیت',
-        flatLabel: 'ماشین‌آلات و ظرفیت',
-        keywords: 'ماشین آلات دستگاه پرس قالب سنبه ماتریس اپراتور سالن ظرفیت',
-        icon: Cpu,
+        defaultNavParams: {
+          machineSubTab: 'machines',
+        },
+        label: 'ماشین‌آلات و نت (PM)',
+        flatLabel: 'ماشین‌آلات و نت (PM)',
+        keywords: 'تجهیزات ماشین آلات تعمیرات نگهداری نت tpm pm cm خرابی توقف دستگاه پرس قالب سنبه ماتریس',
+        icon: Wrench,
         roles: ['ADMIN', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR'] as UserRoleProfile['role'][],
-      },
-      {
-        id: 'flat-sapco',
-        tab: 'sapco' as TabKey,
-        label: 'مواد SAPCO',
-        flatLabel: 'مواد SAPCO',
-        keywords: 'مواد ساپکو امانی رول کویل',
-        icon: Truck,
-        roles: ['ADMIN', 'WAREHOUSE_KEEPER', 'PRODUCTION_MANAGER'] as UserRoleProfile['role'][],
+        subModules: machineSubModules,
       },
       {
         id: 'flat-reports',
         tab: 'reports' as TabKey,
-        label: layoutTemplate === 'TABBED_WORKBENCH' ? 'گزارشات' : 'گزارش‌ها',
-        flatLabel: layoutTemplate === 'TABBED_WORKBENCH' ? 'گزارشات' : 'گزارش‌ها',
-        keywords: 'گزارش مدیریتی بهای تمام شده راندمان oee ضایعات تحلیل',
+        label: 'گزارش‌ها و شاخص OEE',
+        flatLabel: 'گزارش‌ها و شاخص OEE',
+        keywords: 'گزارش مدیریتی بهای تمام شده راندمان oee ضایعات تحلیل انحراف برنامه توقفات نت',
         icon: FileSpreadsheet,
-        count: txCount > 0 ? toPersianDigits(txCount) : undefined,
         roles: ['ADMIN', 'PRODUCTION_MANAGER', 'WAREHOUSE_KEEPER', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
       },
-      {
-        id: 'flat-settings',
-        tab: 'settings' as TabKey,
-        label: 'کاربران و تنظیمات',
-        flatLabel: 'کاربران و تنظیمات',
-        keywords: 'کاربران نقش دسترسی امنیت تنظیمات',
-        icon: Settings,
-        roles: ['ADMIN'] as UserRoleProfile['role'][],
-      },
     ],
-    [layoutTemplate, partsCount, coilsCount, plansCount, txCount, inventorySubModules]
+    [
+      partsCount,
+      coilsCount,
+      plansCount,
+      inventorySubModules,
+      productionSubModules,
+      planningSubModules,
+      machineSubModules,
+    ]
   );
 
   const navGroups: NavGroup[] = useMemo(
     () => [
       {
         id: 'core',
-        groupTitle: 'هسته اصلی: موجودی و انبار',
+        groupTitle: 'ماژول‌های اصلی کارخانه',
         defaultOpen: true,
-        items: [
-          flatTenItems[0], // داشبورد
-          flatTenItems[2], // انبار
-        ],
-      },
-      {
-        id: 'planning_prod',
-        groupTitle: 'برنامه‌ریزی و اجرای تولید',
-        defaultOpen: true,
-        items: [
-          flatTenItems[5], // برنامه‌ریزی تولید
-          flatTenItems[3], // تولید
-          flatTenItems[4], // WIP
-        ],
-      },
-      {
-        id: 'master_reports',
-        groupTitle: 'اطلاعات پایه، منابع و گزارش‌ها',
-        collapsible: true,
-        defaultOpen: true,
-        items: [
-          flatTenItems[1], // اطلاعات پایه
-          flatTenItems[6], // ماشین‌آلات
-          flatTenItems[7], // مواد SAPCO
-          flatTenItems[8], // گزارش‌ها
-          flatTenItems[9], // تنظیمات
-        ],
+        items: flatTenItems,
       },
     ],
     [flatTenItems]
@@ -433,24 +565,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* AI Assistant Button in Sidebar */}
+        {/* AI Assistant Quick Tool (Quiet & Professional) */}
         {onOpenAiAssistant && (
           <button
             type="button"
             onClick={onOpenAiAssistant}
-            title="دستیار صوتی و متنی هوش مصنوعی کارخانه (کلید میانبر Ctrl + Space)"
-            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              isDarkSidebar
-                ? 'bg-gradient-to-r from-indigo-900/50 via-purple-900/40 to-emerald-900/50 hover:from-indigo-800/80 hover:to-emerald-800/80 text-white border border-indigo-500/30 shadow-xs'
-                : 'bg-gradient-to-r from-indigo-50 via-purple-50/50 to-emerald-50 hover:from-indigo-100 hover:to-emerald-100 text-indigo-950 border border-indigo-200/80 shadow-xs'
-            }`}
+            title="دستیار هوشمند کارخانه (کلید میانبر Ctrl + Space)"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
-              {!collapsed && <span>دستیار هوش مصنوعی</span>}
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              {!collapsed && <span>دستیار هوشمند کارخانه</span>}
             </span>
             {!collapsed && (
-              <span className="px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-[9px] font-mono text-slate-500">
+              <span className="px-1.5 py-0.5 rounded bg-white text-[9px] font-mono text-slate-500 border border-slate-200">
                 Ctrl+Space
               </span>
             )}
@@ -458,7 +586,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* =================================================================
-            FLAT 10-MODULE NAVIGATION (IMAGE 1 & IMAGE 2 STYLE)
+            FLAT CLEAN NAVIGATION (ODOO 17 / SAP FIORI STYLE)
            ================================================================= */}
         {isFlatListMode && !searchNormalized ? (
           <nav className="space-y-1">
@@ -472,63 +600,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeTab === item.tab;
 
               return (
-                <div key={item.id} className="space-y-1">
+                <div key={item.id} className="space-y-0.5">
                   <button
                     type="button"
-                    onClick={() => onTabChange(item.tab, item.inventorySubTab)}
+                    onClick={() => handleTriggerNavigation(item.tab, item.defaultNavParams || item.inventorySubTab)}
                     title={collapsed ? item.label : undefined}
                     className={`w-full flex items-center ${
-                      collapsed ? 'justify-center px-2' : 'justify-between px-3.5'
-                    } py-2.5 rounded-lg text-xs transition-all cursor-pointer text-right ${
+                      collapsed ? 'justify-center px-2' : 'justify-between px-3'
+                    } py-2.5 rounded-lg text-xs transition-colors cursor-pointer text-right ${
                       isMainActive
-                        ? 'bg-orange-50/90 text-orange-950 font-bold border border-orange-200/70 shadow-2xs'
-                        : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 font-medium border border-transparent'
+                        ? 'bg-slate-900 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <Icon
                         className={`w-4 h-4 shrink-0 ${
-                          isMainActive ? 'text-orange-600' : 'text-slate-500'
+                          isMainActive ? 'text-amber-400' : 'text-slate-500'
                         }`}
                       />
                       {!collapsed && <span className="truncate">{item.label}</span>}
                     </div>
                     {!collapsed && item.tab === 'inventory' && reorderAlertsCount > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 tabular-nums">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums ${
+                        isMainActive ? 'bg-amber-400 text-slate-950' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
                         {toPersianDigits(reorderAlertsCount)}
                       </span>
                     )}
                   </button>
 
-                  {/* Sub-Modules under Inventory when active */}
+                  {/* Sub-Modules under Active Tab */}
                   {showSubModules && (
-                    <div
-                      className={`mr-3.5 pr-2.5 border-r space-y-0.5 py-1 ${
-                        isDarkSidebar ? 'border-slate-700' : 'border-slate-200'
-                      }`}
-                    >
+                    <div className="mr-3 pr-2 border-r border-slate-200 space-y-0.5 py-1">
                       {item.subModules?.map(sub => {
-                        const isSubActive =
-                          activeTab === sub.tab &&
-                          activeInventorySubTab === sub.inventorySubTab;
+                        const isSubActive = isSubItemActive(sub);
                         const SubIcon = sub.icon;
                         return (
                           <button
                             key={sub.id}
                             type="button"
-                            onClick={() => onTabChange(sub.tab, sub.inventorySubTab)}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer text-right ${
+                            onClick={() => handleTriggerNavigation(sub.tab, sub.navParams || sub.inventorySubTab)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[11px] transition-colors cursor-pointer text-right ${
                               isSubActive
-                                ? isDarkSidebar
-                                  ? 'bg-white/15 text-white font-bold'
-                                  : 'bg-emerald-50 text-emerald-900 font-bold'
-                                : isDarkSidebar
-                                ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-slate-100 text-slate-950 font-bold border-r-2 border-slate-900'
                                 : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <SubIcon className="w-3.5 h-3.5 shrink-0" />
+                              <SubIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-slate-900' : 'text-slate-400'}`} />
                               <span className="truncate">{sub.label}</span>
                             </div>
                             {sub.badge && (
@@ -640,7 +760,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <div key={item.id} className="space-y-1">
                             <button
                               type="button"
-                              onClick={() => onTabChange(item.tab, item.inventorySubTab)}
+                              onClick={() => handleTriggerNavigation(item.tab, item.defaultNavParams || item.inventorySubTab)}
                               title={collapsed ? item.label : undefined}
                               style={
                                 isMainActive
@@ -687,24 +807,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 }`}
                               >
                                 {item.matchedSubs.map(sub => {
-                                  const isSubActive =
-                                    activeTab === sub.tab &&
-                                    activeInventorySubTab === sub.inventorySubTab;
+                                  const isSubActive = isSubItemActive(sub);
                                   const SubIcon = sub.icon;
 
                                   return (
                                     <button
                                       key={sub.id}
                                       type="button"
-                                      onClick={() => onTabChange(sub.tab, sub.inventorySubTab)}
+                                      onClick={() => handleTriggerNavigation(sub.tab, sub.navParams || sub.inventorySubTab)}
                                       className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer text-right ${
                                         isSubActive
                                           ? isDarkSidebar
                                             ? 'bg-white/15 text-white font-bold'
-                                            : 'bg-slate-100 text-slate-950 font-bold'
+                                            : 'bg-emerald-50 text-emerald-950 font-bold border-r-2 border-emerald-600'
                                           : isDarkSidebar
                                           ? 'text-slate-400 hover:text-white hover:bg-white/5'
-                                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                                          : 'text-slate-600 hover:text-slate-950 hover:bg-slate-50'
                                       }`}
                                     >
                                       <div className="flex items-center gap-2 min-w-0">

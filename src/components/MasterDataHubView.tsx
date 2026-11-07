@@ -257,6 +257,19 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
     layoutTemplate === 'TABBED_WORKBENCH' ? 'RAW_MATERIALS' : 'HUB'
   );
 
+  useEffect(() => {
+    const handleContextual = (e: Event) => {
+      const custom = e as CustomEvent<{ actionType?: string }>;
+      if (custom.detail?.actionType === 'OPEN_ADD_PART') {
+        setActiveSection('PARTS');
+      } else if (custom.detail?.actionType === 'OPEN_ADD_ROUTING') {
+        setActiveSection('ROUTINGS');
+      }
+    };
+    window.addEventListener('kpims:contextual-action', handleContextual);
+    return () => window.removeEventListener('kpims:contextual-action', handleContextual);
+  }, []);
+
   const [rawSheets, setRawSheets] = useState<RawSheetSpec[]>(INITIAL_RAW_SHEETS);
   const [sheetSearch, setSheetSearch] = useState('');
   const [editingSheet, setEditingSheet] = useState<RawSheetSpec | null>(null);
@@ -1139,6 +1152,8 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
           onSaveRouting={onSaveRouting}
           onDeleteRouting={onDeleteRouting}
           onDirectProduce={onDirectProduce}
+          onSaveMachine={onSaveMachine}
+          onSaveDie={onSaveDie}
         />
       )}
 

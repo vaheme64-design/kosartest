@@ -28,6 +28,9 @@ import {
   ChevronLeft,
   ChevronRight,
   GitBranch,
+  Edit3,
+  Trash2,
+  Settings,
 } from 'lucide-react';
 import { Part, Routing, DetailedStockBalance, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits, exportToCsv } from '../../utils/formatters';
@@ -77,11 +80,21 @@ export interface MultiPartScheduleItem {
   ops: ScheduledOpStep[];
 }
 
+export type ProductionWorkbenchSubTab =
+  | 'MULTI_PART_SCHEDULER'
+  | 'DAILY_DISPATCH_SHEET'
+  | 'LIVE_WIP_OP_TRACKER'
+  | 'KPI_OEE_REPORTS'
+  | 'TREE_TIMELINE_REPORT'
+  | 'SAP_PP_WORKFLOW';
+
 interface ErpProductionWorkbenchViewProps {
   parts: Part[];
   routings: Routing[];
   machines?: Machine[];
   balances?: DetailedStockBalance[];
+  initialModuleTab?: ProductionWorkbenchSubTab;
+  onModuleTabChange?: (tab: ProductionWorkbenchSubTab) => void;
   onRefreshData?: () => void;
 }
 
@@ -507,17 +520,26 @@ function buildInitial20PartsSchedule(): MultiPartScheduleItem[] {
 
 export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProps> = ({
   parts,
+  routings = [],
+  machines = [],
+  balances = [],
+  initialModuleTab = 'MULTI_PART_SCHEDULER',
+  onModuleTabChange,
   onRefreshData,
 }) => {
   // Major Operational Sub-Modules
-  const [activeModuleTab, setActiveModuleTab] = useState<
-    | 'MULTI_PART_SCHEDULER'
-    | 'DAILY_DISPATCH_SHEET'
-    | 'LIVE_WIP_OP_TRACKER'
-    | 'KPI_OEE_REPORTS'
-    | 'TREE_TIMELINE_REPORT'
-    | 'SAP_PP_WORKFLOW'
-  >('MULTI_PART_SCHEDULER');
+  const [activeModuleTab, setActiveModuleTab] = useState<ProductionWorkbenchSubTab>(initialModuleTab);
+
+  useEffect(() => {
+    if (initialModuleTab) {
+      setActiveModuleTab(initialModuleTab);
+    }
+  }, [initialModuleTab]);
+
+  const handleSelectModuleTab = (tab: ProductionWorkbenchSubTab) => {
+    setActiveModuleTab(tab);
+    if (onModuleTabChange) onModuleTabChange(tab);
+  };
 
   // Master Schedule State (20+ Parts, each with 3 to 5 staggered OPs)
   const [scheduleItems, setScheduleItems] = useState<MultiPartScheduleItem[]>(() => {
@@ -560,6 +582,78 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   const [newPartOp2Day, setNewPartOp2Day] = useState<number>(1);
   const [newPartOp3Day, setNewPartOp3Day] = useState<number>(2);
   const [newPartOp4Day, setNewPartOp4Day] = useState<number>(2);
+  const [customStepDays, setCustomStepDays] = useState<Record<number, number>>({});
+
+  // Dynamic lookup of user's defined routing for the currently selected part
+  const selectedPartRouting = useMemo(() => {
+    if (!newPartCode) return null;
+    const foundPart = parts.find(p => p.code === newPartCode || p.id === newPartCode);
+    return routings.find(
+      r =>
+        (foundPart && (r.partId === foundPart.id || r.partCode === foundPart.code)) ||
+        r.partCode === newPartCode ||
+        (foundPart && r.partName === foundPart.name)
+    );
+  }, [newPartCode, parts, routings]);
+
+  // Modal for Editing an Existing Scheduled Part (ویرایش برنامه تولید قطعه بر اساس استاندارد ERPNext / Odoo)
+  const [editingPlanItem, setEditingPlanItem] = useState<MultiPartScheduleItem | null>(null);
+  const [editPartTargetQty, setEditPartTargetQty] = useState<number>(1000);
+  const [editPartOrderCode, setEditPartOrderCode] = useState<string>('');
+
+  // Delete Scheduled Item Handler (حذف برنامه تولید قطعه)
+  const handleDeleteScheduleItem = (itemId: string, partName: string) => {
+    if (!confirm(`آیا از حذف برنامه تولید قطعه «${partName}» اطمینان دارید؟ تمامی مراحل زمان‌بندی‌شده آن حذف خواهند شد.`)) {
+      return;
+    }
+    const next = scheduleItems.filter(item => item.id !== itemId);
+    saveSchedule(next);
+    setToastNotice({
+      type: 'info',
+      title: `برنامه تولید قطعه «${partName}» با موفقیت حذف شد`,
+      detail: 'مراحل و دستور کار مربوطه از ماتریس زمان‌بندی و برنامه روزانه خارج گردید.',
+    });
+  };
+
+  // Open Edit Scheduled Item Modal
+  const handleOpenEditScheduleItem = (item: MultiPartScheduleItem) => {
+    setEditingPlanItem(item);
+    setEditPartTargetQty(item.weeklyTargetQty);
+    setEditPartOrderCode(item.orderCode);
+  };
+
+  // Save Edit Scheduled Item Handler
+  const handleSaveEditScheduleItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlanItem) return;
+
+    const next = scheduleItems.map(item => {
+      if (item.id !== editingPlanItem.id) return item;
+
+      // Scale operations target if changed
+      const updatedOps = item.ops.map(op => ({
+        ...op,
+        basePlannedQty: editPartTargetQty,
+        effectiveTargetQty: editPartTargetQty + op.carriedOverQty,
+      }));
+
+      return {
+        ...item,
+        orderCode: editPartOrderCode.trim() || item.orderCode,
+        weeklyTargetQty: editPartTargetQty,
+        rawMaterialIssuedKg: Math.round(editPartTargetQty * item.unitWeightKg),
+        ops: updatedOps,
+      };
+    });
+
+    saveSchedule(next);
+    setEditingPlanItem(null);
+    setToastNotice({
+      type: 'success',
+      title: `برنامه تولید «${editingPlanItem.partName}» بروزرسانی شد`,
+      detail: `تیراژ هدف به ${formatNumber(editPartTargetQty)} عدد و شماره دستور کار به ${editPartOrderCode} تغییر یافت.`,
+    });
+  };
 
   // Reporting Time Horizon State (Daily / Weekly / Monthly / Custom Range)
   const [reportHorizon, setReportHorizon] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'CUSTOM'>('DAILY');
@@ -568,7 +662,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
 
   // Toast Feedback Banner
   const [toastNotice, setToastNotice] = useState<{
-    type: 'success' | 'info';
+    type: 'success' | 'info' | 'warning';
     title: string;
     detail: string;
   } | null>(null);
@@ -724,8 +818,33 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
 
   // Open Modal to Record OP Production, Calculate WIP & Auto-Receive into Warehouse if Final OP
   const handleOpenOpExecutionModal = (item: MultiPartScheduleItem, op: ScheduledOpStep) => {
+    const opIdx = item.ops.findIndex(o => o.opId === op.opId);
+    const prevOp = opIdx > 0 ? item.ops[opIdx - 1] : null;
+
+    // CRITICAL PRECEDENCE CHECK: Operation cannot start if predecessor has produced 0 output
+    if (prevOp && prevOp.completedGoodQty === 0) {
+      setToastNotice({
+        type: 'warning',
+        title: `قفل تقدم و تأخر فرآیند (Precedence Lock): مرحله ${op.opCode} قفل است!`,
+        detail: `شما نمی‌توانید عملیات «${op.opTitle}» (${op.opCode}) را شروع کنید، زیرا مرحله قبلی آن («${prevOp.opTitle}» - ${prevOp.opCode}) هنوز هیچ خروجی سالمی ثبت نکرده است. تولید یک فرآیند متوالی وابسته است؛ ابتدا باید قطعات در مرحله قبل تولید شوند.`,
+      });
+      return;
+    }
+
+    const availableWip = prevOp
+      ? Math.max(0, prevOp.completedGoodQty - op.completedGoodQty)
+      : op.effectiveTargetQty;
+
     setActiveLogContext({ partItem: item, opStep: op });
-    setLogGoodInput(String(op.completedGoodQty > 0 ? op.completedGoodQty : op.effectiveTargetQty));
+    setLogGoodInput(
+      String(
+        availableWip > 0
+          ? availableWip
+          : op.completedGoodQty > 0
+          ? op.completedGoodQty
+          : op.effectiveTargetQty
+      )
+    );
     setLogScrapInput(String(op.scrapQty || 0));
     setRollForwardToDay(Math.min(6, op.scheduledDayIndex + 1));
   };
@@ -740,6 +859,19 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     const goodQty = Math.max(0, Number(logGoodInput) || 0);
     const scrapQty = Math.max(0, Number(logScrapInput) || 0);
     const remainingQty = Math.max(0, opStep.effectiveTargetQty - goodQty);
+
+    // Enforce Precedence Upper Bound
+    const opIdx = partItem.ops.findIndex(o => o.opId === opStep.opId);
+    const prevOp = opIdx > 0 ? partItem.ops[opIdx - 1] : null;
+    if (prevOp && goodQty > prevOp.completedGoodQty) {
+      setToastNotice({
+        type: 'warning',
+        title: `خطای تقدم و تأخر (سقف مجاز ورودی):`,
+        detail: `تعداد تولید ثبت‌شده (${formatNumber(goodQty)} عدد) نمی‌تواند از مجموع قطعات تولیدشده در مرحله قبلی (${formatNumber(prevOp.completedGoodQty)} عدد در ${prevOp.opCode}) بیشتر باشد!`,
+      });
+      setIsPostingReceipt(false);
+      return;
+    }
 
     let generatedReceiptDocNo = opStep.warehouseReceiptDocNumber;
 
@@ -855,28 +987,68 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     }
   };
 
-  // Add a New Part with Staggered Multi-OP Schedule
+  // Add a New Part with Staggered Multi-OP Schedule (بر اساس استاندارد SAP PP / Odoo mrp.routing / ERPNext)
   const handleAddNewScheduledPart = (e: React.FormEvent) => {
     e.preventDefault();
     const foundPart = parts.find(p => p.code === newPartCode || p.id === newPartCode);
     const code = foundPart ? foundPart.code : newPartCode || `SAPCO-PRT-${Date.now().toString().slice(-3)}`;
     const name = foundPart ? foundPart.name : 'قطعه جدید برنامه‌ریزی‌شده';
 
-    const newItem: MultiPartScheduleItem = {
-      id: `MPS-ITEM-${Date.now()}`,
-      orderCode: `MO-1404-${Math.floor(3000 + Math.random() * 6000)}`,
-      partId: foundPart?.id || `PRT-${Date.now()}`,
-      partCode: code,
-      partName: name,
-      carModel: foundPart?.carModel || 'پژو ۲۰۶',
-      partType: 'FINISHED_PRODUCT',
-      rawMaterialCode: 'RM-COIL-DC01A-2.0-1140',
-      rawMaterialName: 'رول ورق DC01A ضخامت 2 عرض 1140',
-      unitWeightKg: foundPart?.weightPerUnitKg || 1.2,
-      weeklyTargetQty: newPartTargetQty,
-      rawMaterialIssuedKg: Math.round(newPartTargetQty * (foundPart?.weightPerUnitKg || 1.2)),
-      warehouseReceivedQty: 0,
-      ops: [
+    const matchingRouting =
+      selectedPartRouting ||
+      routings.find(
+        r =>
+          (foundPart && (r.partId === foundPart.id || r.partCode === foundPart.code)) ||
+          r.partCode === code ||
+          (foundPart && r.partName === foundPart.name)
+      );
+
+    let ops: ScheduledOpStep[] = [];
+
+    if (matchingRouting && matchingRouting.operations && matchingRouting.operations.length > 0) {
+      // DYNAMIC EXPLOSION DIRECTLY FROM USER'S DEFINED ROUTING (Odoo mrp.routing / ERPNext Work Order Operation sequence)
+      ops = matchingRouting.operations.map((op, idx) => {
+        const isFinal = idx === matchingRouting.operations.length - 1;
+        const assignedDay = customStepDays[idx] || (idx < 2 ? 1 : idx < 4 ? 2 : 3);
+        const ratePerHour =
+          op.standardCycleTimeSec > 0 ? Math.round(3600 / op.standardCycleTimeSec) : 350;
+        const hallName =
+          op.processType === 'SHEARING'
+            ? 'سالن برش'
+            : op.processType === 'SPOT_WELD' || op.processType === 'CO2_WELD' || op.processType === 'ASSEMBLY'
+            ? 'سالن جوشکاری'
+            : op.processType === 'PAINT'
+            ? 'سالن رنگ'
+            : 'سالن پرس';
+
+        return {
+          opId: `OP-${Date.now()}-${op.stepNumber || (idx + 1) * 10}`,
+          opNo: op.stepNumber || (idx + 1) * 10,
+          opCode: op.stepCode || `OP${op.stepNumber || (idx + 1) * 10}`,
+          opTitle: `${op.stepName}${
+            op.isSharedOperation && op.sharedPartName ? ` (قالب مشترک با ${op.sharedPartName})` : ''
+          }`,
+          stationHall: hallName,
+          machineCode: op.machineId || 'PRS-250T-01',
+          machineName: op.machineName || 'پرس ۲۵۰ تن',
+          dieCode: op.dieMoldName || op.dieMoldId || 'قالب اختصاصی قطعه',
+          standardRatePerHour: ratePerHour,
+          scheduledDayIndex: assignedDay,
+          shiftName: idx % 2 === 0 ? 'شیفت صبح' : 'شیفت عصر',
+          basePlannedQty: newPartTargetQty,
+          carriedOverQty: 0,
+          effectiveTargetQty: newPartTargetQty,
+          completedGoodQty: 0,
+          scrapQty: 0,
+          wipBufferBeforeOp: idx === 0 ? newPartTargetQty : 0,
+          wipBufferAfterOp: 0,
+          isFinalOp: isFinal,
+          status: 'PLANNED',
+        };
+      });
+    } else {
+      // Fallback only if no routing was ever defined for the part
+      ops = [
         {
           opId: `OP-${Date.now()}-10`,
           opNo: 10,
@@ -965,15 +1137,34 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
           isFinalOp: true,
           status: 'PLANNED',
         },
-      ],
+      ];
+    }
+
+    const newItem: MultiPartScheduleItem = {
+      id: `MPS-ITEM-${Date.now()}`,
+      orderCode: `MO-1404-${Math.floor(3000 + Math.random() * 6000)}`,
+      partId: foundPart?.id || `PRT-${Date.now()}`,
+      partCode: code,
+      partName: name,
+      carModel: foundPart?.carModel || 'پژو ۲۰۶',
+      partType: 'FINISHED_PRODUCT',
+      rawMaterialCode: 'RM-COIL-DC01A-2.0-1140',
+      rawMaterialName: 'رول ورق DC01A ضخامت 2 عرض 1140',
+      unitWeightKg: foundPart?.weightPerUnitKg || 1.2,
+      weeklyTargetQty: newPartTargetQty,
+      rawMaterialIssuedKg: Math.round(newPartTargetQty * (foundPart?.weightPerUnitKg || 1.2)),
+      warehouseReceivedQty: 0,
+      ops,
     };
 
     saveSchedule([newItem, ...scheduleItems]);
     setIsAddPartModalOpen(false);
     setToastNotice({
       type: 'success',
-      title: `قطعه «${name}» با ۴ مرحله (OP10 تا OP40) در روزهای انتخابی زمان‌بندی شد`,
-      detail: `کد دستور کار: ${newItem.orderCode} | تیراژ: ${formatNumber(newPartTargetQty)} عدد`,
+      title: `قطعه «${name}» با ${ops.length} مرحله عملیاتی ${
+        matchingRouting ? '(برگرفته از مسیر تولید قطعه)' : '(توالی پیش‌فرض)'
+      } زمان‌بندی شد`,
+      detail: `کد دستور کار: ${newItem.orderCode} | تیراژ هدف: ${formatNumber(newPartTargetQty)} عدد`,
     });
   };
 
@@ -1168,38 +1359,20 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   return (
     <div className="space-y-5 text-right font-sans" dir="rtl">
       {/* ==================================================================== */}
-      {/* CLOSED-LOOP ERP WORKFLOW HEADER (WAREHOUSE <-> LINE OPs <-> WAREHOUSE)*/}
+      {/* CLEAN ENTERPRISE CONTROL BAR (Odoo 17 / ERPNext Style)               */}
       {/* ==================================================================== */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-slate-900 text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
-              <Factory className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                  سیستم جامع برنامه‌ریزی چندقطعه‌ای، رهگیری مراحل (OP) و کنترل تولید (استاندارد SAP PP / Opcenter APS)
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  پشتیبانی از ۲۰+ قطعه همزمان × ۳ تا ۵ مرحله (OP) در روز
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 mt-1">
-                چرخه کامل بسته: ۱. دریافت ورق از انبار به ایستگاه اول (OP10) $\leftarrow$ ۲. زمان‌بندی پله‌ای مراحل هر قطعه در روزهای مختلف و ردیابی موجودی پای خط بین مراحل $\leftarrow$ ۳. صدور خودکار رسید انبار محصول پس از ثبت مرحله آخر (Final OP)
-              </p>
-            </div>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              برنامه‌ریزی و اجرای مراحل تولید (OP)
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              زمان‌بندی ایستگاه‌ها، کنترل تقدم و تأخر مراحل، بافر پای خط (WIP) و رسید خودکار انبار محصول
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAddPartModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-amber-400" />
-              <span>+ افزودن قطعه و زمان‌بندی مراحل (OP)</span>
-            </button>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -1207,57 +1380,35 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 saveSchedule(fresh);
                 setToastNotice({
                   type: 'info',
-                  title: 'برنامه جامع کارخانه بازنشانی شد',
-                  detail: 'فهرست استاندارد قطعات چندمرحله‌ای (هر قطعه ۳ تا ۵ مرحله OP در روزهای مختلف هفته) بارگذاری گردید.',
+                  title: 'برنامه تولید بازنشانی شد',
+                  detail: 'فهرست استاندارد قطعات بارگذاری گردید.',
                 });
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>بازنشانی داده‌های نمونه</span>
+              <span>بازنشانی</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddPartModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>افزودن دستور کار جدید</span>
             </button>
           </div>
         </div>
 
-        {/* 6 Core Module Navigation Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        {/* Clean Horizontal Segmented Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           {[
-            {
-              id: 'MULTI_PART_SCHEDULER' as const,
-              title: '۱. ماتریس زمان‌بندی مراحل',
-              subtitle: `${toPersianDigits(scheduleItems.length)} قطعه × پله‌ای`,
-              icon: Calendar,
-            },
-            {
-              id: 'DAILY_DISPATCH_SHEET' as const,
-              title: '۲. برنامه روزانه خط',
-              subtitle: `${toPersianDigits(dailyScheduledOperations.length)} عملیات چاپی`,
-              icon: Printer,
-            },
-            {
-              id: 'LIVE_WIP_OP_TRACKER' as const,
-              title: '۳. رهگیر موجودی مراحل (WIP)',
-              subtitle: `${formatNumber(kpiSummary.totalWipInLinePcs)} در خط + رسید انبار`,
-              icon: ArrowRightLeft,
-            },
-            {
-              id: 'KPI_OEE_REPORTS' as const,
-              title: '۴. شاخص‌های OEE، نت و بهره‌وری',
-              subtitle: `OEE: ${toPersianDigits(kpiSummary.oeePct)}٪`,
-              icon: Gauge,
-            },
-            {
-              id: 'TREE_TIMELINE_REPORT' as const,
-              title: '۵. نمودار درختی OEE و زمان توقفات',
-              subtitle: 'درخت OEE، تایم‌لاین توقف، Adherence',
-              icon: Activity,
-            },
-            {
-              id: 'SAP_PP_WORKFLOW' as const,
-              title: '۶. مستند جریان کار (SAP PP)',
-              subtitle: 'BOM، زمان‌بندی، WIP، رسید انبار',
-              icon: GitBranch,
-            },
+            { id: 'MULTI_PART_SCHEDULER' as const, title: '۱. ماتریس مراحل تولید (OP)', icon: Calendar },
+            { id: 'DAILY_DISPATCH_SHEET' as const, title: '۲. برنامه روزانه و چاپ شیفت', icon: Printer },
+            { id: 'LIVE_WIP_OP_TRACKER' as const, title: '۳. موجودی بین ایستگاهی (WIP)', icon: ArrowRightLeft },
+            { id: 'KPI_OEE_REPORTS' as const, title: '۴. شاخص‌های OEE و راندمان', icon: Gauge },
+            { id: 'TREE_TIMELINE_REPORT' as const, title: '۵. نمودار درختی و توقفات', icon: Activity },
+            { id: 'SAP_PP_WORKFLOW' as const, title: '۶. راهنمای گردش کار', icon: GitBranch },
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeModuleTab === tab.id;
@@ -1265,30 +1416,15 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveModuleTab(tab.id)}
-                className={`p-3.5 rounded-xl border text-right transition-all flex items-start gap-3 cursor-pointer ${
+                onClick={() => handleSelectModuleTab(tab.id)}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                   active
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/70'
                 }`}
               >
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                    active ? 'bg-amber-500 text-slate-950' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs">{tab.title}</div>
-                  <div
-                    className={`text-[11px] mt-0.5 font-mono truncate ${
-                      active ? 'text-amber-300' : 'text-slate-500'
-                    }`}
-                  >
-                    {tab.subtitle}
-                  </div>
-                </div>
+                <Icon className={`w-3.5 h-3.5 ${active ? 'text-amber-400' : 'text-slate-400'}`} />
+                <span>{tab.title}</span>
               </button>
             );
           })}
@@ -1297,18 +1433,38 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
 
       {/* Live Toast Notification */}
       {toastNotice && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-950 rounded-2xl p-4 text-xs flex items-center justify-between gap-3 shadow-xs">
+        <div
+          className={`rounded-2xl p-4 text-xs flex items-center justify-between gap-3 shadow-xs border ${
+            toastNotice.type === 'warning'
+              ? 'bg-amber-50 border-amber-300 text-amber-950'
+              : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+          }`}
+        >
           <div className="flex items-start gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            {toastNotice.type === 'warning' ? (
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            )}
             <div>
               <div className="font-bold text-sm">{toastNotice.title}</div>
-              <div className="text-emerald-800 mt-0.5">{toastNotice.detail}</div>
+              <div
+                className={`mt-0.5 ${
+                  toastNotice.type === 'warning' ? 'text-amber-800' : 'text-emerald-800'
+                }`}
+              >
+                {toastNotice.detail}
+              </div>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setToastNotice(null)}
-            className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold cursor-pointer shrink-0"
+            className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer shrink-0 ${
+              toastNotice.type === 'warning'
+                ? 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900'
+            }`}
           >
             بستن
           </button>
@@ -1459,14 +1615,19 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                     {/* Horizontal Staggered Operations Pipeline */}
                     <td className="py-3.5 px-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
-                        {item.ops.map(op => {
+                        {item.ops.map((op, oIdx) => {
                           const isScheduledForSelectedDay =
                             op.scheduledDayIndex === selectedDayFilter;
+                          const prevOp = oIdx > 0 ? item.ops[oIdx - 1] : null;
+                          const isLocked = prevOp !== null && prevOp.completedGoodQty === 0;
+
                           return (
                             <div
                               key={op.opId}
                               className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between gap-2 ${
-                                op.status === 'COMPLETED'
+                                isLocked
+                                  ? 'bg-slate-50/70 border-slate-300 border-dashed opacity-85'
+                                  : op.status === 'COMPLETED'
                                   ? 'bg-emerald-50/70 border-emerald-300'
                                   : isScheduledForSelectedDay
                                   ? 'bg-amber-50/90 border-amber-400 shadow-2xs'
@@ -1478,11 +1639,15 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                                   <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-white">
                                     {op.opCode}
                                   </span>
-                                  {op.isFinalOp && (
+                                  {isLocked ? (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                                      🔒 قفل تقدم ({prevOp?.opCode})
+                                    </span>
+                                  ) : op.isFinalOp ? (
                                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-700 text-white">
                                       مرحله آخر (رسید انبار)
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
                                 <div className="font-bold text-slate-900 text-[11px] leading-snug">
                                   {op.opTitle}
@@ -1541,9 +1706,15 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                                 <button
                                   type="button"
                                   onClick={() => handleOpenOpExecutionModal(item, op)}
-                                  className="w-full mt-1 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-[10px] transition cursor-pointer"
+                                  className={`w-full mt-1 py-1 rounded-lg font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1 ${
+                                    isLocked
+                                      ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300'
+                                      : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                  }`}
                                 >
-                                  {op.isFinalOp
+                                  {isLocked
+                                    ? `🔒 قفل (نیاز به ${prevOp?.opCode})`
+                                    : op.isFinalOp
                                     ? 'ثبت تولید + رسید انبار'
                                     : 'ثبت تولید / انتقال مانده'}
                                 </button>
@@ -1554,7 +1725,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                       </div>
                     </td>
 
-                    {/* Warehouse Feed & Cardex Actions */}
+                    {/* Warehouse Feed & Cardex Actions & Plan Management */}
                     <td className="py-3.5 px-3 space-y-2">
                       <button
                         type="button"
@@ -1571,6 +1742,26 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                           </strong>
                         </div>
                       )}
+                      <div className="pt-1.5 border-t border-slate-200/80 grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditScheduleItem(item)}
+                          className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                          title="ویرایش برنامه، تیراژ و شماره دستور ساخت (استاندارد ERPNext / Odoo)"
+                        >
+                          <Edit3 className="w-3 h-3 text-blue-600" />
+                          <span>ویرایش</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteScheduleItem(item.id, item.partName)}
+                          className="flex items-center justify-center gap-1 py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                          title="حذف برنامه تولید این قطعه"
+                        >
+                          <Trash2 className="w-3 h-3 text-rose-600" />
+                          <span>حذف</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1775,13 +1966,24 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                         {formatNumber(rem)}
                       </td>
                       <td className="py-2.5 px-3">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenOpExecutionModal(entry.partItem, entry.op)}
-                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold cursor-pointer"
-                        >
-                          ثبت کارکرد
-                        </button>
+                        {(() => {
+                          const opIdx = entry.partItem.ops.findIndex(o => o.opId === entry.op.opId);
+                          const prevOp = opIdx > 0 ? entry.partItem.ops[opIdx - 1] : null;
+                          const isLocked = prevOp !== null && prevOp.completedGoodQty === 0;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenOpExecutionModal(entry.partItem, entry.op)}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition ${
+                                isLocked
+                                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-white'
+                              }`}
+                            >
+                              {isLocked ? `🔒 قفل (${prevOp?.opCode})` : 'ثبت کارکرد'}
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -2536,12 +2738,15 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       {/* ==================================================================== */}
       {/* MODAL 2: ADD NEW PART WITH STAGGERED MULTI-OP SCHEDULE               */}
       {/* ==================================================================== */}
+      {/* ==================================================================== */}
+      {/* MODAL 2: ADD NEW PART WITH STAGGERED MULTI-OP SCHEDULE               */}
+      {/* ==================================================================== */}
       {isAddPartModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 shadow-xl space-y-4 text-right text-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 shadow-xl space-y-4 text-right text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h4 className="font-bold text-sm text-slate-900">
-                افزودن قطعه جدید به برنامه و تعیین روز اجرای هر مرحله (OP10 تا OP40)
+                افزودن قطعه جدید به برنامه تولید (بر اساس مسیر تولید و توالی عملیات)
               </h4>
               <button
                 type="button"
@@ -2557,7 +2762,10 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 <label className="block font-bold text-slate-700 mb-1">انتخاب قطعه از کاتالوگ *</label>
                 <SearchableSelect
                   value={newPartCode}
-                  onChange={val => setNewPartCode(val)}
+                  onChange={val => {
+                    setNewPartCode(val);
+                    setCustomStepDays({});
+                  }}
                   placeholder="جستجو و انتخاب قطعه..."
                   searchPlaceholder="نام یا کد قطعه..."
                   options={parts.map(p => ({
@@ -2576,50 +2784,191 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                   min={50}
                   value={newPartTargetQty}
                   onChange={e => setNewPartTargetQty(Number(e.target.value) || 1000)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-900"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-900 focus:outline-none focus:bg-white"
                 />
               </div>
 
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
-                <div className="font-bold text-slate-800">
-                  تعیین روز اجرای هر عملیات (امکان اجرای چند مرحله امروز و مراحل بعدی در روزهای بعد):
-                </div>
-                {[
-                  { label: 'OP10: برش ورق اولیه', val: newPartOp1Day, set: setNewPartOp1Day },
-                  { label: 'OP20: بلنک‌زنی و فرم', val: newPartOp2Day, set: setNewPartOp2Day },
-                  { label: 'OP30: پانچ و سوراخ‌کاری', val: newPartOp3Day, set: setNewPartOp3Day },
-                  { label: 'OP40: پرس‌جوش / مرحله آخر (رسید انبار)', val: newPartOp4Day, set: setNewPartOp4Day },
-                ].map((st, idx) => (
-                  <div key={idx} className="flex items-center justify-between">
-                    <span className="text-slate-700">{st.label}</span>
-                    <select
-                      value={st.val}
-                      onChange={e => st.set(Number(e.target.value))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-bold text-slate-900"
-                    >
-                      {WORK_DAYS.map(d => (
-                        <option key={d.index} value={d.index}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
+              {/* Dynamic Operations from Part's Defined Routing or Default Sequential Steps */}
+              {selectedPartRouting && selectedPartRouting.operations && selectedPartRouting.operations.length > 0 ? (
+                <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>مراحل عملیاتی استخراج‌شده از مسیر تولید ({selectedPartRouting.operations.length} مرحله):</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-mono">
+                      Routing v{selectedPartRouting.version || '1.0'}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  <p className="text-[10px] text-emerald-800">
+                    توالی عملیات، پرس و قالب مستقیماً از مسیر تولید تعریف‌شده خوانده شد. روز اجرای هر مرحله را در زیر تعیین کنید:
+                  </p>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {selectedPartRouting.operations.map((op, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-emerald-150 text-[11px] shadow-2xs">
+                        <div className="flex-1 ml-2">
+                          <div className="font-bold text-slate-900">
+                            {op.stepCode || `OP${op.stepNumber || (idx + 1) * 10}`}: {op.stepName}
+                          </div>
+                          <div className="text-[10px] text-slate-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                            <span>پرس: {op.machineName || 'پرس ۲۵۰ تن'}</span>
+                            <span>•</span>
+                            <span>قالب: {op.dieMoldName || 'قالب اختصاصی'}</span>
+                            {op.isSharedOperation && (
+                              <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                خروجی مشترک با {op.sharedPartName || 'قطعه جفت'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <select
+                          value={customStepDays[idx] || (idx < 2 ? 1 : idx < 4 ? 2 : 3)}
+                          onChange={e => setCustomStepDays(prev => ({ ...prev, [idx]: Number(e.target.value) }))}
+                          className="bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 font-bold text-slate-900 text-xs"
+                        >
+                          {WORK_DAYS.map(d => (
+                            <option key={d.index} value={d.index}>
+                              {d.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                  <div className="font-bold text-slate-800 flex items-center justify-between">
+                    <span>تعیین روز اجرای هر عملیات:</span>
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      فاقد مسیر اختصاصی (توالی پیش‌فرض ۴ مرحله‌ای)
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    برای این قطعه هنوز مسیر تولید اختصاصی ثبت نشده؛ می‌توانید از توالی استاندارد زیر استفاده کنید یا در منوی «اطلاعات پایه › مسیر تولید» برای آن فرآیند دقیق تعریف نمایید.
+                  </p>
+                  {[
+                    { label: 'OP10: برش ورق اولیه', val: newPartOp1Day, set: setNewPartOp1Day },
+                    { label: 'OP20: بلنک‌زنی و فرم', val: newPartOp2Day, set: setNewPartOp2Day },
+                    { label: 'OP30: پانچ و سوراخ‌کاری', val: newPartOp3Day, set: setNewPartOp3Day },
+                    { label: 'OP40: پرس‌جوش / مرحله آخر (رسید انبار)', val: newPartOp4Day, set: setNewPartOp4Day },
+                  ].map((st, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="text-slate-700">{st.label}</span>
+                      <select
+                        value={st.val}
+                        onChange={e => st.set(Number(e.target.value))}
+                        className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-bold text-slate-900 text-xs"
+                      >
+                        {WORK_DAYS.map(d => (
+                          <option key={d.index} value={d.index}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddPartModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold cursor-pointer"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer"
                 >
                   افزودن به ماتریس زمان‌بندی
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL 3: EDIT SCHEDULED PLAN ITEM (استاندارد ERPNext / Odoo mrp.production) */}
+      {/* ==================================================================== */}
+      {editingPlanItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-xl space-y-4 text-right text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-900">
+                  ویرایش برنامه تولید قطعه
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPlanItem(null)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditScheduleItem} className="space-y-3.5">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">نام و کد قطعه:</span>
+                <strong className="text-slate-900 text-sm block mt-0.5">
+                  {editingPlanItem.partName}
+                </strong>
+                <span className="font-mono text-slate-600 text-[11px]">
+                  {editingPlanItem.partCode} ({editingPlanItem.carModel})
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  شماره دستور ساخت / دستور کار (MO) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPartOrderCode}
+                  onChange={e => setEditPartOrderCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-900 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  تیراژ هفتگی هدف (عدد) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={editPartTargetQty}
+                  onChange={e => setEditPartTargetQty(Number(e.target.value) || 0)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-900 focus:outline-none focus:bg-white"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  با تغییر تیراژ، برنامه تمامی {editingPlanItem.ops.length} مرحله عملیاتی متناسب با هدف جدید بازتراز خواهد شد.
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingPlanItem(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer shadow-xs"
+                >
+                  ذخیره تغییرات برنامه
                 </button>
               </div>
             </form>
