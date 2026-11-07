@@ -34,6 +34,7 @@ import {
   Clock,
   Building,
   BookOpen,
+  Disc,
 } from 'lucide-react';
 import { UserRoleProfile } from '../types/inventory';
 import {
@@ -199,6 +200,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         label: 'قراردادها و سهمیه ساپکو',
         keywords: 'قرارداد ساپکو مشتری امانی سهمیه تخصیص شناسه',
         icon: FileSignature,
+      },
+      {
+        id: 'sub-inv-sapco-heat',
+        tab: 'sapco',
+        label: 'رسید کلاف و شماره ذوب (Heat)',
+        keywords: 'رسید کلاف ساپکو شماره ذوب heat number بچ تولید ردیابی',
+        icon: Disc,
       },
       {
         id: 'sub-inv-alerts',

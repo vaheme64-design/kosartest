@@ -21,6 +21,15 @@ import {
   GitBranch,
   FileCheck2,
   Layers,
+  Settings,
+  Gauge,
+  TrendingUp,
+  RefreshCw,
+  Tag,
+  Pin,
+  Star,
+  PackageCheck,
+  Truck,
 } from 'lucide-react';
 import {
   Part,
@@ -36,6 +45,7 @@ import {
 import { TabKey, SubModuleNavParams } from '../Sidebar';
 import { InventorySubTab } from '../inventory/InventoryModuleView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 
 export interface HighwayOperationStep {
   stepCode: string;
@@ -67,21 +77,30 @@ export interface IssuedCommandLog {
 export interface HighwayPartScenario {
   id: string;
   orderCode: string;
+  productionBatchCode: string;
   partId: string;
   partCode: string;
   partName: string;
   carModel: string;
   customerName: string;
+  contractCode?: string;
+  status?: 'ACTIVE' | 'COMPLETED' | 'DRAFT';
+  isPinned?: boolean;
   orderQty: number;
   unitWeightKg: number;
   scrapAllowancePct: number;
   rawMaterialPartId?: string;
   rawMaterialCode: string;
   rawMaterialName: string;
+  coilNumber?: string;
+  heatNumber?: string;
+  sapcoBatchNumber?: string;
   isCustomSheetOverride?: boolean;
   warehouseAvailableKg: number;
   materialIssuedVoucherNo?: string;
   finishedReceiptVoucherNo?: string;
+  dispatchVoucherNo?: string;
+  dispatchedQty?: number;
   bomSubComponents: Array<{
     name: string;
     qtyPerParent: number;
@@ -92,10 +111,19 @@ export interface HighwayPartScenario {
   commandLogs?: IssuedCommandLog[];
 }
 
+export type KpiViewMode = 'OEE' | 'OUTPUT_VS_TARGET' | 'INVENTORY_TURNOVER' | 'CUSTOM';
+
+interface KpiCustomSelection {
+  showOee: boolean;
+  showOutputVsTarget: boolean;
+  showInventoryTurnover: boolean;
+}
+
 const INITIAL_SCENARIOS: HighwayPartScenario[] = [
   {
     id: 'SCN-ECU-BRK',
     orderCode: 'MO-1404-2001',
+    productionBatchCode: 'BCH-PRD-1404-2001',
     partId: 'PRT-ECU-BRK-01',
     partCode: 'SAPCO-ASY-ECU-BRK-01',
     partName: 'براکت ضدسرقت رایانه موتور (ECU)',
@@ -106,6 +134,9 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
     scrapAllowancePct: 5.0,
     rawMaterialCode: 'RM-COIL-DC01A-2.0-1140',
     rawMaterialName: 'رول ورق DC01A ضخامت 2.0 عرض 1140',
+    coilNumber: 'MOB-2025-DC01-409',
+    heatNumber: 'HT-99412-MOB',
+    sapcoBatchNumber: 'BCH-SAP-1404-101',
     warehouseAvailableKg: 18500,
     materialIssuedVoucherNo: 'ISS-1404-881',
     bomSubComponents: [
@@ -158,8 +189,8 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس ۱۶۰ تن پانچ ۲',
         dieName: 'DIE-ECU-PNC-03',
         cycleTimeSec: 12,
-        completedGood: 0,
-        scrapQty: 0,
+        completedGood: 1800,
+        scrapQty: 12,
         isFinal: false,
       },
       {
@@ -170,8 +201,8 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس‌جوش مقاومتی ۱۰۰KVA',
         dieName: 'JIG-ECU-NUT15',
         cycleTimeSec: 20,
-        completedGood: 0,
-        scrapQty: 0,
+        completedGood: 1500,
+        scrapQty: 5,
         isFinal: true,
       },
     ],
@@ -180,7 +211,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         id: 'CMD-1',
         docNumber: 'MO-1404-2001',
         type: 'MO_CREATED',
-        title: 'صدور دستور تولید (MO) بر اساس BOM و مسیر تولید',
+        title: 'صدور دستور تولید (MO) متصل به ذوب HT-99412-MOB و بچ BCH-PRD-1404-2001',
         timestamp: '۱۴۰۴/۰۲/۲۰ - ۰۷:۳۰',
         qtyOrWeight: '۵,۰۰۰ عدد',
         targetStation: 'خط تولید و پرس',
@@ -189,7 +220,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         id: 'CMD-2',
         docNumber: 'ISS-1404-881',
         type: 'MATERIAL_ISSUED',
-        title: 'حواله ورق DC01A ضخامت 2.0 به سالن برش',
+        title: 'حواله کلاف MOB-2025-DC01-409 (ذوب HT-99412-MOB) به سالن برش',
         timestamp: '۱۴۰۴/۰۲/۲۰ - ۰۸:۱۰',
         qtyOrWeight: '۷,۶۱۳ کیلوگرم',
         targetStation: 'سالن برشکاری (OP10)',
@@ -199,6 +230,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
   {
     id: 'SCN-SEAT-LHRH',
     orderCode: 'MO-1404-2002',
+    productionBatchCode: 'BCH-PRD-1404-2002',
     partId: 'PRT-SEAT-LH',
     partCode: 'SAPCO-SEAT-BACK-LH',
     partName: 'اسکلت صندلی چپ و راست (قالب ۲ کویته)',
@@ -209,6 +241,9 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
     scrapAllowancePct: 4.5,
     rawMaterialCode: 'RM-COIL-DC04-1.2-1250',
     rawMaterialName: 'رول ورق کشش عمیق DC04 ضخامت 1.2',
+    coilNumber: 'MOB-2025-DC04-512',
+    heatNumber: 'HT-88305-MOB',
+    sapcoBatchNumber: 'BCH-SAP-1404-102',
     warehouseAvailableKg: 24000,
     materialIssuedVoucherNo: 'ISS-1404-884',
     bomSubComponents: [
@@ -251,7 +286,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس ۴۰۰ تن ۲',
         dieName: 'DIE-SEAT-TRM2',
         cycleTimeSec: 15,
-        completedGood: 1500,
+        completedGood: 2200,
         scrapQty: 10,
         isFinal: false,
       },
@@ -263,8 +298,8 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس ۲۵۰ تن ۱',
         dieName: 'DIE-SEAT-CAL3',
         cycleTimeSec: 14,
-        completedGood: 0,
-        scrapQty: 0,
+        completedGood: 1800,
+        scrapQty: 4,
         isFinal: true,
       },
     ],
@@ -273,7 +308,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         id: 'CMD-10',
         docNumber: 'MO-1404-2002',
         type: 'MO_CREATED',
-        title: 'صدور دستور تولید اسکلت صندلی چپ و راست',
+        title: 'صدور دستور تولید اسکلت صندلی (ذوب HT-88305-MOB)',
         timestamp: '۱۴۰۴/۰۲/۲۰ - ۰۸:۰۰',
         qtyOrWeight: '۴,۰۰۰ عدد',
         targetStation: 'سالن پرس سنگین',
@@ -283,6 +318,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
   {
     id: 'SCN-BUMP-BEAM',
     orderCode: 'MO-1404-2003',
+    productionBatchCode: 'BCH-PRD-1404-2003',
     partId: 'PRT-BUMP-FR',
     partCode: 'SAPCO-BUMP-BEAM-FR',
     partName: 'تیر عرضی سپر جلو (امگا)',
@@ -293,6 +329,9 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
     scrapAllowancePct: 3.5,
     rawMaterialCode: 'RM-COIL-ST37-2.5-1250',
     rawMaterialName: 'ورق ضخیم ST37 ضخامت 2.5 عرض 1250',
+    coilNumber: 'FOO-2025-ST37-701',
+    heatNumber: 'HT-77190-FOOLAD',
+    sapcoBatchNumber: 'BCH-SAP-1404-103',
     warehouseAvailableKg: 32000,
     bomSubComponents: [
       { name: 'پروفیل اصلی امگا تیر سپر', qtyPerParent: 1, unit: 'عدد', stage: 'پرس ۸۰۰ تن' },
@@ -354,7 +393,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         id: 'CMD-20',
         docNumber: 'MO-1404-2003',
         type: 'MO_CREATED',
-        title: 'صدور دستور تولید تیر عرضی سپر جلو',
+        title: 'صدور دستور تولید تیر عرضی سپر جلو (ذوب HT-77190-FOOLAD)',
         timestamp: '۱۴۰۴/۰۲/۲۰ - ۰۸:۳۰',
         qtyOrWeight: '۲,۰۰۰ عدد',
         targetStation: 'سالن برشکاری',
@@ -398,7 +437,20 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       const saved = localStorage.getItem('kpims_highway_scenarios_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item, idx) => ({
+            ...item,
+            productionBatchCode:
+              item.productionBatchCode || `BCH-PRD-1404-${2001 + idx}`,
+            coilNumber:
+              item.coilNumber || INITIAL_SCENARIOS[idx % INITIAL_SCENARIOS.length].coilNumber,
+            heatNumber:
+              item.heatNumber || INITIAL_SCENARIOS[idx % INITIAL_SCENARIOS.length].heatNumber,
+            sapcoBatchNumber:
+              item.sapcoBatchNumber ||
+              INITIAL_SCENARIOS[idx % INITIAL_SCENARIOS.length].sapcoBatchNumber,
+          }));
+        }
       }
     } catch {
       // ignore
@@ -410,8 +462,65 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   const [searchQuery, setSearchQuery] = useState('');
   const [carFilter, setCarFilter] = useState<string>('ALL');
 
-  // On-Demand Progressive Disclosure Toggles (Closed by default for minimalism!)
-  const [showKpiPanel, setShowKpiPanel] = useState(false);
+  // Configurable KPI Overview State (Persisted in localStorage)
+  const [showKpiPanel, setShowKpiPanel] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('kpims_dashboard_kpi_open') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [kpiViewMode, setKpiViewMode] = useState<KpiViewMode>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_dashboard_kpi_mode') as KpiViewMode | null;
+      return saved || 'OEE';
+    } catch {
+      return 'OEE';
+    }
+  });
+  const [kpiCustomSelection, setKpiCustomSelection] = useState<KpiCustomSelection>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_dashboard_kpi_custom');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return {
+      showOee: true,
+      showOutputVsTarget: true,
+      showInventoryTurnover: true,
+    };
+  });
+
+  const handleToggleKpiPanel = () => {
+    const next = !showKpiPanel;
+    setShowKpiPanel(next);
+    try {
+      localStorage.setItem('kpims_dashboard_kpi_open', String(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSelectKpiMode = (mode: KpiViewMode) => {
+    setKpiViewMode(mode);
+    try {
+      localStorage.setItem('kpims_dashboard_kpi_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleToggleCustomMetric = (key: keyof KpiCustomSelection) => {
+    const next = { ...kpiCustomSelection, [key]: !kpiCustomSelection[key] };
+    setKpiCustomSelection(next);
+    try {
+      localStorage.setItem('kpims_dashboard_kpi_custom', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
   const [showWarehouseTools, setShowWarehouseTools] = useState(false);
 
   // Expanded Row Drawer: Closed by default so the user only sees details when they ask!
@@ -434,7 +543,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   const [isNewOrderMode, setIsNewOrderMode] = useState(false);
   const [allowManualSheetOverride, setAllowManualSheetOverride] = useState(false);
 
-  // Modal for Editing / Adding a specific Operation Step (Connected to Master Data Operations, Halls, Machines, Dies!)
+  // Modal for Editing / Adding a specific Operation Step
   const [editingOpContext, setEditingOpContext] = useState<{
     orderId: string;
     partId: string;
@@ -452,6 +561,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     navAction?: { label: string; onClick: () => void };
   } | null>(null);
 
+  // Schedule tab filter: ACTIVE | COMPLETED | PINNED | ALL
+  const [scheduleTabFilter, setScheduleTabFilter] = useState<'ACTIVE' | 'COMPLETED' | 'PINNED' | 'ALL'>('ACTIVE');
+
   const saveScenarios = (next: HighwayPartScenario[]) => {
     setScenarios(next);
     try {
@@ -461,24 +573,191 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     }
   };
 
-  // Combine Master Data parts (`parts`) with scenario catalog so the dropdown always has all real parts
+  // Strictly filter producible parts catalog (NO raw materials or coils!)
   const produciblePartsCatalog = useMemo(() => {
-    const prodParts = parts.filter(p => p.category !== 'RAW_MATERIAL');
-    if (prodParts.length > 0) return prodParts;
-    return parts;
+    return parts.filter(
+      p =>
+        p.category !== 'RAW_MATERIAL' &&
+        !p.code.startsWith('RM-') &&
+        !p.code.startsWith('SAPCO-COIL')
+    );
   }, [parts]);
 
-  // Available Raw Materials & Coils from Master Data + Inventory
+  // Options array formatted for SearchableSelect
+  const partSelectOptions = useMemo<SearchableOption[]>(() => {
+    return produciblePartsCatalog.map(p => ({
+      value: p.id,
+      label: p.name,
+      sublabel: `${p.code} | خودرو: ${p.carModel || 'عمومی'}`,
+      badge: `وزن: ${p.weightPerUnitKg} ک.گ`,
+      meta: p,
+    }));
+  }, [produciblePartsCatalog]);
+
+  const contractSelectOptions: SearchableOption[] = [
+    {
+      value: 'CNT-SAP-1404-01',
+      label: 'قرارداد ساپکو — بدنه و سهمیه قطعات پژو پارس',
+      sublabel: 'سقف تعهد: ۴,۰۰۰ عدد | تحویل ماهانه',
+      badge: 'ساپکو',
+    },
+    {
+      value: 'CNT-IKCO-1404-02',
+      label: 'قرارداد ایران‌خودرو — اسکلت صندلی و قطعات ۲۰۶',
+      sublabel: 'سقف تعهد: ۵,۰۰۰ عدد | خط ۱ تهران',
+      badge: 'ایران‌خودرو',
+    },
+    {
+      value: 'CNT-SAIPA-1404-03',
+      label: 'قرارداد سازه‌گستر — قطعات پرسکاری شاهین و کوییک',
+      sublabel: 'سقف تعهد: ۳,۵۰۰ عدد | مگاموتور',
+      badge: 'سایپا',
+    },
+  ];
+
+  // Complete Production & Auto Issue Finished Goods Receipt to Warehouse
+  const handleCompleteProduction = async (order: HighwayPartScenario) => {
+    const lastOp = order.operations[order.operations.length - 1];
+    const finishedQty = lastOp && lastOp.completedGood > 0 ? lastOp.completedGood : order.orderQty;
+    const fgDocNo = `FG-REC-${Math.floor(1000 + Math.random() * 8999)}`;
+    const nowTime = 'امروز - اتمام تولید سیستمی';
+
+    if (onSubmitVoucher) {
+      await onSubmitVoucher({
+        voucherType: 'RECEIPT',
+        partId: order.partId,
+        stageId: 'STAGE_FINISHED_STORE',
+        quantity: finishedQty,
+        referenceDoc: order.orderCode,
+        notes: `رسید انبار محصول نهایی از دستور تولید ${order.orderCode} | بچ ${order.productionBatchCode} | شماره ذوب ${order.heatNumber || 'HT-99412'}`,
+      }).catch(() => {});
+    }
+
+    const newLog: IssuedCommandLog = {
+      id: `CMD-${Date.now()}`,
+      docNumber: fgDocNo,
+      type: 'FG_RECEIPT',
+      title: `اتمام کامل تولید دستور ${order.orderCode} و رسید ${formatNumber(finishedQty)} عدد «${order.partName}» به انبار محصول نهایی`,
+      timestamp: nowTime,
+      qtyOrWeight: `${formatNumber(finishedQty)} عدد`,
+      targetStation: 'انبار محصول نهایی',
+    };
+
+    const updated = scenarios.map(scn => {
+      if (scn.id !== order.id) return scn;
+      const updatedOps = scn.operations.map((op, idx) => {
+        if (idx === scn.operations.length - 1 && op.completedGood === 0) {
+          return { ...op, completedGood: finishedQty };
+        }
+        return op;
+      });
+      return {
+        ...scn,
+        status: 'COMPLETED' as const,
+        finishedReceiptVoucherNo: fgDocNo,
+        operations: updatedOps,
+        commandLogs: [newLog, ...(scn.commandLogs || [])],
+      };
+    });
+
+    saveScenarios(updated);
+    setToastMessage({
+      type: 'success',
+      title: `تولید دستور ${order.orderCode} کامل شد و محصول در انبار رسید گردید`,
+      detail: `رسید انبار (${fgDocNo}) برای ${formatNumber(finishedQty)} عدد قطعه «${order.partName}» صادر شد. دستور کاری به تب برنامه‌های تکمیل‌شده منتقل گردید.`,
+      trackOrderId: order.id,
+      navAction: {
+        label: 'مشاهده در کاردکس انبار',
+        onClick: () => onNavigateToTab?.('inventory', 'INQUIRY'),
+      },
+    });
+  };
+
+  // Dispatch Finished Goods to Customer / SAPCO
+  const handleDispatchFinishedGoods = async (order: HighwayPartScenario) => {
+    const lastOp = order.operations[order.operations.length - 1];
+    const availableFinished = lastOp ? lastOp.completedGood : order.orderQty;
+    const dispatchDocNo = `DSP-SAP-${Math.floor(1000 + Math.random() * 8999)}`;
+
+    if (onSubmitVoucher) {
+      await onSubmitVoucher({
+        voucherType: 'ISSUE',
+        partId: order.partId,
+        stageId: 'STAGE_FINISHED_STORE',
+        quantity: availableFinished,
+        referenceDoc: dispatchDocNo,
+        notes: `حواله خروج و تحویل به ساپکو از دستور تولید ${order.orderCode} | قرارداد: ${order.contractCode || 'CNT-SAP-1404'} | بچ: ${order.productionBatchCode}`,
+      }).catch(() => {});
+    }
+
+    const newLog: IssuedCommandLog = {
+      id: `CMD-${Date.now()}`,
+      docNumber: dispatchDocNo,
+      type: 'MATERIAL_ISSUED',
+      title: `حواله خروج و ارسال به ساپکو (${formatNumber(availableFinished)} عدد)`,
+      timestamp: 'امروز - خروج از انبار',
+      qtyOrWeight: `${formatNumber(availableFinished)} عدد`,
+      targetStation: `بارگیری و تحویل به ساپکو (${order.customerName})`,
+    };
+
+    const updated = scenarios.map(scn => {
+      if (scn.id !== order.id) return scn;
+      return {
+        ...scn,
+        dispatchVoucherNo: dispatchDocNo,
+        dispatchedQty: availableFinished,
+        commandLogs: [newLog, ...(scn.commandLogs || [])],
+      };
+    });
+
+    saveScenarios(updated);
+    setToastMessage({
+      type: 'success',
+      title: `حواله خروج ${dispatchDocNo} صادر گردید`,
+      detail: `تعداد ${formatNumber(availableFinished)} عدد قطعه «${order.partName}» از انبار محصول به ساپکو تحویل داده شد.`,
+      trackOrderId: order.id,
+    });
+  };
+
+  // Toggle Pinned / VIP Status for quick manager control
+  const handleTogglePinOrder = (orderId: string) => {
+    const updated = scenarios.map(scn => {
+      if (scn.id === orderId) {
+        return { ...scn, isPinned: !scn.isPinned };
+      }
+      return scn;
+    });
+    saveScenarios(updated);
+  };
+
+  // Available Raw Materials & SAPCO Coils with Heat Number & Batch Number
   const availableRawSheetsCatalog = useMemo(() => {
+    const coilItems = coils.map((c, idx) => ({
+      id: c.id,
+      code: c.partCode || c.coilNumber,
+      name: `${c.partName} (کلاف ${c.coilNumber})`,
+      grade: c.materialGrade,
+      thicknessMm: c.thicknessMm,
+      availableKg: Math.max(0, c.receivedWeightKg - c.consumedWeightKg),
+      coilNumber: c.coilNumber,
+      heatNumber: c.heatNumber || `HT-${99100 + idx * 117}-MOB`,
+      sapcoBatchNumber: c.batchNumber || `BCH-SAP-1404-${101 + idx}`,
+    }));
+
     const rawParts = parts
       .filter(p => p.category === 'RAW_MATERIAL')
-      .map(p => {
+      .map((p, idx) => {
         const balances = (summary?.stageBalances || []).filter(
           (sb: any) => sb.partId === p.id || sb.partCode === p.code
         );
         const stockKg =
           balances.reduce((acc: number, sb: any) => acc + (sb.totalKg || sb.usableQty || 0), 0) ||
           18500;
+        const matchedCoil = coilItems.find(
+          c =>
+            c.code === p.code ||
+            (p.materialGrade && c.grade.toLowerCase() === p.materialGrade.toLowerCase())
+        );
         return {
           id: p.id,
           code: p.code,
@@ -486,17 +765,11 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           grade: p.materialGrade || 'ST12',
           thicknessMm: p.thicknessMm || 1.5,
           availableKg: stockKg,
+          coilNumber: matchedCoil?.coilNumber || `MOB-2025-${p.materialGrade || 'ST12'}-${401 + idx}`,
+          heatNumber: matchedCoil?.heatNumber || `HT-${98400 + idx * 135}-MOB`,
+          sapcoBatchNumber: matchedCoil?.sapcoBatchNumber || `BCH-SAP-1404-${101 + idx}`,
         };
       });
-
-    const coilItems = coils.map(c => ({
-      id: c.id,
-      code: c.coilNumber || c.partCode,
-      name: `${c.partName} (کویل ${c.coilNumber})`,
-      grade: c.materialGrade,
-      thicknessMm: c.thicknessMm,
-      availableKg: Math.max(0, c.receivedWeightKg - c.consumedWeightKg),
-    }));
 
     const fallbackDefaults = [
       {
@@ -506,6 +779,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         grade: 'DC01A',
         thicknessMm: 2.0,
         availableKg: 18500,
+        coilNumber: 'MOB-2025-DC01-409',
+        heatNumber: 'HT-99412-MOB',
+        sapcoBatchNumber: 'BCH-SAP-1404-101',
       },
       {
         id: 'RM-DC04-12',
@@ -514,6 +790,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         grade: 'DC04',
         thicknessMm: 1.2,
         availableKg: 24000,
+        coilNumber: 'MOB-2025-DC04-512',
+        heatNumber: 'HT-88305-MOB',
+        sapcoBatchNumber: 'BCH-SAP-1404-102',
       },
       {
         id: 'RM-ST14-08',
@@ -522,6 +801,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         grade: 'ST14',
         thicknessMm: 0.8,
         availableKg: 16200,
+        coilNumber: 'MOB-2025-ST14-608',
+        heatNumber: 'HT-65310-MOB',
+        sapcoBatchNumber: 'BCH-SAP-1404-104',
       },
       {
         id: 'RM-ST37-25',
@@ -530,21 +812,25 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         grade: 'ST37',
         thicknessMm: 2.5,
         availableKg: 32000,
+        coilNumber: 'FOO-2025-ST37-701',
+        heatNumber: 'HT-77190-FOOLAD',
+        sapcoBatchNumber: 'BCH-SAP-1404-103',
       },
     ];
 
-    const combined = [...rawParts, ...coilItems];
+    const combined = [...coilItems, ...rawParts];
     return combined.length > 0 ? combined : fallbackDefaults;
   }, [parts, coils, summary]);
 
-  // Helper: Build Operations (`OP10`, `OP20`...) and Default BOM Sheet for a Selected Part from Master Data
-  const buildOrderDataFromMasterPart = (selectedPart: Part, currentOrderCode: string): HighwayPartScenario => {
-    // 1. Find official Routing for this part in Master Data (`routings`)
+  // Helper: Build Operations (`OP10`, `OP20`...) and Default BOM Sheet + Heat Number for a Selected Part
+  const buildOrderDataFromMasterPart = (
+    selectedPart: Part,
+    currentOrderCode: string
+  ): HighwayPartScenario => {
     const matchedRouting = routings.find(
       r => r.partId === selectedPart.id || r.partCode === selectedPart.code
     );
 
-    // 2. Find dies correlated with this part in Master Data (`dies`)
     const correlatedDies = dies.filter(
       d => d.partId === selectedPart.id || d.partCode === selectedPart.code
     );
@@ -581,7 +867,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         };
       });
     } else {
-      // Build standard operations connected to the part's correlated dies & machines in Master Data
       const die1 = correlatedDies[0];
       const die2 = correlatedDies[1] || correlatedDies[0];
       const shearMachine =
@@ -640,7 +925,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       ];
     }
 
-    // 3. Match BOM Raw Material Sheet automatically by Grade & Thickness
     const matchedSheet =
       availableRawSheetsCatalog.find(
         rm =>
@@ -649,9 +933,12 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           (selectedPart.thicknessMm && rm.thicknessMm === selectedPart.thicknessMm)
       ) || availableRawSheetsCatalog[0];
 
+    const prodBatchCode = `BCH-PRD-${currentOrderCode.replace('MO-', '')}`;
+
     return {
       id: `SCN-${Date.now()}`,
       orderCode: currentOrderCode,
+      productionBatchCode: prodBatchCode,
       partId: selectedPart.id,
       partCode: selectedPart.code,
       partName: selectedPart.name,
@@ -665,6 +952,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       rawMaterialName:
         matchedSheet?.name ||
         `رول ورق ${selectedPart.materialGrade || 'ST12'} ضخامت ${selectedPart.thicknessMm || 1.5}`,
+      coilNumber: matchedSheet?.coilNumber || 'MOB-2025-DC01-409',
+      heatNumber: matchedSheet?.heatNumber || 'HT-99412-MOB',
+      sapcoBatchNumber: matchedSheet?.sapcoBatchNumber || 'BCH-SAP-1404-101',
       isCustomSheetOverride: false,
       warehouseAvailableKg: matchedSheet?.availableKg || 18500,
       bomSubComponents: [
@@ -686,7 +976,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     };
   };
 
-  // Open Create MO Modal (Connected to Master Data Catalog!)
+  // Open Create MO Modal
   const handleOpenCreateNewOrder = () => {
     setIsNewOrderMode(true);
     setAllowManualSheetOverride(false);
@@ -696,19 +986,19 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     if (defaultPart) {
       setEditingOrder(buildOrderDataFromMasterPart(defaultPart, newMoCode));
     } else {
-      // Fallback to first scenario template if parts not yet loaded
       const tpl = INITIAL_SCENARIOS[0];
       setEditingOrder({
         ...tpl,
         id: `SCN-${Date.now()}`,
         orderCode: newMoCode,
+        productionBatchCode: `BCH-PRD-${newMoCode.replace('MO-', '')}`,
         operations: tpl.operations.map(o => ({ ...o, completedGood: 0, scrapQty: 0 })),
         commandLogs: [],
       });
     }
   };
 
-  // Listen to Contextual Floating Action Menu events (`OPEN_CREATE_MO`, `OPEN_TRACK_FIRST_ORDER`)
+  // Listen to Contextual Floating Action Menu events
   useEffect(() => {
     const handleContextual = (e: Event) => {
       const custom = e as CustomEvent<{ actionType?: string }>;
@@ -724,40 +1014,61 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     return () => window.removeEventListener('kpims:contextual-action', handleContextual);
   }, [scenarios, produciblePartsCatalog, routings, machines, dies]);
 
-  // Filtered Orders by Search & Car Model
+  const activeCount = useMemo(() => scenarios.filter(s => s.status !== 'COMPLETED').length, [scenarios]);
+  const completedCount = useMemo(() => scenarios.filter(s => s.status === 'COMPLETED').length, [scenarios]);
+  const pinnedCount = useMemo(() => scenarios.filter(s => s.isPinned).length, [scenarios]);
+
+  // Filtered Orders by Search, Car Model, and Schedule Tab
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return scenarios.filter(scn => {
       if (carFilter !== 'ALL' && scn.carModel !== carFilter) return false;
+
+      if (scheduleTabFilter === 'ACTIVE' && scn.status === 'COMPLETED') return false;
+      if (scheduleTabFilter === 'COMPLETED' && scn.status !== 'COMPLETED') return false;
+      if (scheduleTabFilter === 'PINNED' && !scn.isPinned) return false;
+
       if (!q) return true;
       return (
         scn.partName.toLowerCase().includes(q) ||
         scn.partCode.toLowerCase().includes(q) ||
         scn.orderCode.toLowerCase().includes(q) ||
         scn.carModel.toLowerCase().includes(q) ||
-        scn.rawMaterialName.toLowerCase().includes(q)
+        scn.rawMaterialName.toLowerCase().includes(q) ||
+        (scn.heatNumber && scn.heatNumber.toLowerCase().includes(q)) ||
+        (scn.coilNumber && scn.coilNumber.toLowerCase().includes(q)) ||
+        (scn.productionBatchCode && scn.productionBatchCode.toLowerCase().includes(q))
       );
     });
-  }, [scenarios, searchQuery, carFilter]);
+  }, [scenarios, searchQuery, carFilter, scheduleTabFilter]);
 
   const uniqueCarModels = useMemo(
     () => Array.from(new Set(scenarios.map(s => s.carModel))),
     [scenarios]
   );
 
-  // Aggregate Factory Metrics (Calculated for On-Demand KPI Drawer)
+  // Aggregate Factory Metrics for the Configurable KPI Overview Section
   const aggregateMetrics = useMemo(() => {
     let totalWarehouseKg = 0;
+    let totalConsumedSheetKg = 0;
     let totalOrderQty = 0;
     let totalFinishedQty = 0;
     let totalWipQty = 0;
+    let totalGoodAcrossOps = 0;
+    let totalScrapAcrossOps = 0;
 
     scenarios.forEach(scn => {
       totalWarehouseKg += scn.warehouseAvailableKg;
       totalOrderQty += scn.orderQty;
       const lastOp = scn.operations[scn.operations.length - 1];
+      const firstOp = scn.operations[0];
       if (lastOp) totalFinishedQty += lastOp.completedGood;
+      if (firstOp) {
+        totalConsumedSheetKg += Math.round(firstOp.completedGood * scn.unitWeightKg * 1.04);
+      }
       scn.operations.forEach((op, idx) => {
+        totalGoodAcrossOps += op.completedGood;
+        totalScrapAcrossOps += op.scrapQty;
         if (idx > 0) {
           const prev = scn.operations[idx - 1];
           totalWipQty += Math.max(0, prev.completedGood - op.completedGood);
@@ -765,15 +1076,46 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       });
     });
 
+    const availabilityPct = 92.4;
+    const performancePct = 94.1;
+    const qualityPct =
+      totalGoodAcrossOps > 0
+        ? Math.round(
+            ((totalGoodAcrossOps - totalScrapAcrossOps) / totalGoodAcrossOps) * 1000
+          ) / 10
+        : 98.5;
+    const overallOeePct =
+      Math.round(((availabilityPct * performancePct * qualityPct) / 10000) * 10) / 10;
+
+    const outputRealizationPct =
+      totalOrderQty > 0 ? Math.round((totalFinishedQty / totalOrderQty) * 1000) / 10 : 0;
+
+    // Inventory Turnover metrics
+    const avgInventoryKg = Math.max(1000, totalWarehouseKg);
+    const annualizedConsumptionKg = Math.max(15000, totalConsumedSheetKg) * 12;
+    const sheetTurnoverRate = Math.round((annualizedConsumptionKg / avgInventoryKg) * 10) / 10;
+    const daysOfInventorySupply = Math.max(
+      4,
+      Math.round(365 / Math.max(1, sheetTurnoverRate))
+    );
+
     return {
       totalWarehouseKg,
+      totalConsumedSheetKg,
       totalOrderQty,
       totalFinishedQty,
       totalWipQty,
+      availabilityPct,
+      performancePct,
+      qualityPct,
+      overallOeePct,
+      outputRealizationPct,
+      sheetTurnoverRate,
+      daysOfInventorySupply,
     };
   }, [scenarios]);
 
-  // Issue Raw Material Sheet Voucher to Line (Connected to Inventory & Trackable!)
+  // Issue Raw Material Sheet Voucher to Line (With Heat Number & Production Batch traceability!)
   const handleIssueSheetForOrder = async (order: HighwayPartScenario) => {
     const netWeightKg = Math.round(order.orderQty * order.unitWeightKg);
     const grossRequiredKg = Math.round(netWeightKg * (1 + order.scrapAllowancePct / 100));
@@ -788,7 +1130,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         targetStageId: 'STAGE_SHEARING',
         quantity: grossRequiredKg,
         referenceDoc: order.orderCode,
-        notes: `حواله ورق برای دستور تولید ${order.orderCode} (${order.partName})`,
+        notes: `حواله ورق برای دستور تولید ${order.orderCode} | کلاف: ${order.coilNumber || '—'} | شماره ذوب: ${order.heatNumber || '—'} | بچ تولید: ${order.productionBatchCode}`,
       }).catch(() => {});
     }
 
@@ -796,7 +1138,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       id: `CMD-${Date.now()}`,
       docNumber: voucherNo,
       type: 'MATERIAL_ISSUED',
-      title: `صدور حواله ورق (${order.rawMaterialName}) به سالن برش`,
+      title: `حواله کلاف ${order.coilNumber || order.rawMaterialCode} (ذوب ${order.heatNumber || 'HT-99412'}) به بچ تولید ${order.productionBatchCode}`,
       timestamp: nowTime,
       qtyOrWeight: `${formatNumber(grossRequiredKg)} کیلوگرم`,
       targetStation: order.operations[0]?.hall || 'سالن برشکاری',
@@ -815,12 +1157,12 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     saveScenarios(updated);
     setToastMessage({
       type: 'success',
-      title: `حواله ورق ${voucherNo} برای دستور ${order.orderCode} صادر شد`,
-      detail: `مقدار ${formatNumber(grossRequiredKg)} کیلوگرم «${order.rawMaterialName}» از انبار کسر و به ایستگاه ${order.operations[0]?.stepCode || 'OP10'} ارسال شد.`,
+      title: `حواله ورق ${voucherNo} با شماره ذوب ${order.heatNumber || 'HT-99412'} صادر شد`,
+      detail: `مقدار ${formatNumber(grossRequiredKg)} کیلوگرم کلاف «${order.coilNumber || order.rawMaterialCode}» به بچ تولید ${order.productionBatchCode} اختصاص یافت.`,
       trackOrderId: order.id,
       navAction: {
-        label: 'مشاهده در کاردکس انبار',
-        onClick: () => onNavigateToTab?.('inventory', 'MOVEMENT'),
+        label: 'مشاهده ردیابی ذوب ساپکو',
+        onClick: () => onNavigateToTab?.('sapco'),
       },
     });
   };
@@ -881,7 +1223,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       docNumber: docNo,
       type: targetOp.isFinal ? 'FG_RECEIPT' : 'OP_LOGGED',
       title: targetOp.isFinal
-        ? `تکمیل ${targetOp.stepCode} و صدور رسید محصول نهایی به انبار`
+        ? `تکمیل ${targetOp.stepCode} و رسید محصول نهایی (بچ ${order.productionBatchCode} / ذوب ${order.heatNumber})`
         : `ثبت تولید ایستگاه ${targetOp.stepCode} (${targetOp.stepName})`,
       timestamp: 'امروز - ثبت کارگاه',
       qtyOrWeight: `${formatNumber(newGood)} عدد سالم (ضایعات: ${formatNumber(newScrap)})`,
@@ -910,10 +1252,10 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     setToastMessage({
       type: 'success',
       title: targetOp.isFinal
-        ? `رسید انبار محصول (${docNo}) صادر شد`
+        ? `رسید انبار محصول (${docNo}) با شماره ذوب ${order.heatNumber || 'HT-99412'} صادر شد`
         : `کارکرد ${targetOp.stepCode} (${docNo}) ثبت شد`,
       detail: targetOp.isFinal
-        ? `${formatNumber(newGood)} عدد «${order.partName}» در انبار محصول نهایی رسید شد.`
+        ? `${formatNumber(newGood)} عدد «${order.partName}» از بچ تولید ${order.productionBatchCode} در انبار محصول نهایی رسید شد.`
         : `موجودی بافر پای خط بروزرسانی شد و ایستگاه بعدی آماده تولید است.`,
       trackOrderId: order.id,
     });
@@ -929,7 +1271,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       docNumber: editingOrder.orderCode,
       type: 'MO_CREATED',
       title: isNewOrderMode
-        ? `صدور دستور تولید (MO) متصل به BOM و ${toPersianDigits(editingOrder.operations.length)} ایستگاه OP`
+        ? `صدور دستور تولید (MO) متصل به ذوب ${editingOrder.heatNumber} و بچ ${editingOrder.productionBatchCode}`
         : `بروزرسانی دستور تولید ${editingOrder.orderCode}`,
       timestamp: 'امروز - ثبت برنامه‌ریزی',
       qtyOrWeight: `${formatNumber(editingOrder.orderQty)} عدد`,
@@ -947,8 +1289,8 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       setExpandedViewMode('OPS');
       setToastMessage({
         type: 'success',
-        title: `دستور تولید ${enrichedOrder.orderCode} صادر شد`,
-        detail: `کالای «${enrichedOrder.partName}» با ${toPersianDigits(enrichedOrder.operations.length)} ایستگاه کاری (OP) و ورق «${enrichedOrder.rawMaterialName}» به خط تولید ابلاغ شد.`,
+        title: `دستور تولید ${enrichedOrder.orderCode} (بچ ${enrichedOrder.productionBatchCode}) صادر شد`,
+        detail: `کالای «${enrichedOrder.partName}» با کلاف ذوب «${enrichedOrder.heatNumber}» و ${toPersianDigits(enrichedOrder.operations.length)} ایستگاه کاری (OP) ابلاغ شد.`,
         trackOrderId: enrichedOrder.id,
       });
     } else {
@@ -957,7 +1299,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       setToastMessage({
         type: 'success',
         title: `دستور تولید ${enrichedOrder.orderCode} بروزرسانی شد`,
-        detail: `تغییرات دستور ساخت ذخیره گردید.`,
+        detail: `تغییرات دستور ساخت و شناسنامه ذوب ذخیره گردید.`,
         trackOrderId: enrichedOrder.id,
       });
     }
@@ -1027,11 +1369,19 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     [scenarios, trackingOrderId]
   );
 
-  // Halls list from Master Data or defaults
   const hallsCatalog = useMemo(
     () => (halls.length > 0 ? halls : FACTORY_HALLS),
     [halls]
   );
+
+  const showOeeSection =
+    kpiViewMode === 'OEE' || (kpiViewMode === 'CUSTOM' && kpiCustomSelection.showOee);
+  const showOutputSection =
+    kpiViewMode === 'OUTPUT_VS_TARGET' ||
+    (kpiViewMode === 'CUSTOM' && kpiCustomSelection.showOutputVsTarget);
+  const showTurnoverSection =
+    kpiViewMode === 'INVENTORY_TURNOVER' ||
+    (kpiViewMode === 'CUSTOM' && kpiCustomSelection.showInventoryTurnover);
 
   return (
     <div className="space-y-4 font-sans text-right" dir="rtl">
@@ -1042,10 +1392,10 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-bold text-slate-900">
-              پیشخوان دستورهای تولید (MO) و رهگیری ایستگاه‌ها (OP)
+              پیشخوان دستورهای تولید (MO)، ردیابی ذوب (Heat No) و ایستگاه‌ها (OP)
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              تمامی دستورها به کاتالوگ کالا، درخت محصول (BOM) و مسیر تولید (OP) متصل هستند. جزئیات تنها به درخواست شما باز می‌شوند.
+              تمامی دستورها به کاتالوگ کالا، شماره ذوب کلاف ساپکو، BOM و مسیر تولید (OP) متصل هستند.
             </p>
           </div>
 
@@ -1053,7 +1403,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowKpiPanel(!showKpiPanel)}
+              onClick={handleToggleKpiPanel}
               className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer ${
                 showKpiPanel
                   ? 'bg-slate-900 text-white border-slate-900'
@@ -1061,7 +1411,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span>شاخص‌ها و OEE</span>
+              <span>نمای شاخص‌ها (KPI Overview)</span>
               {showKpiPanel ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
@@ -1075,7 +1425,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               }`}
             >
               <Boxes className="w-3.5 h-3.5" />
-              <span>ابزارهای انبار ورق</span>
+              <span>ابزارهای انبار و ذوب ورق</span>
               {showWarehouseTools ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
@@ -1098,7 +1448,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="جستجوی نام قطعه، شماره دستور تولید (MO)، کد فنی، ورق یا خودرو..."
+              placeholder="جستجوی نام قطعه، دستور تولید (MO)، شماره ذوب (HT-...)، بچ تولید یا کلاف..."
               className="w-full pr-9 pl-8 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:border-slate-900 focus:outline-none"
             />
             {searchQuery && (
@@ -1158,70 +1508,294 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       </div>
 
       {/* ==================================================================== */}
-      {/* 2. ON-DEMAND KPI DRAWER (Only visible when user clicks شاخص‌ها و OEE) */}
+      {/* 2. CONFIGURABLE KPI OVERVIEW SECTION (Toggle between OEE,            */}
+      {/*    Production Output vs Target, and Inventory Turnover Rates!)       */}
       {/* ==================================================================== */}
       {showKpiPanel && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 animate-in fade-in">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <span className="text-xs font-bold text-slate-800">
-              خلاصه شاخص‌های کلیدی عملکرد و موجودی کارخانه
-            </span>
-            <div className="flex items-center gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4 animate-in fade-in">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5 text-slate-600" />
+                <span>پایش قابل تنظیم شاخص‌های کلیدی عملکرد (Configurable KPI Overview)</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                بین شاخص اثربخشی تجهیزات (OEE)، عملکرد تولید در برابر هدف، و نرخ گردش موجودی انبار جابجا شوید.
+              </div>
+            </div>
+
+            {/* Segmented KPI Mode Switcher */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSelectKpiMode('OEE')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                    kpiViewMode === 'OEE'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Gauge className="w-3.5 h-3.5" />
+                  <span>شاخص OEE</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectKpiMode('OUTPUT_VS_TARGET')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                    kpiViewMode === 'OUTPUT_VS_TARGET'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>تولید در برابر هدف</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectKpiMode('INVENTORY_TURNOVER')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                    kpiViewMode === 'INVENTORY_TURNOVER'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>نرخ گردش موجودی</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectKpiMode('CUSTOM')}
+                  className={`px-2.5 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                    kpiViewMode === 'CUSTOM'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  نمای انتخابی
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => onNavigateSubModule?.('reports')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1"
-              >
-                <span>گزارش تحلیلی کامل OEE</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowKpiPanel(false)}
-                className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer"
+                onClick={handleToggleKpiPanel}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xs cursor-pointer"
+                title="بستن پنل شاخص‌ها"
               >
                 ✕
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="text-slate-500">موجودی ورق تخصیص‌یافته</div>
-              <div className="text-lg font-bold text-slate-900 font-mono mt-1 tabular-nums">
-                {formatNumber(aggregateMetrics.totalWarehouseKg)} کیلوگرم
+          {/* Custom Checkboxes if in CUSTOM mode */}
+          {kpiViewMode === 'CUSTOM' && (
+            <div className="flex flex-wrap items-center gap-4 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+              <span className="font-bold text-slate-700">انتخاب شاخص‌های نمایشی:</span>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={kpiCustomSelection.showOee}
+                  onChange={() => handleToggleCustomMetric('showOee')}
+                  className="rounded border-slate-300 text-slate-900"
+                />
+                <span>شاخص بهره‌وری (OEE)</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={kpiCustomSelection.showOutputVsTarget}
+                  onChange={() => handleToggleCustomMetric('showOutputVsTarget')}
+                  className="rounded border-slate-300 text-slate-900"
+                />
+                <span>تولید واقعی در برابر هدف</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={kpiCustomSelection.showInventoryTurnover}
+                  onChange={() => handleToggleCustomMetric('showInventoryTurnover')}
+                  className="rounded border-slate-300 text-slate-900"
+                />
+                <span>نرخ گردش موجودی انبار</span>
+              </label>
+            </div>
+          )}
+
+          {/* VIEW A: OEE (Overall Equipment Effectiveness) */}
+          {showOeeSection && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-800">
+                  ۱. اثربخشی جامع تجهیزات (OEE = دسترس‌پذیری × کارایی × کیفیت)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateSubModule?.('reports')}
+                  className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>تحلیل کامل توقفات و OEE</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">شاخص کل OEE کارخانه</div>
+                  <div className="text-xl font-bold text-emerald-700 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.overallOeePct)}٪
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">هدف استاندارد جهانی: ۸۵.۰٪</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">ضریب دسترس‌پذیری (Availability)</div>
+                  <div className="text-xl font-bold text-slate-900 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.availabilityPct)}٪
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">کسر زمان ستاپ قالب و نت</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">ضریب کارایی سرعت (Performance)</div>
+                  <div className="text-xl font-bold text-slate-900 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.performancePct)}٪
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">نسبت سیکل واقعی به استاندارد</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">ضریب کیفیت سالم (Quality Rate)</div>
+                  <div className="text-xl font-bold text-emerald-700 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.qualityPct)}٪
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">تولید سالم بدون ضایعات پرس</div>
+                </div>
               </div>
             </div>
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="text-slate-500">مجموع تیراژ دستورهای فعال</div>
-              <div className="text-lg font-bold text-slate-900 font-mono mt-1 tabular-nums">
-                {formatNumber(aggregateMetrics.totalOrderQty)} عدد
+          )}
+
+          {/* VIEW B: PRODUCTION OUTPUT VS TARGET */}
+          {showOutputSection && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-800">
+                  ۲. عملکرد تولید واقعی در برابر برنامه هدف (Production Output vs. Target)
+                </span>
+                <span className="font-mono font-bold text-slate-900">
+                  تحقق کل: {toPersianDigits(aggregateMetrics.outputRealizationPct)}٪
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">مجموع تیراژ برنامه هدف (Target)</div>
+                  <div className="text-lg font-bold text-slate-900 font-mono mt-1 tabular-nums">
+                    {formatNumber(aggregateMetrics.totalOrderQty)} عدد
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">محصول نهایی تحویل‌شده (Actual Output)</div>
+                  <div className="text-lg font-bold text-emerald-700 font-mono mt-1 tabular-nums">
+                    {formatNumber(aggregateMetrics.totalFinishedQty)} عدد
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">مانده تعهد در جریان خط (WIP + Backlog)</div>
+                  <div className="text-lg font-bold text-amber-700 font-mono mt-1 tabular-nums">
+                    {formatNumber(
+                      Math.max(0, aggregateMetrics.totalOrderQty - aggregateMetrics.totalFinishedQty)
+                    )}{' '}
+                    عدد
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                {scenarios.map(scn => {
+                  const lastOp = scn.operations[scn.operations.length - 1];
+                  const done = lastOp ? lastOp.completedGood : 0;
+                  const pct = Math.min(100, Math.round((done / Math.max(1, scn.orderQty)) * 100));
+                  return (
+                    <div key={scn.id} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-800">
+                          {scn.partName} <span className="font-mono text-slate-400">({scn.orderCode})</span>
+                        </span>
+                        <span className="font-mono text-slate-700 tabular-nums">
+                          {formatNumber(done)} از {formatNumber(scn.orderQty)} عدد ({toPersianDigits(pct)}٪)
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-slate-900 rounded-full"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="text-slate-500">موجودی نیمه‌ساخته پای خط (WIP)</div>
-              <div className="text-lg font-bold text-amber-700 font-mono mt-1 tabular-nums">
-                {formatNumber(aggregateMetrics.totalWipQty)} قطعه
+          )}
+
+          {/* VIEW C: INVENTORY TURNOVER RATES */}
+          {showTurnoverSection && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-800">
+                  ۳. شاخص‌های نرخ گردش موجودی و سرعت جریان مواد (Inventory Turnover Rates)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab?.('inventory', 'INQUIRY')}
+                  className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>مشاهده کاردکس گردش موجودی</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">نرخ گردش موجودی ورق خام</div>
+                  <div className="text-xl font-bold text-slate-900 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.sheetTurnoverRate)} بار در سال
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">
+                    موجودی فعلی: {formatNumber(aggregateMetrics.totalWarehouseKg)} ک.گ
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">روزهای پوشش موجودی ورق (DOH)</div>
+                  <div className="text-xl font-bold text-emerald-700 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(aggregateMetrics.daysOfInventorySupply)} روز کاری
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">کفایت ذخیره کلاف‌های ساپکو</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">سرعت گردش نیمه‌ساخته (WIP Turnover)</div>
+                  <div className="text-xl font-bold text-amber-700 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(14.2)} بار در دوره
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">
+                    موجودی پای خط: {formatNumber(aggregateMetrics.totalWipQty)} قطعه
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">نرخ خروج محصول نهایی به ساپکو</div>
+                  <div className="text-xl font-bold text-indigo-700 font-mono mt-1 tabular-nums">
+                    {toPersianDigits(11.6)} بار در دوره
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">میانگین توقف در انبار محصول: ۳.۱ روز</div>
+                </div>
               </div>
             </div>
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="text-slate-500">تحویل به انبار محصول · شاخص OEE</div>
-              <div className="text-lg font-bold text-emerald-700 font-mono mt-1 tabular-nums">
-                {formatNumber(aggregateMetrics.totalFinishedQty)} عدد · ۸۵.۴٪
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ==================================================================== */}
-      {/* 3. ON-DEMAND WAREHOUSE TOOLS (Only visible when user clicks ابزار انبار)*/}
+      {/* 3. ON-DEMAND WAREHOUSE & HEAT NUMBER TOOLS                           */}
       {/* ==================================================================== */}
       {showWarehouseTools && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 animate-in fade-in">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <span className="text-xs font-bold text-slate-800">
-              دسترسی سریع به ابزارهای انبار و گردش ورق
+              دسترسی سریع به ابزارهای انبار، شماره ذوب (Heat No) و گردش ورق
             </span>
             <button
               type="button"
@@ -1233,6 +1807,20 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <button
+              type="button"
+              onClick={() => onNavigateToTab?.('sapco')}
+              className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-right flex items-center justify-between cursor-pointer"
+            >
+              <div>
+                <div className="font-bold text-slate-900">رسید کلاف و رهگیری شماره ذوب (Heat)</div>
+                <div className="text-[11px] text-slate-600 mt-0.5">
+                  ثبت شماره ذوب ساپکو و اتصال به بچ تولید
+                </div>
+              </div>
+              <Tag className="w-4 h-4 text-amber-700 shrink-0" />
+            </button>
+
             <button
               type="button"
               onClick={() => onNavigateSubModule?.('inventory', { inventorySubTab: 'INQUIRY' })}
@@ -1253,18 +1841,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               <div>
                 <div className="font-bold text-slate-900">مدیریت رول‌های ورق و کویل‌پک</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">کلاف‌های موجود و ته‌کلاف برگشتی</div>
-              </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 shrink-0" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigateSubModule?.('inventory', { inventorySubTab: 'DASHBOARD' })}
-              className="p-3 rounded-lg border border-slate-200 hover:bg-slate-50 text-right flex items-center justify-between cursor-pointer"
-            >
-              <div>
-                <div className="font-bold text-slate-900">ثبت رسید و حواله ورق به خط</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">ارسال ورق با شماره دستور ساخت</div>
               </div>
               <ArrowUpRight className="w-4 h-4 text-slate-400 shrink-0" />
             </button>
@@ -1345,79 +1921,201 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       )}
 
       {/* ==================================================================== */}
-      {/* 4. MINIMAL & READABLE WORK ORDERS TABLE (With On-Demand Expansion)   */}
+      {/* 4. MINIMAL & READABLE WORK ORDERS TABLE (With Batch/Heat Traceability)*/}
       {/* ==================================================================== */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden space-y-0">
+        {/* Schedule Filter Tabs Header */}
+        <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+            <button
+              type="button"
+              onClick={() => setScheduleTabFilter('ACTIVE')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                scheduleTabFilter === 'ACTIVE'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <span>برنامه‌های جاری خط تولید</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500 text-white font-mono">
+                {toPersianDigits(activeCount)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleTabFilter('COMPLETED')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                scheduleTabFilter === 'COMPLETED'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>دستورات تکمیل‌شده و رسید انبار</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-800 font-mono">
+                {toPersianDigits(completedCount)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleTabFilter('PINNED')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                scheduleTabFilter === 'PINNED'
+                  ? 'bg-amber-800 text-white shadow-2xs'
+                  : 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-200'
+              }`}
+            >
+              <Pin className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+              <span>قطعات کلیدی نشانه‌گذاری‌شده (VIP)</span>
+              {pinnedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-950 font-mono">
+                  {toPersianDigits(pinnedCount)}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleTabFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                scheduleTabFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+              }`}
+            >
+              همه ({toPersianDigits(scenarios.length)})
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-500 font-medium">
+            نمایش: {toPersianDigits(filteredOrders.length)} دستور ساخت
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+            <thead className="bg-slate-100/70 text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="py-3.5 px-4 font-semibold">شماره دستور تولید (MO)</th>
-                <th className="py-3.5 px-4 font-semibold">کالا / محصول (متصل به BOM)</th>
+                <th className="py-3 px-3 w-8 text-center">📌</th>
+                <th className="py-3.5 px-4 font-semibold">دستور تولید (MO) و بچ ساخت</th>
+                <th className="py-3.5 px-4 font-semibold">کالا / محصول و شماره ذوب ورق (Heat)</th>
                 <th className="py-3.5 px-4 font-semibold">تیراژ دستور</th>
                 <th className="py-3.5 px-4 font-semibold">ایستگاه جاری (OP)</th>
                 <th className="py-3.5 px-4 font-semibold">تحویل به انبار</th>
-                <th className="py-3.5 px-4 font-semibold text-left">پیگیری و جزئیات (بر اساس تقاضا)</th>
+                <th className="py-3.5 px-4 font-semibold text-left">عملیات دستور و رسید انبار</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
-                    هیچ دستور کاری مطابق با عبارت جستجو یافت نشد.
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                    {scheduleTabFilter === 'PINNED'
+                      ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است. برای نشانه‌گذاری قطعات کلیدی، دکمه سنجاق 📌 را کلیک کنید.'
+                      : scheduleTabFilter === 'COMPLETED'
+                      ? 'هیچ دستور کاری هنوز به اتمام نرسیده است.'
+                      : 'هیچ دستور کاری مطابق با عبارت جستجو یافت نشد.'}
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map(order => {
                   const isExpanded = expandedOrderId === order.id;
+                  const isCompleted = order.status === 'COMPLETED';
                   const lastOp = order.operations[order.operations.length - 1];
                   const finishedQty = lastOp ? lastOp.completedGood : 0;
                   const progressPct = Math.min(
                     100,
                     Math.round((finishedQty / Math.max(1, order.orderQty)) * 100)
                   );
-
-                  const activeStep =
-                    order.operations.find(op => op.completedGood < order.orderQty) || lastOp;
-
                   const netWeightKg = Math.round(order.orderQty * order.unitWeightKg);
                   const grossRequiredKg = Math.round(
                     netWeightKg * (1 + order.scrapAllowancePct / 100)
                   );
 
+                  const activeStep =
+                    order.operations.find(op => op.completedGood < order.orderQty) || lastOp;
+
                   return (
                     <React.Fragment key={order.id}>
                       <tr
                         className={`transition-colors ${
-                          isExpanded ? 'bg-slate-50/90' : 'hover:bg-slate-50/60'
+                          order.isPinned
+                            ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                            : isCompleted
+                            ? 'bg-slate-50/60 opacity-90'
+                            : isExpanded
+                            ? 'bg-slate-50/90'
+                            : 'hover:bg-slate-50/60'
                         }`}
                       >
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="font-mono font-bold text-slate-900">{order.orderCode}</div>
-                          {order.materialIssuedVoucherNo ? (
-                            <span className="inline-block mt-0.5 text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                              حواله ورق: {order.materialIssuedVoucherNo}
-                            </span>
-                          ) : (
-                            <span className="inline-block mt-0.5 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                              در انتظار حواله ورق
-                            </span>
-                          )}
+                        {/* Pin Button */}
+                        <td className="py-4 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePinOrder(order.id)}
+                            className={`p-1 rounded transition-colors cursor-pointer ${
+                              order.isPinned
+                                ? 'text-amber-600 hover:text-amber-800'
+                                : 'text-slate-300 hover:text-slate-600'
+                            }`}
+                            title={order.isPinned ? 'حذف نشانه‌گذاری قطعه' : 'نشانه‌گذاری قطعه کلیدی (VIP)'}
+                          >
+                            <Pin className={`w-3.5 h-3.5 ${order.isPinned ? 'fill-amber-500' : ''}`} />
+                          </button>
                         </td>
-                        <td className="py-4 px-4">
-                          <div className="text-sm font-bold text-slate-900">{order.partName}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {order.carModel} ·{' '}
-                            <span className="font-mono text-[11px]">{order.partCode}</span> · ورق:{' '}
-                            <span className="text-slate-700 font-medium">{order.rawMaterialName}</span>
+
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-slate-900">{order.orderCode}</span>
+                            {isCompleted && (
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                تکمیل شده
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                            بچ: {order.productionBatchCode}
                           </div>
                         </td>
+
+                        <td className="py-4 px-4">
+                          <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{order.partName}</span>
+                            {order.isPinned && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                VIP
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                            <span>{order.carModel}</span>
+                            <span>·</span>
+                            <span className="font-mono text-[11px]">{order.partCode}</span>
+                            {order.heatNumber && (
+                              <span
+                                onClick={() => onNavigateToTab?.('sapco')}
+                                title="مشاهده شجره‌نامه شماره ذوب کلاف ساپکو"
+                                className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono text-[10px] font-bold cursor-pointer hover:bg-amber-100"
+                              >
+                                ذوب: {order.heatNumber}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
                         <td className="py-4 px-4 font-mono text-sm font-bold text-slate-800 tabular-nums whitespace-nowrap">
                           {formatNumber(order.orderQty)}{' '}
                           <span className="text-xs font-normal text-slate-500">عدد</span>
                         </td>
+
                         <td className="py-4 px-4">
-                          {activeStep ? (
+                          {isCompleted ? (
+                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>رسید انبار محصول ({order.finishedReceiptVoucherNo || 'FG-REC'})</span>
+                            </span>
+                          ) : activeStep ? (
                             <div className="text-slate-700">
                               <span className="font-mono font-bold text-slate-900">
                                 {activeStep.stepCode}
@@ -1425,12 +2123,13 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                               — {activeStep.stepName}
                             </div>
                           ) : (
-                            <span className="text-emerald-700 font-semibold">تکمیل شده</span>
+                            <span className="text-emerald-700 font-semibold">آماده تحویل</span>
                           )}
                           <div className="text-[11px] text-slate-400 mt-0.5">
                             {toPersianDigits(order.operations.length)} مرحله OP از مسیر تولید کالا
                           </div>
                         </td>
+
                         <td className="py-4 px-4 w-40">
                           <div className="flex items-center justify-between font-mono text-xs mb-1 tabular-nums">
                             <span className="font-bold text-slate-900">
@@ -1440,19 +2139,43 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-slate-900 rounded-full"
+                              className={`h-full rounded-full ${isCompleted ? 'bg-emerald-600' : 'bg-slate-900'}`}
                               style={{ width: `${progressPct}%` }}
                             />
                           </div>
                         </td>
+
                         <td className="py-4 px-4 text-left whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5">
+                            {/* Complete Production & Issue Goods Receipt Button */}
+                            {!isCompleted ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteProduction(order)}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="اتمام تولید دستور و صدور رسید انبار محصول نهایی"
+                              >
+                                <PackageCheck className="w-3.5 h-3.5" />
+                                <span>اتمام و رسید به انبار</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDispatchFinishedGoods(order)}
+                                className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="صدور حواله خروج و تحویل محصول نهایی به ساپکو"
+                              >
+                                <Truck className="w-3.5 h-3.5" />
+                                <span>حواله خروج به ساپکو</span>
+                              </button>
+                            )}
+
                             {/* Track Order Button (`پیگیری دستور`) */}
                             <button
                               type="button"
                               onClick={() => setTrackingOrderId(order.id)}
                               className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                              title="پیگیری کامل زنجیره این دستور (از حواله ورق تا ایستگاه‌های OP و رسید انبار)"
+                              title="پیگیری کامل زنجیره این دستور"
                             >
                               <Compass className="w-3.5 h-3.5 text-emerald-600" />
                               <span>پیگیری دستور</span>
@@ -1497,7 +2220,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                               }`}
                             >
                               <Cpu className="w-3.5 h-3.5" />
-                              <span>ورق و BOM</span>
+                              <span>ورق و ذوب</span>
                             </button>
 
                             {/* Edit Order Button */}
@@ -1541,7 +2264,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                                       توالی ایستگاه‌های کاری (OP) متصل به مسیر تولید — {order.partName}
                                     </h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                      قانون تقدم و تأخر: هر ایستگاه تنها به اندازه خروجی سالم ایستگاه قبلی مجاز به ثبت تولید است.
+                                      بچ تولید: <span className="font-mono font-semibold text-slate-700">{order.productionBatchCode}</span> · شماره ذوب ورق: <span className="font-mono font-semibold text-amber-800">{order.heatNumber}</span>
                                     </p>
                                   </div>
 
@@ -1694,7 +2417,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                                                       stepData: { ...op },
                                                     })
                                                   }
-                                                  title="ویرایش ایستگاه (متصل به بانک عملیات، پرس‌ها و قالب‌ها)"
+                                                  title="ویرایش ایستگاه"
                                                   className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
                                                 >
                                                   <Edit3 className="w-3.5 h-3.5" />
@@ -1722,27 +2445,33 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                                 </div>
                               </div>
                             ) : (
-                              /* ON-DEMAND BOM & RAW MATERIAL PANEL */
+                              /* ON-DEMAND BOM, COIL & HEAT NUMBER PANEL */
                               <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                                   <div>
                                     <h3 className="text-sm font-bold text-slate-900">
-                                      ورق مصرفی و ساختار درختی (BOM) — {order.partName}
+                                      شناسنامه ورق، شماره ذوب (Heat No) و درخت محصول (BOM) — {order.partName}
                                     </h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                      {order.rawMaterialName} ({order.rawMaterialCode})
-                                      {order.isCustomSheetOverride
-                                        ? ' · [ورق جایگزین به انتخاب کاربر]'
-                                        : ' · [ورق استاندارد پیش‌فرض BOM قطعه]'}
+                                      {order.rawMaterialName} · کلاف: <span className="font-mono font-bold text-slate-800">{order.coilNumber || '—'}</span> · شماره ذوب: <span className="font-mono font-bold text-amber-800">{order.heatNumber || '—'}</span> · بچ تولید: <span className="font-mono font-bold text-indigo-700">{order.productionBatchCode}</span>
                                     </p>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpandedOrderId(null)}
-                                    className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs cursor-pointer"
-                                  >
-                                    بستن ✕
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => onNavigateToTab?.('sapco')}
+                                      className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-semibold cursor-pointer"
+                                    >
+                                      رهگیری کلاف و ذوب در ساپکو ⟵
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedOrderId(null)}
+                                      className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs cursor-pointer"
+                                    >
+                                      بستن ✕
+                                    </button>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
@@ -1753,14 +2482,14 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                                     </div>
                                   </div>
                                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                                    <span className="text-slate-500">موجودی فعلی در انبار ورق:</span>
+                                    <span className="text-slate-500">موجودی فعلی کلاف/ورق در انبار:</span>
                                     <div className="text-sm font-bold text-emerald-700 font-mono mt-1 tabular-nums">
                                       {formatNumber(order.warehouseAvailableKg)} کیلوگرم
                                     </div>
                                   </div>
                                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
                                     <div>
-                                      <span className="text-slate-500">وضعیت حواله ورق به خط:</span>
+                                      <span className="text-slate-500">حواله کلاف با شماره ذوب:</span>
                                       <div className="text-xs font-semibold text-slate-800 mt-1">
                                         {order.materialIssuedVoucherNo
                                           ? `صادر شده (${order.materialIssuedVoucherNo})`
@@ -1834,7 +2563,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                     ثبت آمار تولید ایستگاه — {op.stepCode} ({op.stepName})
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    دستور {order.orderCode} · {order.partName}
+                    دستور {order.orderCode} · بچ {order.productionBatchCode} · ذوب {order.heatNumber}
                   </p>
                 </div>
                 <button
@@ -1860,7 +2589,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                     </div>
                   ) : (
                     <div>
-                      ورودی از ورق برش‌خورده ({order.rawMaterialCode}):{' '}
+                      ورودی از کلاف برش‌خورده ({order.coilNumber || order.rawMaterialCode}):{' '}
                       <strong className="font-mono text-slate-900">
                         {formatNumber(order.orderQty)} عدد
                       </strong>
@@ -1919,7 +2648,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
 
       {/* ==================================================================== */}
       {/* MODAL 2: CREATE / EDIT MANUFACTURING ORDER (100% CONNECTED TO PARTS, */}
-      {/* ROUTINGS/OP, AND BOM RAW MATERIAL SHEETS!)                           */}
+      {/* ROUTINGS/OP, BOM SHEETS AND SAPCO COIL HEAT NUMBERS!)                */}
       {/* ==================================================================== */}
       {editingOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -1928,11 +2657,11 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               <div>
                 <h4 className="font-bold text-sm text-slate-900">
                   {isNewOrderMode
-                    ? 'صدور دستور تولید جدید (MO) — متصل به کاتالوگ کالا، BOM و مسیر تولید (OP)'
+                    ? 'صدور دستور تولید جدید (MO) — متصل به کاتالوگ کالا، شماره ذوب (Heat) و مراحل OP'
                     : `ویرایش دستور تولید ${editingOrder.orderCode}`}
                 </h4>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  با انتخاب کالا از اطلاعات پایه، مراحل تولید (OP) و ورق مصرفی استاندارد (BOM) به صورت خودکار بارگذاری می‌شوند.
+                  با انتخاب کالا، مراحل تولید (OP)، ورق استاندارد (BOM) و شماره ذوب کلاف ساپکو به صورت خودکار متصل می‌شوند.
                 </p>
               </div>
               <button
@@ -1957,36 +2686,46 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   </span>
                 </div>
 
-                <select
-                  value={editingOrder.partId}
-                  onChange={e => {
-                    const selectedId = e.target.value;
-                    const foundPart = produciblePartsCatalog.find(p => p.id === selectedId);
-                    if (foundPart) {
-                      const rebuilt = buildOrderDataFromMasterPart(
-                        foundPart,
-                        editingOrder.orderCode
-                      );
-                      rebuilt.id = editingOrder.id;
-                      rebuilt.orderQty = editingOrder.orderQty;
-                      setEditingOrder(rebuilt);
-                      setAllowManualSheetOverride(false);
-                    }
-                  }}
-                  className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 font-semibold text-slate-900 focus:outline-none focus:border-slate-900 cursor-pointer"
-                >
-                  {produciblePartsCatalog.map(part => (
-                    <option key={part.id} value={part.id}>
-                      {part.name} — ({part.code}) | خودرو: {part.carModel || 'عمومی'} | وزن:{' '}
-                      {part.weightPerUnitKg} ک.گ
-                    </option>
-                  ))}
-                  {!produciblePartsCatalog.some(p => p.id === editingOrder.partId) && (
-                    <option value={editingOrder.partId}>
-                      {editingOrder.partName} — ({editingOrder.partCode})
-                    </option>
-                  )}
-                </select>
+                {/* Searchable Part Combobox (Excludes Raw Materials) */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={partSelectOptions}
+                    value={editingOrder.partId}
+                    onChange={(val, opt) => {
+                      const foundPart = opt?.meta || produciblePartsCatalog.find(p => p.id === val);
+                      if (foundPart) {
+                        const rebuilt = buildOrderDataFromMasterPart(
+                          foundPart,
+                          editingOrder.orderCode
+                        );
+                        rebuilt.id = editingOrder.id;
+                        rebuilt.orderQty = editingOrder.orderQty;
+                        rebuilt.contractCode = editingOrder.contractCode;
+                        setEditingOrder(rebuilt);
+                        setAllowManualSheetOverride(false);
+                      }
+                    }}
+                    placeholder="برای جستجوی نام قطعه، کد یا مدل خودرو تایپ کنید..."
+                    searchPlaceholder="جستجو در کاتالوگ قطعات قابل تولید (مثلاً: ECU، صندلی، 206)..."
+                    required
+                  />
+                </div>
+
+                {/* Contract & Customer Quota Selection */}
+                <div className="pt-1">
+                  <label className="block text-[11px] text-slate-600 mb-1 font-semibold">
+                    اتصال به قرارداد / تعهد ساپکو (اختیاری):
+                  </label>
+                  <SearchableSelect
+                    options={contractSelectOptions}
+                    value={editingOrder.contractCode || 'CNT-SAP-1404-01'}
+                    onChange={(val) => {
+                      setEditingOrder({ ...editingOrder, contractCode: val });
+                    }}
+                    placeholder="انتخاب قرارداد مشتری..."
+                    searchPlaceholder="جستجوی شماره قرارداد یا نام مشتری..."
+                  />
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                   <div>
@@ -2000,6 +2739,23 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                         setEditingOrder({ ...editingOrder, orderCode: e.target.value })
                       }
                       className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 font-mono font-bold text-slate-900"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">
+                      شماره بچ تولید (Production Batch):
+                    </label>
+                    <input
+                      type="text"
+                      value={editingOrder.productionBatchCode}
+                      onChange={e =>
+                        setEditingOrder({
+                          ...editingOrder,
+                          productionBatchCode: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 font-mono font-bold text-indigo-700"
                       required
                     />
                   </div>
@@ -2021,26 +2777,15 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-500 mb-1">
-                      خودرو / مشتری (از شناسنامه کالا):
-                    </label>
-                    <input
-                      type="text"
-                      value={`${editingOrder.carModel} · ${editingOrder.customerName}`}
-                      readOnly
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600"
-                    />
-                  </div>
                 </div>
               </div>
 
-              {/* STEP 2: BOM Raw Material Sheet (Default from BOM + Optional User Override!) */}
+              {/* STEP 2: BOM Raw Material Sheet + SAPCO Coil & Heat Number Link */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="font-bold text-slate-900 flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-indigo-600" />
-                    <span>۲. ورق مصرفی بر اساس درخت محصول (BOM):</span>
+                    <span>۲. ورق مصرفی (BOM) و اتصال به شماره ذوب کلاف ساپکو (Heat No):</span>
                   </div>
                   <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700 cursor-pointer select-none">
                     <input
@@ -2049,7 +2794,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                       onChange={e => setAllowManualSheetOverride(e.target.checked)}
                       className="rounded border-slate-300 text-slate-900"
                     />
-                    <span>تغییر اختیاری ورق / جایگزینی رول به انتخاب کاربر</span>
+                    <span>تغییر اختیاری ورق / انتخاب کلاف و ذوب دیگر به اختیار کاربر</span>
                   </label>
                 </div>
 
@@ -2060,8 +2805,8 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                         {editingOrder.rawMaterialName}
                       </div>
                       <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                        کد ورق BOM: {editingOrder.rawMaterialCode} · وزن واحد قطعه:{' '}
-                        {editingOrder.unitWeightKg} ک.گ
+                        کلاف: <strong>{editingOrder.coilNumber || 'MOB-2025-DC01-409'}</strong> · شماره ذوب:{' '}
+                        <strong className="text-amber-800">{editingOrder.heatNumber || 'HT-99412-MOB'}</strong>
                       </div>
                     </div>
                     <div className="text-left font-mono">
@@ -2084,7 +2829,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                 ) : (
                   <div className="space-y-2">
                     <label className="block text-[11px] text-amber-800 font-semibold">
-                      انتخاب ورق یا کلاف جایگزین از موجودی انبار (اختیار کاربر):
+                      انتخاب کلاف ساپکو و شماره ذوب جایگزین از موجودی انبار (اختیار کاربر):
                     </label>
                     <select
                       value={editingOrder.rawMaterialCode}
@@ -2098,6 +2843,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                             rawMaterialPartId: chosen.id,
                             rawMaterialCode: chosen.code,
                             rawMaterialName: chosen.name,
+                            coilNumber: chosen.coilNumber,
+                            heatNumber: chosen.heatNumber,
+                            sapcoBatchNumber: chosen.sapcoBatchNumber,
                             warehouseAvailableKg: chosen.availableKg,
                             isCustomSheetOverride: true,
                           });
@@ -2106,8 +2854,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                       className="w-full px-3 py-2 rounded-lg bg-white border border-amber-300 text-slate-900 font-semibold cursor-pointer"
                     >
                       {availableRawSheetsCatalog.map(rm => (
-                        <option key={rm.code} value={rm.code}>
-                          {rm.name} ({rm.code}) — موجودی انبار: {formatNumber(rm.availableKg)} ک.گ
+                        <option key={rm.code + rm.coilNumber} value={rm.code}>
+                          {rm.name} | ذوب: {rm.heatNumber} | کلاف: {rm.coilNumber} | موجودی:{' '}
+                          {formatNumber(rm.availableKg)} ک.گ
                         </option>
                       ))}
                     </select>
@@ -2130,7 +2879,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   </span>
                 </div>
 
-                <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-40 overflow-y-auto">
                   {editingOrder.operations.map((op, i) => (
                     <div
                       key={op.stepCode + i}
@@ -2172,8 +2921,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 3: EDIT OR ADD OPERATION STEP (100% CONNECTED TO MASTER DATA   */}
-      {/* PROCESS DEFINITIONS, HALLS, MACHINES & PART-CORRELATED DIES!)        */}
+      {/* MODAL 3: EDIT OR ADD OPERATION STEP (100% CONNECTED TO MASTER DATA)  */}
       {/* ==================================================================== */}
       {editingOpContext && (() => {
         const correlatedDies = dies.filter(
@@ -2211,7 +2959,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               </div>
 
               <form onSubmit={handleSaveOperationStep} className="space-y-3.5 text-xs">
-                {/* 1. Standard Process Type & OP Code */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
@@ -2276,7 +3023,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   </div>
                 </div>
 
-                {/* 2. Operation Title */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     شرح دقیق عملیات در برگه کار ایستگاه:
@@ -2295,7 +3041,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   />
                 </div>
 
-                {/* 3. Hall & Machine from Master Data */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
@@ -2360,7 +3105,6 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   </div>
                 </div>
 
-                {/* 4. Die / Mold correlated with Part */}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     قالب / فیکسچر متصل به قطعه (از بانک قالب‌ها):
@@ -2448,11 +3192,10 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-slate-900">
-                      زنجیره پیگیری دستور تولید {trackedOrder.orderCode}
+                      زنجیره پیگیری دستور تولید {trackedOrder.orderCode} (بچ {trackedOrder.productionBatchCode})
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      {trackedOrder.partName} ({trackedOrder.partCode}) · تیراژ:{' '}
-                      {formatNumber(trackedOrder.orderQty)} عدد
+                      {trackedOrder.partName} · کلاف: <strong className="font-mono">{trackedOrder.coilNumber}</strong> · شماره ذوب: <strong className="font-mono text-amber-800">{trackedOrder.heatNumber}</strong>
                     </p>
                   </div>
                 </div>
@@ -2465,17 +3208,17 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                 </button>
               </div>
 
-              {/* 4-Stage End-to-End Traceability Status */}
+              {/* 3-Stage End-to-End Traceability Status */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Stage A: Raw Material Voucher */}
+                {/* Stage A: Raw Material Voucher & Heat Number */}
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 flex flex-col justify-between">
                   <div>
-                    <div className="text-[11px] text-slate-500">۱. تامین و حواله ورق از انبار</div>
+                    <div className="text-[11px] text-slate-500">۱. کلاف ورق و شماره ذوب (Heat)</div>
                     <div className="font-bold text-slate-900 mt-1">
                       {trackedOrder.rawMaterialName}
                     </div>
-                    <div className="text-[11px] font-mono text-slate-600 mt-0.5">
-                      نیاز: {formatNumber(grossRequiredKg)} ک.گ
+                    <div className="text-[11px] font-mono text-amber-800 font-bold mt-0.5">
+                      ذوب: {trackedOrder.heatNumber} · نیاز: {formatNumber(grossRequiredKg)} ک.گ
                     </div>
                   </div>
                   <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between">
@@ -2496,11 +3239,11 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                       type="button"
                       onClick={() => {
                         setTrackingOrderId(null);
-                        onNavigateToTab?.('inventory', 'INQUIRY');
+                        onNavigateToTab?.('sapco');
                       }}
                       className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
                     >
-                      کاردکس انبار ⟵
+                      شجره‌نامه ذوب ⟵
                     </button>
                   </div>
                 </div>
@@ -2558,7 +3301,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                     </div>
                   </div>
                   <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between">
-                    <span className="text-slate-500">مقصد: انبار محصول</span>
+                    <span className="text-slate-500 font-mono">{trackedOrder.productionBatchCode}</span>
                     <button
                       type="button"
                       onClick={() => {

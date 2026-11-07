@@ -138,6 +138,7 @@ export interface Part {
   materialGrade?: string;     // گرید فولاد: ST12, ST14, DX51D, ST37
   minStock?: number;          // حداقل موجودی اطمینان
   maxStock?: number;          // حداکثر ظرفیت انبار
+  isPinned?: boolean;         // نشانه‌گذاری قطعه کلیدی / VIP برای کنترل سریع
   isDemo?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -335,10 +336,22 @@ export interface ProductionPlan {
   createdAt?: string;
 }
 
+export interface LinkedCoilProductionBatch {
+  batchCode: string;
+  moCode: string;
+  partId?: string;
+  partCode: string;
+  partName: string;
+  allocatedKg: number;
+  targetQtyPcs: number;
+  linkedAt: string;
+}
+
 export interface SapcoCoilReceipt {
   id: string;
   receiptNumber: string;
   coilNumber: string;
+  batchNumber?: string;
   partId: string;
   partCode: string;
   partName: string;
@@ -350,6 +363,7 @@ export interface SapcoCoilReceipt {
   heatNumber?: string;
   receiptDate: string;
   status: 'IN_STOCK' | 'IN_CUTTING' | 'DEPLETED';
+  linkedProductionBatches?: LinkedCoilProductionBatch[];
   isDemo?: boolean;
 }
 
