@@ -389,27 +389,48 @@ Output MUST BE STRICT VALID JSON (without markdown fences if possible, or inside
     else if (provider === 'OPENROUTER') {
       const apiKey = settings.openRouterApiKey;
       if (!apiKey) throw new Error('کلید API سرویس OpenRouter وارد نشده است.');
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://kpims.local',
-          'X-Title': 'KPIMS Industrial ERP',
-        },
-        body: JSON.stringify({
-          model: settings.openRouterModel || 'meta-llama/llama-3.2-3b-instruct:free',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`OpenRouter error HTTP ${res.status}: ${await res.text()}`);
+      const openRouterCandidates = Array.from(
+        new Set([
+          settings.openRouterModel || 'gpt-4o-mini',
+          'gpt-4o-mini',
+          'google/gemini-flash-1.5',
+          'google/gemini-2.5-flash:free',
+          'meta-llama/llama-3.3-70b-instruct:free',
+        ])
+      );
+      let lastOpenRouterErr = '';
+      for (const modelCandidate of openRouterCandidates) {
+        try {
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+              'HTTP-Referer': 'https://kpims.local',
+              'X-Title': 'KPIMS Industrial ERP',
+            },
+            body: JSON.stringify({
+              model: modelCandidate,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt },
+              ],
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            rawJsonResponse = data?.choices?.[0]?.message?.content || '';
+            if (rawJsonResponse) break;
+          } else {
+            lastOpenRouterErr = await res.text();
+          }
+        } catch (err: any) {
+          lastOpenRouterErr = err.message;
+        }
       }
-      const data = await res.json();
-      rawJsonResponse = data?.choices?.[0]?.message?.content || '';
+      if (!rawJsonResponse) {
+        throw new Error(`OpenRouter API error: ${lastOpenRouterErr}`);
+      }
     }
 
     // 5. Google Gemini API (@google/genai)
@@ -418,14 +439,35 @@ Output MUST BE STRICT VALID JSON (without markdown fences if possible, or inside
       if (!apiKey) throw new Error('کلید API سرویس Gemini تنظیم نشده است.');
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: settings.geminiModel || 'gemini-2.5-flash',
-        contents: `${systemPrompt}\n\nUser command: ${prompt}`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      rawJsonResponse = response.text || '';
+      const geminiCandidates = Array.from(
+        new Set([
+          settings.geminiModel || 'gemini-1.5-flash',
+          'gemini-1.5-flash',
+          'gemini-2.5-flash',
+          'gemini-1.5-pro',
+        ])
+      );
+      let lastGeminiErr = '';
+      for (const gemModel of geminiCandidates) {
+        try {
+          const response = await ai.models.generateContent({
+            model: gemModel,
+            contents: `${systemPrompt}\n\nUser command: ${prompt}`,
+            config: {
+              responseMimeType: 'application/json',
+            },
+          });
+          if (response.text) {
+            rawJsonResponse = response.text;
+            break;
+          }
+        } catch (err: any) {
+          lastGeminiErr = err.message;
+        }
+      }
+      if (!rawJsonResponse) {
+        throw new Error(`Gemini API error: ${lastGeminiErr}`);
+      }
     }
 
     // Clean JSON response

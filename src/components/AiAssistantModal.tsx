@@ -37,9 +37,9 @@ const DEFAULT_SETTINGS: AiSettings = {
   groqApiKey: '',
   groqModel: 'llama-3.1-8b-instant',
   openRouterApiKey: '',
-  openRouterModel: 'meta-llama/llama-3.2-3b-instruct:free',
+  openRouterModel: 'gpt-4o-mini',
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-flash',
+  geminiModel: 'gemini-1.5-flash',
 };
 
 export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
@@ -526,25 +526,25 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                     </p>
                   </button>
 
-                  {/* OPENROUTER */}
+                  {/* GEMINI */}
                   <button
                     type="button"
-                    onClick={() => handleSaveSettings({ ...settings, provider: 'OPENROUTER' })}
+                    onClick={() => handleSaveSettings({ ...settings, provider: 'GEMINI' })}
                     className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-                      settings.provider === 'OPENROUTER'
-                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 font-bold shadow-xs'
+                      settings.provider === 'GEMINI'
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-xs'
                         : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Cloud className="w-4 h-4 text-purple-600" />
-                        <span>OpenRouter Free Models</span>
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        <span>Google Gemini API</span>
                       </div>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">مدل‌های رایگان</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">موتور هوشمند پیش‌فرض</span>
                     </div>
                     <p className="text-[11px] text-slate-500 font-normal mt-1">
-                      دسترسی به مدل‌های رایگان متنوع بدون هزینه.
+                      مدل فوق‌العاده دقیق Gemini 1.5 Flash و Gemini 2.5 Flash.
                     </p>
                   </button>
                 </div>
@@ -606,11 +606,11 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                         onChange={e => handleSaveSettings({ ...settings, groqModel: e.target.value })}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs cursor-pointer"
                       >
-                        <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (سریع و استاندارد)</option>
+                        <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (توصیه سریع)</option>
                         <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-                        <option value="llama3-70b-8192">llama3-70b-8192</option>
-                        <option value="llama3-8b-8192">llama3-8b-8192</option>
-                        <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+                        <option value="qwen-2.5-coder-32b">qwen-2.5-coder-32b</option>
+                        <option value="deepseek-r1-distill-llama-70b">deepseek-r1-distill-llama-70b</option>
+                        <option value="gemma2-9b-it">gemma2-9b-it</option>
                       </select>
                     </div>
                   </div>
@@ -623,15 +623,63 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                     <Cloud className="w-4 h-4 text-purple-600" />
                     <span>تنظیمات OpenRouter</span>
                   </div>
-                  <div>
-                    <label className="block text-slate-600 mb-1">کلید API:</label>
-                    <input
-                      type="password"
-                      value={settings.openRouterApiKey}
-                      onChange={e => handleSaveSettings({ ...settings, openRouterApiKey: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs"
-                      placeholder="sk-or-..."
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-600 mb-1">کلید API:</label>
+                      <input
+                        type="password"
+                        value={settings.openRouterApiKey}
+                        onChange={e => handleSaveSettings({ ...settings, openRouterApiKey: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs"
+                        placeholder="sk-or-..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 mb-1">مدل OpenRouter:</label>
+                      <select
+                        value={settings.openRouterModel || 'gpt-4o-mini'}
+                        onChange={e => handleSaveSettings({ ...settings, openRouterModel: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs cursor-pointer"
+                      >
+                        <option value="gpt-4o-mini">gpt-4o-mini (توصیه پرسرعت و ارزان)</option>
+                        <option value="google/gemini-flash-1.5">google/gemini-flash-1.5</option>
+                        <option value="google/gemini-2.5-flash:free">google/gemini-2.5-flash:free</option>
+                        <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {settings.provider === 'GEMINI' && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                  <div className="font-bold text-slate-800 text-xs flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <span>تنظیمات Google Gemini API</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-600 mb-1">کلید API (اختیاری اگر در کلود تنظیم شده):</label>
+                      <input
+                        type="password"
+                        value={settings.geminiApiKey}
+                        onChange={e => handleSaveSettings({ ...settings, geminiApiKey: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs"
+                        placeholder="AIzaSy..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 mb-1">مدل Gemini:</label>
+                      <select
+                        value={settings.geminiModel || 'gemini-1.5-flash'}
+                        onChange={e => handleSaveSettings({ ...settings, geminiModel: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs cursor-pointer"
+                      >
+                        <option value="gemini-1.5-flash">gemini-1.5-flash (توصیه پرسرعت)</option>
+                        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                        <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
