@@ -1,19 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   GitBranch,
-  Layers,
-  Split,
-  ArrowLeft,
-  CheckCircle2,
   Flame,
-  Package,
   Scissors,
-  FileText,
-  Recycle,
-  AlertTriangle,
+  Edit3,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { PhysicalCoil } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 export interface ChildSlitNode {
   id: string;
@@ -27,6 +23,7 @@ export interface ChildSlitNode {
   targetPartName?: string;
   warehouseLocation: string;
   status: 'IN_STOCK' | 'ISSUED_TO_LINE' | 'CONSUMED' | 'SCRAP_BIN';
+  isDeleted?: boolean;
 }
 
 export interface ParentCoilSlittingTree {
@@ -45,7 +42,7 @@ export interface ParentCoilSlittingTree {
   children: ChildSlitNode[];
 }
 
-const DEFAULT_SLITTING_TREES: ParentCoilSlittingTree[] = [
+const INITIAL_SLITTING_TREES: ParentCoilSlittingTree[] = [
   {
     parentId: 'PC-SLIT-01',
     parentCoilCode: 'COIL-402918',
@@ -252,7 +249,26 @@ interface CoilSlittingGenealogyPanelProps {
 }
 
 export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProps> = ({ coils = [] }) => {
-  // Merge any dynamic coils from props with rich default slitting trees
+  const { openQuickEditDrawer, requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
+
+  const [treesState, setTreesState] = useState<ParentCoilSlittingTree[]>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_coil_slitting_trees_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_SLITTING_TREES;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kpims_coil_slitting_trees_v1', JSON.stringify(treesState));
+    } catch {
+      // ignore
+    }
+  }, [treesState]);
+
   const slittingTrees = useMemo(() => {
     const dynamicTrees: ParentCoilSlittingTree[] = coils.slice(0, 2).map((c, idx) => {
       const origW = c.originalWeightKg || 6000;
@@ -326,39 +342,259 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
       };
     });
 
-    const combined = [...DEFAULT_SLITTING_TREES];
+    const combined = [...treesState];
     dynamicTrees.forEach(dt => {
       if (!combined.some(t => t.parentCoilCode === dt.parentCoilCode)) {
         combined.push(dt);
       }
     });
     return combined;
-  }, [coils]);
+  }, [coils, treesState]);
 
-  const [selectedTreeId, setSelectedTreeId] = useState<string>(DEFAULT_SLITTING_TREES[0].parentId);
+  const [selectedTreeId, setSelectedTreeId] = useState<string>(INITIAL_SLITTING_TREES[0].parentId);
 
   const activeTree = useMemo(
     () => slittingTrees.find(t => t.parentId === selectedTreeId) || slittingTrees[0],
     [slittingTrees, selectedTreeId]
   );
 
+  const visibleChildren = useMemo(
+    () => activeTree.children.filter(c => !c.isDeleted),
+    [activeTree]
+  );
+
   const totalSlitWeight = useMemo(
     () =>
-      activeTree.children
+      visibleChildren
         .filter(c => c.type === 'SLIT_STRIP' || c.type === 'BLANK_SHEET')
         .reduce((s, c) => s + c.weightKg, 0),
-    [activeTree]
+    [visibleChildren]
   );
 
   const remnantWeight = useMemo(
-    () => activeTree.children.filter(c => c.type === 'REMNANT_COIL').reduce((s, c) => s + c.weightKg, 0),
-    [activeTree]
+    () => visibleChildren.filter(c => c.type === 'REMNANT_COIL').reduce((s, c) => s + c.weightKg, 0),
+    [visibleChildren]
   );
 
   const scrapWeight = useMemo(
-    () => activeTree.children.filter(c => c.type === 'EDGE_SCRAP').reduce((s, c) => s + c.weightKg, 0),
-    [activeTree]
+    () => visibleChildren.filter(c => c.type === 'EDGE_SCRAP').reduce((s, c) => s + c.weightKg, 0),
+    [visibleChildren]
   );
+
+  // Edit Parent Coil in Slide-Over Drawer
+  const handleEditParentCoil = () => {
+    openQuickEditDrawer({
+      title: `ویرایش مشخصات رول مادر ${activeTree.parentCoilCode}`,
+      entityId: activeTree.parentId,
+      entityCode: activeTree.parentCoilCode,
+      moduleName: 'شجره‌نامه برش کلاف (Coil Slitting)',
+      fields: [
+        { key: 'parentCoilCode', label: 'کد رول مادر (Parent Coil ID)', type: 'text' },
+        { key: 'heatNumber', label: 'شماره ذوب (Heat Number)', type: 'text' },
+        { key: 'materialGrade', label: 'گرید ورق (Grade)', type: 'text' },
+        { key: 'thicknessMm', label: 'ضخامت ورق (mm)', type: 'number' },
+        { key: 'originalWidthMm', label: 'عرض اولیه کلاف (mm)', type: 'number' },
+        { key: 'originalWeightKg', label: 'وزن اولیه کلاف (kg)', type: 'number' },
+        { key: 'slittingMachine', label: 'خط برش / نواربر', type: 'text' },
+      ],
+      initialValues: {
+        parentCoilCode: activeTree.parentCoilCode,
+        heatNumber: activeTree.heatNumber,
+        materialGrade: activeTree.materialGrade,
+        thicknessMm: activeTree.thicknessMm,
+        originalWidthMm: activeTree.originalWidthMm,
+        originalWeightKg: activeTree.originalWeightKg,
+        slittingMachine: activeTree.slittingMachine,
+      },
+      onSave: updated => {
+        setTreesState(prev =>
+          prev.map(t =>
+            t.parentId === activeTree.parentId
+              ? {
+                  ...t,
+                  parentCoilCode: String(updated.parentCoilCode || t.parentCoilCode),
+                  heatNumber: String(updated.heatNumber || t.heatNumber),
+                  materialGrade: String(updated.materialGrade || t.materialGrade),
+                  thicknessMm: Number(updated.thicknessMm) || t.thicknessMm,
+                  originalWidthMm: Number(updated.originalWidthMm) || t.originalWidthMm,
+                  originalWeightKg: Number(updated.originalWeightKg) || t.originalWeightKg,
+                  slittingMachine: String(updated.slittingMachine || t.slittingMachine),
+                }
+              : t
+          )
+        );
+      },
+    });
+  };
+
+  // Edit Child Strip/Sheet Node in Slide-Over Drawer
+  const handleEditChildNode = (child: ChildSlitNode) => {
+    openQuickEditDrawer({
+      title: `ویرایش خروجی فرعی برش: ${child.childCode}`,
+      subtitle: `متصل به رول مادر ${activeTree.parentCoilCode} (شماره ذوب: ${activeTree.heatNumber})`,
+      entityId: child.id,
+      entityCode: child.childCode,
+      moduleName: 'شجره‌نامه برش کلاف (Coil Slitting)',
+      fields: [
+        { key: 'childCode', label: 'کد نوار / شیت فرعی (Child Code)', type: 'text' },
+        { key: 'typeLabel', label: 'عنوان خروجی', type: 'text' },
+        { key: 'dimensionsLabel', label: 'ابعاد و مشخصات برش', type: 'text' },
+        { key: 'weightKg', label: 'وزن خروجی فرعی (kg)', type: 'number' },
+        { key: 'sheetCount', label: 'تعداد شیت / بلنک (اختیاری)', type: 'number' },
+        { key: 'assignedMoNumber', label: 'شماره دستور تولید متصل (MO)', type: 'text' },
+        { key: 'targetPartName', label: 'نام قطعه هدف', type: 'text' },
+        { key: 'warehouseLocation', label: 'محل استقرار / ایستگاه', type: 'text' },
+      ],
+      initialValues: {
+        childCode: child.childCode,
+        typeLabel: child.typeLabel,
+        dimensionsLabel: child.dimensionsLabel,
+        weightKg: child.weightKg,
+        sheetCount: child.sheetCount || 0,
+        assignedMoNumber: child.assignedMoNumber || '',
+        targetPartName: child.targetPartName || '',
+        warehouseLocation: child.warehouseLocation,
+      },
+      onSave: updated => {
+        setTreesState(prev =>
+          prev.map(t => {
+            if (t.parentId !== activeTree.parentId) return t;
+            return {
+              ...t,
+              children: t.children.map(c =>
+                c.id === child.id
+                  ? {
+                      ...c,
+                      childCode: String(updated.childCode || c.childCode),
+                      typeLabel: String(updated.typeLabel || c.typeLabel),
+                      dimensionsLabel: String(updated.dimensionsLabel || c.dimensionsLabel),
+                      weightKg: Math.max(1, Number(updated.weightKg) || c.weightKg),
+                      sheetCount: Number(updated.sheetCount) || undefined,
+                      assignedMoNumber: String(updated.assignedMoNumber || ''),
+                      targetPartName: String(updated.targetPartName || ''),
+                      warehouseLocation: String(updated.warehouseLocation || c.warehouseLocation),
+                    }
+                  : c
+              ),
+            };
+          })
+        );
+      },
+    });
+  };
+
+  // Add New Child Strip/Sheet via Slide-Over Drawer
+  const handleAddChildNode = () => {
+    const newChildId = `CH-${Date.now()}`;
+    const nextCode = `SLIT-${activeTree.parentCoilCode.replace('COIL-', '')}-S${visibleChildren.length + 1}`;
+    openQuickEditDrawer({
+      title: `افزودن نوار / شیت فرعی جدید به رول مادر ${activeTree.parentCoilCode}`,
+      subtitle: `شماره ذوب ارث‌برده‌شده: ${activeTree.heatNumber}`,
+      entityId: newChildId,
+      entityCode: nextCode,
+      moduleName: 'شجره‌نامه برش کلاف (Coil Slitting)',
+      fields: [
+        { key: 'childCode', label: 'کد نوار / شیت فرعی', type: 'text' },
+        {
+          key: 'type',
+          label: 'نوع خروجی برش',
+          type: 'select',
+          options: [
+            { value: 'SLIT_STRIP', label: 'نوار فرعی (Slit Strip)' },
+            { value: 'BLANK_SHEET', label: 'پالت شیت فرعی (Blank Sheet)' },
+            { value: 'REMNANT_COIL', label: 'ته‌کلاف برگشتی (Remnant)' },
+          ],
+        },
+        { key: 'dimensionsLabel', label: 'ابعاد برش', type: 'text' },
+        { key: 'weightKg', label: 'وزن (کیلوگرم)', type: 'number' },
+        { key: 'sheetCount', label: 'تعداد شیت / برگ', type: 'number' },
+        { key: 'assignedMoNumber', label: 'شماره دستور تولید (MO)', type: 'text' },
+        { key: 'targetPartName', label: 'نام قطعه تولیدی', type: 'text' },
+        { key: 'warehouseLocation', label: 'محل استقرار', type: 'text' },
+      ],
+      initialValues: {
+        childCode: nextCode,
+        type: 'SLIT_STRIP',
+        dimensionsLabel: `عرض ۳۲۰mm × ضخامت ${activeTree.thicknessMm}mm`,
+        weightKg: 1450,
+        sheetCount: 850,
+        assignedMoNumber: 'MO-1404-2001',
+        targetPartName: 'قطعه پرسکاری ساپکو',
+        warehouseLocation: 'انبار میانی شیت و نوار (RACK-B05)',
+      },
+      onSave: vals => {
+        const chosenType = (vals.type as ChildSlitNode['type']) || 'SLIT_STRIP';
+        const newNode: ChildSlitNode = {
+          id: newChildId,
+          childCode: String(vals.childCode || nextCode),
+          type: chosenType,
+          typeLabel:
+            chosenType === 'BLANK_SHEET'
+              ? 'پالت شیت فرعی (Blank Sheet)'
+              : chosenType === 'REMNANT_COIL'
+              ? 'ته‌کلاف مادر (Remnant)'
+              : 'نوار فرعی (Slit Strip)',
+          dimensionsLabel: String(vals.dimensionsLabel || ''),
+          weightKg: Math.max(1, Number(vals.weightKg) || 1000),
+          sheetCount: Number(vals.sheetCount) || undefined,
+          assignedMoNumber: String(vals.assignedMoNumber || ''),
+          targetPartName: String(vals.targetPartName || ''),
+          warehouseLocation: String(vals.warehouseLocation || 'انبار ورق'),
+          status: 'IN_STOCK',
+        };
+        setTreesState(prev =>
+          prev.map(t =>
+            t.parentId === activeTree.parentId
+              ? { ...t, children: [...t.children, newNode] }
+              : t
+          )
+        );
+      },
+    });
+  };
+
+  // Soft Delete Child Node (Protected by ConfirmDialog + Gmail-style Undo)
+  const handleDeleteChildNode = (child: ChildSlitNode) => {
+    requestConfirm({
+      title: `حذف منطقی خروجی برش کلاف (${child.childCode})`,
+      message: `آیا از حذف منطقی «${child.typeLabel} — ${child.childCode}» به وزن ${formatNumber(child.weightKg)} کیلوگرم اطمینان دارید؟`,
+      consequences: [
+        `حذف منطقی (Soft Delete) از شجره‌نامه رول مادر ${activeTree.parentCoilCode}`,
+        'بازمحاسبه موازنه جرم و راندمان برش رول مادر',
+        'امکان بازگردانی فوری (Undo) تا ۸ ثانیه پس از حذف',
+      ],
+      confirmLabel: 'حذف منطقی (Soft Delete)',
+      variant: 'danger',
+      onConfirm: () => {
+        const prevSnap = [...treesState];
+        setTreesState(prev =>
+          prev.map(t => {
+            if (t.parentId !== activeTree.parentId) return t;
+            return {
+              ...t,
+              children: t.children.map(c =>
+                c.id === child.id ? { ...c, isDeleted: true } : c
+              ),
+            };
+          })
+        );
+        recordAudit({
+          entityId: child.id,
+          entityCode: child.childCode,
+          moduleName: 'شجره‌نامه برش کلاف',
+          actionType: 'SOFT_DELETE',
+          title: `حذف منطقی نوار/شیت فرعی ${child.childCode}`,
+          details: `از رول مادر ${activeTree.parentCoilCode} (ذوب ${activeTree.heatNumber})`,
+        });
+        showUndoToast({
+          title: `خروجی برش «${child.childCode}» حذف منطقی شد`,
+          detail: 'برای بازگردانی به شجره‌نامه کلاف روی لغو (Undo) کلیک کنید.',
+          variant: 'danger',
+          onUndo: () => setTreesState(prevSnap),
+        });
+      },
+    });
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4 text-right" dir="rtl">
@@ -378,7 +614,7 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              مشاهده بصری نحوه برش یک رول مادر (Parent Coil) با شماره ذوب مشخص به نوارها و شیت‌های فرعی (Child)، ته‌کلاف و دستورات تولید (MO) مصرف‌کننده.
+              مشاهده و ویرایش کشویی (با آیکون مداد) برش رول مادر (Parent) به نوارها و شیت‌های فرعی (Child)، ته‌کلاف و دستورات تولید (MO).
             </p>
           </div>
         </div>
@@ -415,14 +651,24 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
 
       {/* Visual Tree Layout: Parent Coil (Right) ➔ Slitting Operation ➔ Child Strips/Sheets (Left) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch pt-1">
-        {/* 1. Parent Coil Card (رول مادر) */}
+        {/* 1. Parent Coil Card (رول مادر) with Pencil Drawer Edit */}
         <div className="lg:col-span-4 bg-slate-900 text-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden border border-slate-800">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
                 رول مادر (Parent Master Coil)
               </span>
-              <span className="font-mono text-xs text-slate-300">{activeTree.coilPackNumber}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-slate-300">{activeTree.coilPackNumber}</span>
+                <button
+                  type="button"
+                  onClick={handleEditParentCoil}
+                  title="ویرایش مشخصات رول مادر در کشو"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-amber-400 text-slate-300 hover:text-slate-950 border border-slate-700 transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <div>
@@ -471,23 +717,30 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400">موازنه جرم برش کلاف:</span>
               <span className="font-mono text-emerald-400 font-bold">
-                راندمان برش: {toPersianDigits(Math.round(((totalSlitWeight + remnantWeight) / activeTree.originalWeightKg) * 100))}٪
+                راندمان برش:{' '}
+                {toPersianDigits(
+                  Math.min(
+                    100,
+                    Math.round(((totalSlitWeight + remnantWeight) / Math.max(1, activeTree.originalWeightKg)) * 100)
+                  )
+                )}
+                ٪
               </span>
             </div>
             <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
               <div
                 className="bg-emerald-500 h-full"
-                style={{ width: `${(totalSlitWeight / activeTree.originalWeightKg) * 100}%` }}
+                style={{ width: `${(totalSlitWeight / Math.max(1, activeTree.originalWeightKg)) * 100}%` }}
                 title={`نوار و شیت فرعی: ${totalSlitWeight} kg`}
               />
               <div
                 className="bg-amber-400 h-full"
-                style={{ width: `${(remnantWeight / activeTree.originalWeightKg) * 100}%` }}
+                style={{ width: `${(remnantWeight / Math.max(1, activeTree.originalWeightKg)) * 100}%` }}
                 title={`ته‌کلاف: ${remnantWeight} kg`}
               />
               <div
                 className="bg-rose-500 h-full"
-                style={{ width: `${(scrapWeight / activeTree.originalWeightKg) * 100}%` }}
+                style={{ width: `${(scrapWeight / Math.max(1, activeTree.originalWeightKg)) * 100}%` }}
                 title={`پرت برش: ${scrapWeight} kg`}
               />
             </div>
@@ -508,9 +761,19 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
               <span className="text-slate-400">|</span>
               <span className="text-slate-600">تاریخ برش: {activeTree.slittingDate}</span>
             </div>
-            <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
-              {toPersianDigits(activeTree.children.length)} خروجی فرعی (Child) از ذوب {activeTree.heatNumber}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                {toPersianDigits(visibleChildren.length)} خروجی فرعی (Child) از ذوب {activeTree.heatNumber}
+              </span>
+              <button
+                type="button"
+                onClick={handleAddChildNode}
+                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3 h-3 text-emerald-400" />
+                <span>افزودن نوار/شیت فرعی</span>
+              </button>
+            </div>
           </div>
 
           {/* Vertical Connected Tree of Child Outputs */}
@@ -518,10 +781,9 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
             {/* Vertical Connector Line */}
             <div className="absolute right-2 top-3 bottom-3 w-0.5 bg-slate-300 rounded-full" />
 
-            {activeTree.children.map(child => {
+            {visibleChildren.map(child => {
               const isStripOrSheet = child.type === 'SLIT_STRIP' || child.type === 'BLANK_SHEET';
               const isRemnant = child.type === 'REMNANT_COIL';
-              const isScrap = child.type === 'EDGE_SCRAP';
 
               const dotColor = isStripOrSheet
                 ? 'bg-emerald-600 ring-emerald-100'
@@ -569,18 +831,22 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap text-[11px] text-slate-600">
-                        <span>محل استقرار: <strong>{child.warehouseLocation}</strong></span>
+                        <span>
+                          محل استقرار: <strong>{child.warehouseLocation}</strong>
+                        </span>
                         {child.targetPartName && (
                           <>
                             <span className="text-slate-300">•</span>
-                            <span>قطعه هدف: <strong className="text-slate-900">{child.targetPartName}</strong></span>
+                            <span>
+                              قطعه هدف: <strong className="text-slate-900">{child.targetPartName}</strong>
+                            </span>
                           </>
                         )}
                       </div>
                     </div>
 
-                    {/* Right-side Metrics & Linked MO Badge */}
-                    <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+                    {/* Right-side Metrics, Linked MO Badge, Pencil Edit & Soft Delete */}
+                    <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
                       {child.assignedMoNumber && (
                         <div className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-left">
                           <span className="text-[9px] text-indigo-600 block">دستور تولید متصل</span>
@@ -599,12 +865,30 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
                         </div>
                       )}
 
-                      <div className="text-left min-w-[85px]">
+                      <div className="text-left min-w-[75px]">
                         <span className="text-[10px] text-slate-400 block">وزن فرعی</span>
                         <span className="font-mono text-sm font-black text-slate-900">
                           {formatNumber(child.weightKg)} <span className="text-[10px] font-normal">kg</span>
                         </span>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleEditChildNode(child)}
+                        title="ویرایش در کشو (Edit)"
+                        className="p-1.5 rounded-lg bg-white hover:bg-slate-900 text-slate-600 hover:text-white border border-slate-200 transition cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteChildNode(child)}
+                        title="حذف منطقی (Soft Delete)"
+                        className="p-1.5 rounded-lg bg-white hover:bg-rose-600 text-slate-400 hover:text-white border border-slate-200 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>

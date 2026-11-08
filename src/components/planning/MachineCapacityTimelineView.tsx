@@ -1,21 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarClock,
   AlertTriangle,
   CheckCircle2,
   Cpu,
-  Clock,
   Layers,
   ArrowLeftRight,
   Sparkles,
   Filter,
-  ChevronLeft,
-  Wrench,
-  PlayCircle,
+  Edit3,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { ProductionPlanSuggestion } from '../../types/productionPlanning';
 import { Part, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 interface MachineCapacityTimelineViewProps {
   suggestions: ProductionPlanSuggestion[];
@@ -35,12 +35,13 @@ export interface ScheduledMoBlock {
   hall: string;
   tonnageLabel: string;
   quantity: number;
-  startHour: number; // 7 to 23 (decimal allowed, e.g., 7.5 = 07:30)
-  endHour: number;   // 7 to 23
+  startHour: number;
+  endHour: number;
   status: 'IN_PROGRESS' | 'SCHEDULED' | 'SETUP' | 'COMPLETED';
   contractNumber: string;
   dieCode: string;
   setupMinutes: number;
+  isDeleted?: boolean;
 }
 
 const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
@@ -230,13 +231,38 @@ const formatHourLabel = (hr: number): string => {
 export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewProps> = ({
   suggestions,
 }) => {
-  const [blocks, setBlocks] = useState<ScheduledMoBlock[]>(INITIAL_CAPACITY_BLOCKS);
+  const { openQuickEditDrawer, requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
+
+  const [blocks, setBlocks] = useState<ScheduledMoBlock[]>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_capacity_blocks_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_CAPACITY_BLOCKS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kpims_capacity_blocks_v1', JSON.stringify(blocks));
+    } catch {
+      // ignore
+    }
+  }, [blocks]);
+
   const [selectedHall, setSelectedHall] = useState<string>('ALL');
   const [onlyConflicts, setOnlyConflicts] = useState<boolean>(false);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>('CAP-02');
-  const [resolutionNotice, setResolutionNotice] = useState<string | null>(null);
 
-  // Group blocks by machine and detect overlaps (تداخل زمانی ماشین‌آلات)
+  const activeBlocks = useMemo(() => blocks.filter(b => !b.isDeleted), [blocks]);
+
+  const dynamicHallList = useMemo(
+    () => Array.from(new Set(activeBlocks.map(b => b.hall))),
+    [activeBlocks]
+  );
+
+  // Group blocks by machine and detect overlaps
   const machineRows = useMemo(() => {
     const map = new Map<
       string,
@@ -251,7 +277,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
       }
     >();
 
-    blocks.forEach(b => {
+    activeBlocks.forEach(b => {
       if (selectedHall !== 'ALL' && b.hall !== selectedHall) return;
       const existing = map.get(b.machineCode) || {
         machineCode: b.machineCode,
@@ -266,7 +292,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
       map.set(b.machineCode, existing);
     });
 
-    const totalHorizonHours = 16; // 07:00 to 23:00 (2 shifts)
+    const totalHorizonHours = 16;
     Array.from(map.values()).forEach(row => {
       row.items.sort((a, b) => a.startHour - b.startHour);
       let bookedHours = 0;
@@ -293,7 +319,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
     const allRows = Array.from(map.values());
     return onlyConflicts ? allRows.filter(r => r.conflicts.length > 0) : allRows;
-  }, [blocks, selectedHall, onlyConflicts]);
+  }, [activeBlocks, selectedHall, onlyConflicts]);
 
   const totalConflictsCount = useMemo(
     () => machineRows.reduce((sum, r) => sum + r.conflicts.length, 0),
@@ -312,12 +338,12 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
   }, [machineRows]);
 
   const selectedBlock = useMemo(
-    () => blocks.find(b => b.id === selectedBlockId) || blocks[0] || null,
-    [blocks, selectedBlockId]
+    () => activeBlocks.find(b => b.id === selectedBlockId) || activeBlocks[0] || null,
+    [activeBlocks, selectedBlockId]
   );
 
-  // Auto-resolve a conflict by shifting the second MO right after the first MO (+0.5h setup buffer)
   const handleAutoResolveConflict = (blockIdToShift: string, targetStartHour: number) => {
+    const prevSnap = [...blocks];
     setBlocks(prev =>
       prev.map(b => {
         if (b.id !== blockIdToShift) return b;
@@ -331,44 +357,154 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
         };
       })
     );
-    setResolutionNotice('تداخل زمانی دستور تولید با جابجایی خودکار به اولین بازه آزاد پس از تعویض قالب (SMED) برطرف شد.');
-    setTimeout(() => setResolutionNotice(null), 4000);
+    showUndoToast({
+      title: 'بازه زمانی دستور تولید روی گانت جابجا شد',
+      detail: 'برای بازگردانی به ساعت قبلی روی لغو (Undo) کلیک کنید.',
+      variant: 'success',
+      onUndo: () => setBlocks(prevSnap),
+    });
   };
 
-  // Resolve all conflicts across all machines with one click
   const handleResolveAllConflicts = () => {
-    setBlocks(prev => {
-      const next = [...prev];
-      const byMachine = new Map<string, ScheduledMoBlock[]>();
-      next.forEach(b => {
-        const list = byMachine.get(b.machineCode) || [];
-        list.push({ ...b });
-        byMachine.set(b.machineCode, list);
-      });
+    requestConfirm({
+      title: 'تایید تسطیح خودکار تداخل‌های زمانی (Auto-Leveling)',
+      message: `آیا از جابجایی خودکار ${toPersianDigits(totalConflictsCount)} دستور تولید دارای تداخل زمانی روی پرس‌ها اطمینان دارید؟`,
+      consequences: [
+        'انتقال دستورهای همپوشان به اولین بازه آزاد پس از اتمام دستور قبلی',
+        'لحاظ شدن ۳۰ دقیقه زمان تعویض قالب استاندارد (SMED) بین دو دستور کار',
+        'امکان بازگردانی کامل برنامه با دکمه لغو (Undo)',
+      ],
+      confirmLabel: 'تایید و تسطیح تداخل‌ها',
+      variant: 'indigo',
+      onConfirm: () => {
+        const prevSnap = [...blocks];
+        setBlocks(prev => {
+          const next = [...prev];
+          const byMachine = new Map<string, ScheduledMoBlock[]>();
+          next.forEach(b => {
+            const list = byMachine.get(b.machineCode) || [];
+            list.push({ ...b });
+            byMachine.set(b.machineCode, list);
+          });
 
-      const resolved: ScheduledMoBlock[] = [];
-      byMachine.forEach(list => {
-        list.sort((a, b) => a.startHour - b.startHour);
-        for (let i = 1; i < list.length; i++) {
-          const prevBlock = list[i - 1];
-          const currBlock = list[i];
-          if (currBlock.startHour < prevBlock.endHour) {
-            const duration = currBlock.endHour - currBlock.startHour;
-            currBlock.startHour = prevBlock.endHour + 0.5; // 30m SMED setup buffer
-            currBlock.endHour = Math.min(23, currBlock.startHour + duration);
-          }
-        }
-        resolved.push(...list);
-      });
-      return resolved;
+          const resolved: ScheduledMoBlock[] = [];
+          byMachine.forEach(list => {
+            list.sort((a, b) => a.startHour - b.startHour);
+            for (let i = 1; i < list.length; i++) {
+              const prevBlock = list[i - 1];
+              const currBlock = list[i];
+              if (!currBlock.isDeleted && !prevBlock.isDeleted && currBlock.startHour < prevBlock.endHour) {
+                const duration = currBlock.endHour - currBlock.startHour;
+                currBlock.startHour = prevBlock.endHour + 0.5;
+                currBlock.endHour = Math.min(23, currBlock.startHour + duration);
+              }
+            }
+            resolved.push(...list);
+          });
+          return resolved;
+        });
+
+        recordAudit({
+          moduleName: 'تقویم ظرفیت ماشین‌آلات',
+          actionType: 'UPDATE',
+          title: 'تسطیح خودکار تداخل‌های زمانی ماشین‌آلات (Auto-Leveling)',
+          details: 'رفع همپوشانی زمانی پرس‌ها با اعمال ۳۰ دقیقه بافر تعویض قالب (SMED)',
+        });
+
+        showUndoToast({
+          title: 'تداخل‌های زمانی ماشین‌آلات تسطیح شدند',
+          detail: 'تا ۸ ثانیه امکان لغو تسطیح (Undo) وجود دارد.',
+          variant: 'success',
+          onUndo: () => setBlocks(prevSnap),
+        });
+      },
     });
-    setResolutionNotice('تمامی تداخل‌های زمانی ماشین‌آلات با اعمال ۳۰ دقیقه زمان تعویض قالب (SMED) تسطیح (Leveling) شدند.');
-    setTimeout(() => setResolutionNotice(null), 4500);
+  };
+
+  // Slide-over Drawer Edit for any Scheduled MO Block
+  const handleEditBlockInDrawer = (block: ScheduledMoBlock) => {
+    openQuickEditDrawer({
+      title: `ویرایش زمان‌بندی ظرفیت: ${block.moNumber} (${block.operationCode})`,
+      subtitle: `قطعه: ${block.partName} — ماشین فعلی: ${block.machineName}`,
+      entityId: block.id,
+      entityCode: block.moNumber,
+      moduleName: 'تقویم ظرفیت ماشین‌آلات',
+      fields: [
+        { key: 'moNumber', label: 'شماره دستور تولید (MO)', type: 'text' },
+        { key: 'partName', label: 'نام قطعه', type: 'text' },
+        { key: 'operationCode', label: 'کد ایستگاه (OP)', type: 'text' },
+        { key: 'machineName', label: 'نام ماشین / پرس', type: 'text' },
+        { key: 'startHour', label: 'ساعت شروع شیفت (۷ تا ۲۲)', type: 'number' },
+        { key: 'endHour', label: 'ساعت پایان شیفت (۸ تا ۲۳)', type: 'number' },
+        { key: 'quantity', label: 'تیراژ برنامه‌ریزی‌شده (عدد)', type: 'number' },
+        { key: 'dieCode', label: 'کد قالب (Die Code)', type: 'text' },
+      ],
+      initialValues: {
+        moNumber: block.moNumber,
+        partName: block.partName,
+        operationCode: block.operationCode,
+        machineName: block.machineName,
+        startHour: block.startHour,
+        endHour: block.endHour,
+        quantity: block.quantity,
+        dieCode: block.dieCode,
+      },
+      onSave: updated => {
+        setBlocks(prev =>
+          prev.map(b =>
+            b.id === block.id
+              ? {
+                  ...b,
+                  moNumber: String(updated.moNumber || b.moNumber),
+                  partName: String(updated.partName || b.partName),
+                  operationCode: String(updated.operationCode || b.operationCode),
+                  machineName: String(updated.machineName || b.machineName),
+                  startHour: Math.max(7, Math.min(22, Number(updated.startHour) || b.startHour)),
+                  endHour: Math.max(8, Math.min(23, Number(updated.endHour) || b.endHour)),
+                  quantity: Math.max(1, Number(updated.quantity) || b.quantity),
+                  dieCode: String(updated.dieCode || b.dieCode),
+                }
+              : b
+          )
+        );
+      },
+    });
+  };
+
+  // Soft Delete Scheduled Block
+  const handleDeleteBlock = (block: ScheduledMoBlock) => {
+    requestConfirm({
+      title: `حذف منطقی دستور کار از تقویم ظرفیت (${block.moNumber})`,
+      message: `آیا از حذف منطقی عملیات «${block.operationCode} — ${block.partName}» از روی ماشین «${block.machineName}» اطمینان دارید؟`,
+      consequences: [
+        `آزادسازی ظرفیت ماشین ${block.machineName} در بازه ${formatHourLabel(block.startHour)} الی ${formatHourLabel(block.endHour)}`,
+        'امکان بازگردانی فوری (Undo) تا ۸ ثانیه پس از حذف',
+      ],
+      confirmLabel: 'حذف منطقی از گانت',
+      variant: 'danger',
+      onConfirm: () => {
+        const prevSnap = [...blocks];
+        setBlocks(prev => prev.map(b => (b.id === block.id ? { ...b, isDeleted: true } : b)));
+        recordAudit({
+          entityId: block.id,
+          entityCode: block.moNumber,
+          moduleName: 'تقویم ظرفیت ماشین‌آلات',
+          actionType: 'SOFT_DELETE',
+          title: `حذف منطقی عملیات ${block.operationCode} (${block.moNumber}) از تقویم ظرفیت`,
+          details: `ماشین: ${block.machineName} | قطعه: ${block.partName}`,
+        });
+        showUndoToast({
+          title: `عملیات ${block.moNumber} از گانت ظرفیت حذف منطقی شد`,
+          detail: 'برای بازگردانی روی لغو (Undo) کلیک کنید.',
+          variant: 'danger',
+          onUndo: () => setBlocks(prevSnap),
+        });
+      },
+    });
   };
 
   const resetDemoConflicts = () => {
     setBlocks(INITIAL_CAPACITY_BLOCKS);
-    setResolutionNotice(null);
   };
 
   return (
@@ -400,7 +536,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              نمای بصری تخصیص هر دستور تولید (MO) و ایستگاه عملیاتی (OP) روی پرس‌ها و خطوط برش در شیفت صبح و عصر (۰۷:۰۰ تا ۲۳:۰۰) جهت شناسایی و رفع تداخل‌های همزمان.
+              نمای بصری تخصیص هر دستور تولید (MO) روی پرس‌ها با قابلیت ویرایش کشویی (آیکون مداد)، تاییدیه هوشمند و بازگشت عملیات (Undo).
             </p>
           </div>
         </div>
@@ -427,23 +563,6 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
         </div>
       </div>
 
-      {/* Notification Banner */}
-      {resolutionNotice && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{resolutionNotice}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setResolutionNotice(null)}
-            className="text-emerald-700 hover:text-emerald-950 text-xs px-2 cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* KPI Strip & Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="bg-white border border-slate-200 rounded-xl p-3.5">
@@ -452,7 +571,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
             <Layers className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-xl font-black text-slate-900 font-mono mt-1">
-            {toPersianDigits(blocks.length)} <span className="text-xs font-sans font-normal text-slate-500">عملیات MO</span>
+            {toPersianDigits(activeBlocks.length)} <span className="text-xs font-sans font-normal text-slate-500">عملیات MO</span>
           </div>
         </div>
 
@@ -496,10 +615,11 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
               className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none"
             >
               <option value="ALL">همه سالن‌ها</option>
-              <option value="سالن پرس سنگین">سالن پرس سنگین</option>
-              <option value="سالن پرس متوسط">سالن پرس متوسط</option>
-              <option value="سالن برش و آماده‌سازی">سالن برش و آماده‌سازی</option>
-              <option value="سالن مونتاژ و جوش">سالن مونتاژ و جوش</option>
+              {dynamicHallList.map(h => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
             </select>
           </div>
           <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium cursor-pointer mt-2">
@@ -638,7 +758,6 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
                     {/* Left Column: 16-Hour Visual Gantt Track (07:00 to 23:00) */}
                     <div className="col-span-9 relative min-h-[96px] p-2 flex items-center">
-                      {/* Vertical Hour Grid Lines */}
                       <div className="absolute inset-0 grid grid-cols-16 pointer-events-none">
                         {HOURS_AXIS.slice(0, 16).map(hr => (
                           <div
@@ -652,10 +771,9 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                         ))}
                       </div>
 
-                      {/* Scheduled MO Blocks */}
                       <div className="relative w-full h-20">
                         {row.items.map((item, idx) => {
-                          const totalSpan = 16; // 7 to 23
+                          const totalSpan = 16;
                           const startOffset = Math.max(0, item.startHour - 7);
                           const duration = Math.max(0.8, item.endHour - item.startHour);
                           const rightPercent = Math.min(95, (startOffset / totalSpan) * 100);
@@ -663,7 +781,6 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                           const isConflicting = conflictingBlockIds.has(item.id);
                           const isSelected = selectedBlock?.id === item.id;
 
-                          // Stack slightly vertically if conflicting so both bars are clearly visible and clickable
                           const topClass = isConflicting
                             ? idx % 2 === 0
                               ? 'top-0.5 h-10'
@@ -720,24 +837,46 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
         </div>
       </div>
 
-      {/* Selected MO Operation Inspector & Conflict Resolution Panel */}
+      {/* Selected MO Operation Inspector, Pencil Drawer Edit & Conflict Resolution Panel */}
       {selectedBlock && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
           <div className="lg:col-span-8 space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-amber-400 font-mono text-xs font-bold">
-                {selectedBlock.moNumber}
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono text-xs font-bold">
-                {selectedBlock.operationCode}: {selectedBlock.operationTitle}
-              </span>
-              <span className="text-sm font-bold text-slate-900">{selectedBlock.partName}</span>
-              {conflictingBlockIds.has(selectedBlock.id) && (
-                <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  دارای تداخل زمانی روی {selectedBlock.machineName}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-amber-400 font-mono text-xs font-bold">
+                  {selectedBlock.moNumber}
                 </span>
-              )}
+                <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono text-xs font-bold">
+                  {selectedBlock.operationCode}: {selectedBlock.operationTitle}
+                </span>
+                <span className="text-sm font-bold text-slate-900">{selectedBlock.partName}</span>
+                {conflictingBlockIds.has(selectedBlock.id) && (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    دارای تداخل زمانی روی {selectedBlock.machineName}
+                  </span>
+                )}
+              </div>
+
+              {/* Pencil Drawer Edit & Soft Delete Buttons */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleEditBlockInDrawer(selectedBlock)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>ویرایش در کشو</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteBlock(selectedBlock)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-600 text-slate-500 hover:text-white transition cursor-pointer"
+                  title="حذف منطقی از گانت"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1 text-xs">

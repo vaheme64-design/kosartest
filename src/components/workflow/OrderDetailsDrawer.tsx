@@ -23,14 +23,16 @@ import {
   Hammer,
   Flame,
   Cpu,
+  History,
 } from 'lucide-react';
 import {
   HighwayPartScenario,
   HighwayOperationStep,
 } from './FactoryHighwayWorkbench';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { AuditTrailTabContent, useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
-export type DrawerTabKey = 'TRACEABILITY' | 'ROUTING' | 'ACTIONS';
+export type DrawerTabKey = 'TRACEABILITY' | 'ROUTING' | 'ACTIONS' | 'AUDIT_TRAIL';
 
 interface OrderDetailsDrawerProps {
   order: HighwayPartScenario | null;
@@ -72,6 +74,7 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
   onNavigateToSapco,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>(initialTab);
+  const { openQuickEditDrawer } = useEnterpriseUx();
 
   React.useEffect(() => {
     if (isOpen && initialTab) {
@@ -209,45 +212,58 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
             </div>
           </div>
 
-          {/* Segmented 3-Tab Navigation */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/75 rounded-xl text-xs">
+          {/* Segmented 4-Tab Navigation (Includes Enterprise Audit Trail) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-slate-200/75 rounded-xl text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('TRACEABILITY')}
-              className={`py-2 px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'TRACEABILITY'
                   ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Tag className="w-3.5 h-3.5 text-amber-600" />
-              <span>رهگیری (Traceability)</span>
+              <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span className="truncate">رهگیری (Traceability)</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('ROUTING')}
-              className={`py-2 px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'ROUTING'
                   ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <GitBranch className="w-3.5 h-3.5 text-emerald-600" />
-              <span>مسیر تولید ({toPersianDigits(order.operations.length)} OP)</span>
+              <GitBranch className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">مسیر تولید ({toPersianDigits(order.operations.length)} OP)</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('ACTIONS')}
-              className={`py-2 px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'ACTIONS'
                   ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-              <span>عملیات و کنترل خط</span>
+              <Sliders className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span className="truncate">عملیات و کنترل خط</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('AUDIT_TRAIL')}
+              className={`py-2 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'AUDIT_TRAIL'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span className="truncate">تاریخچه تغییرات (Audit)</span>
             </button>
           </div>
         </div>
@@ -800,6 +816,45 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* -------------------------------------------------------------- */}
+          {/* TAB 4: AUDIT TRAIL (تاریخچه تغییرات و لاگ‌های ممیزی دستور کار)   */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'AUDIT_TRAIL' && (
+            <div className="space-y-4">
+              <AuditTrailTabContent
+                entityId={order.id}
+                entityCode={order.orderCode}
+              />
+
+              {/* Also display detailed voucher/command logs for this order */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-1.5">
+                  <FileCheck2 className="w-4 h-4 text-slate-500" />
+                  <span>اسناد سیستمی و حواله‌های صادرشده این دستور ({toPersianDigits((order.commandLogs || []).length)})</span>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                  {(order.commandLogs || []).map(log => (
+                    <div
+                      key={log.id}
+                      className="px-4 py-2.5 flex items-center justify-between gap-2 text-[11px]"
+                    >
+                      <div>
+                        <span className="font-mono font-bold text-slate-900 ml-1.5">
+                          [{log.docNumber}]
+                        </span>
+                        <span className="font-semibold text-slate-800">{log.title}</span>
+                        <span className="text-slate-400 mr-1.5">({log.targetStation})</span>
+                      </div>
+                      <div className="font-mono text-slate-500 shrink-0">
+                        {log.qtyOrWeight} · {log.timestamp}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

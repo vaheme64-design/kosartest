@@ -1,26 +1,29 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart3,
-  AlertTriangle,
   ShieldAlert,
-  Wrench,
   Clock,
   CheckCircle2,
   TrendingDown,
+  Edit3,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 export interface ParetoCauseItem {
   id: string;
   title: string;
-  category6M: string; // e.g. Tooling (Die), Material, Man (Operator), Machine, Method
-  value: number; // pieces for scrap, minutes for downtime
+  category6M: string;
+  value: number;
   unitLabel: string;
   affectedStation: string;
   capaAction: string;
+  isDeleted?: boolean;
 }
 
-const SCRAP_CAUSES_RAW: ParetoCauseItem[] = [
+const INITIAL_SCRAP_CAUSES: ParetoCauseItem[] = [
   {
     id: 'SCR-01',
     title: 'ایراد قالب، کندی لبه برش و پلیسه سنبه/ماتریس (Die & Tooling Wear)',
@@ -68,7 +71,7 @@ const SCRAP_CAUSES_RAW: ParetoCauseItem[] = [
   },
 ];
 
-const DOWNTIME_CAUSES_RAW: ParetoCauseItem[] = [
+const INITIAL_DOWNTIME_CAUSES: ParetoCauseItem[] = [
   {
     id: 'DT-P01',
     title: 'خرابی اضطراری مدار هیدرولیک و بالشتک کشش پرس (Hydraulic Breakdown)',
@@ -117,10 +120,48 @@ const DOWNTIME_CAUSES_RAW: ParetoCauseItem[] = [
 ];
 
 export const ScrapParetoChart: React.FC = () => {
+  const { openQuickEditDrawer, requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
   const [mode, setMode] = useState<'SCRAP' | 'DOWNTIME'>('SCRAP');
 
+  // Dynamic State (Persisted in localStorage, Zero Hardcoded Read-Only Arrays)
+  const [scrapCauses, setScrapCauses] = useState<ParetoCauseItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_pareto_scrap_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_SCRAP_CAUSES;
+  });
+
+  const [downtimeCauses, setDowntimeCauses] = useState<ParetoCauseItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('kpims_pareto_downtime_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_DOWNTIME_CAUSES;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kpims_pareto_scrap_v1', JSON.stringify(scrapCauses));
+    } catch {
+      // ignore
+    }
+  }, [scrapCauses]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kpims_pareto_downtime_v1', JSON.stringify(downtimeCauses));
+    } catch {
+      // ignore
+    }
+  }, [downtimeCauses]);
+
   const computedRows = useMemo(() => {
-    const source = mode === 'SCRAP' ? SCRAP_CAUSES_RAW : DOWNTIME_CAUSES_RAW;
+    const source = (mode === 'SCRAP' ? scrapCauses : downtimeCauses).filter(i => !i.isDeleted);
     const sorted = [...source].sort((a, b) => b.value - a.value);
     const total = Math.max(1, sorted.reduce((sum, item) => sum + item.value, 0));
     const maxVal = Math.max(1, sorted[0]?.value || 1);
@@ -130,7 +171,6 @@ export const ScrapParetoChart: React.FC = () => {
       const sharePercent = Number(((item.value / total) * 100).toFixed(1));
       cumulative = Math.min(100, Number((cumulative + sharePercent).toFixed(1)));
       const widthRatioPercent = Math.round((item.value / maxVal) * 100);
-      // Vital Few (80/20 rule): causes that make up the first ~80% of defects
       const isVitalFew = index < 2 || cumulative <= 82;
 
       return {
@@ -143,10 +183,172 @@ export const ScrapParetoChart: React.FC = () => {
         total,
       };
     });
-  }, [mode]);
+  }, [mode, scrapCauses, downtimeCauses]);
 
   const totalSum = computedRows[0]?.total || 0;
-  const topTwoCumulative = computedRows[1]?.cumulativePercent || 0;
+  const topTwoCumulative = computedRows[1]?.cumulativePercent || computedRows[0]?.cumulativePercent || 0;
+
+  // Slide-over Drawer Edit via Pencil Icon
+  const handleEditCause = (item: ParetoCauseItem) => {
+    openQuickEditDrawer({
+      title: `ویرایش علت ${mode === 'SCRAP' ? 'ضایعات' : 'توقف'}: ${item.title}`,
+      subtitle: 'بروزرسانی مقادیر به صورت آنی نمودار پارتو (۸۰/۲۰) و درصد تجمعی را بازمحاسبه می‌کند.',
+      entityId: item.id,
+      entityCode: item.id,
+      moduleName: 'گزارشات پارتو و IATF 16949',
+      fields: [
+        { key: 'title', label: 'عنوان علت ریشه‌ای (Root Cause)', type: 'text' },
+        {
+          key: 'category6M',
+          label: 'دسته‌بندی ۶M ایشیکاوا',
+          type: 'select',
+          options: [
+            { value: 'قالب و ابزار (Tooling)', label: 'قالب و ابزار (Tooling)' },
+            { value: 'مواد اولیه (Material)', label: 'مواد اولیه (Material)' },
+            { value: 'نیروی انسانی (Man)', label: 'نیروی انسانی (Man)' },
+            { value: 'ماشین‌آلات (Machine)', label: 'ماشین‌آلات (Machine)' },
+            { value: 'فرآیند و روش (Method)', label: 'فرآیند و روش (Method)' },
+            { value: 'تعویض قالب (Setup)', label: 'تعویض قالب (Setup)' },
+          ],
+        },
+        {
+          key: 'value',
+          label: mode === 'SCRAP' ? 'تعداد ضایعات ثبت‌شده (قطعه)' : 'مدت زمان توقف (دقیقه)',
+          type: 'number',
+        },
+        { key: 'affectedStation', label: 'ایستگاه / پرس درگیر', type: 'text' },
+        { key: 'capaAction', label: 'اقدام اصلاحی و پیشگیرانه (8D / CAPA)', type: 'text' },
+      ],
+      initialValues: {
+        title: item.title,
+        category6M: item.category6M,
+        value: item.value,
+        affectedStation: item.affectedStation,
+        capaAction: item.capaAction,
+      },
+      onSave: updated => {
+        const updater = (prev: ParetoCauseItem[]) =>
+          prev.map(c =>
+            c.id === item.id
+              ? {
+                  ...c,
+                  title: String(updated.title || c.title),
+                  category6M: String(updated.category6M || c.category6M),
+                  value: Math.max(1, Number(updated.value) || 1),
+                  affectedStation: String(updated.affectedStation || c.affectedStation),
+                  capaAction: String(updated.capaAction || c.capaAction),
+                }
+              : c
+          );
+        if (mode === 'SCRAP') setScrapCauses(updater);
+        else setDowntimeCauses(updater);
+      },
+    });
+  };
+
+  // Add New Cause via Slide-Over Drawer
+  const handleAddNewCause = () => {
+    const newId = `${mode === 'SCRAP' ? 'SCR' : 'DT-P'}-${Math.floor(10 + Math.random() * 89)}`;
+    openQuickEditDrawer({
+      title: mode === 'SCRAP' ? 'ثبت علت ضایعات کیفی جدید در پارتو' : 'ثبت علت توقف خط جدید در پارتو',
+      entityId: newId,
+      entityCode: newId,
+      moduleName: 'گزارشات پارتو و IATF 16949',
+      fields: [
+        { key: 'title', label: 'عنوان علت ریشه‌ای (Root Cause)', type: 'text' },
+        {
+          key: 'category6M',
+          label: 'دسته‌بندی ۶M ایشیکاوا',
+          type: 'select',
+          options: [
+            { value: 'قالب و ابزار (Tooling)', label: 'قالب و ابزار (Tooling)' },
+            { value: 'مواد اولیه (Material)', label: 'مواد اولیه (Material)' },
+            { value: 'نیروی انسانی (Man)', label: 'نیروی انسانی (Man)' },
+            { value: 'ماشین‌آلات (Machine)', label: 'ماشین‌آلات (Machine)' },
+            { value: 'فرآیند و روش (Method)', label: 'فرآیند و روش (Method)' },
+          ],
+        },
+        {
+          key: 'value',
+          label: mode === 'SCRAP' ? 'تعداد ضایعات (قطعه)' : 'مدت زمان توقف (دقیقه)',
+          type: 'number',
+        },
+        { key: 'affectedStation', label: 'ایستگاه / پرس درگیر', type: 'text' },
+        { key: 'capaAction', label: 'اقدام اصلاحی (CAPA)', type: 'text' },
+      ],
+      initialValues: {
+        title: mode === 'SCRAP' ? 'خراشیدگی سطحی ورق در قالب کشش' : 'توقف تنظیم سنسور نوری فیدر',
+        category6M: 'قالب و ابزار (Tooling)',
+        value: 15,
+        affectedStation: 'سالن پرس متوسط',
+        capaAction: 'پولیش سطح ماتریس و بازبینی سنسور',
+      },
+      onSave: vals => {
+        const newItem: ParetoCauseItem = {
+          id: newId,
+          title: String(vals.title || 'علت جدید'),
+          category6M: String(vals.category6M || 'قالب و ابزار (Tooling)'),
+          value: Math.max(1, Number(vals.value) || 10),
+          unitLabel: mode === 'SCRAP' ? 'قطعه' : 'دقیقه',
+          affectedStation: String(vals.affectedStation || 'سالن پرس'),
+          capaAction: String(vals.capaAction || 'ثبت اقدام اصلاحی'),
+        };
+        if (mode === 'SCRAP') setScrapCauses(prev => [...prev, newItem]);
+        else setDowntimeCauses(prev => [...prev, newItem]);
+      },
+    });
+  };
+
+  // Soft Delete Cause (Protected by ConfirmDialog + Gmail-style Undo)
+  const handleDeleteCause = (item: ParetoCauseItem) => {
+    requestConfirm({
+      title: `حذف منطقی ردیف پارتو (${item.id})`,
+      message: `آیا از حذف منطقی علت «${item.title}» از نمودار پارتو اطمینان دارید؟`,
+      consequences: [
+        'بازمحاسبه خودکار سهم درصدی و منحنی تجمعی ۸۰/۲۰ پارتو',
+        'امکان بازگردانی فوری (Undo) تا ۸ ثانیه پس از حذف',
+      ],
+      confirmLabel: 'حذف منطقی (Soft Delete)',
+      variant: 'danger',
+      onConfirm: () => {
+        if (mode === 'SCRAP') {
+          const prevSnap = [...scrapCauses];
+          setScrapCauses(prev => prev.map(c => (c.id === item.id ? { ...c, isDeleted: true } : c)));
+          recordAudit({
+            entityId: item.id,
+            entityCode: item.id,
+            moduleName: 'پارتو ضایعات',
+            actionType: 'SOFT_DELETE',
+            title: `حذف منطقی علت ضایعات: ${item.title}`,
+            details: `تعداد ${item.value} قطعه از محاسبات پارتو آرشیو شد.`,
+          });
+          showUndoToast({
+            title: `علت ضایعات «${item.id}» حذف منطقی شد`,
+            detail: 'برای بازگردانی به نمودار پارتو روی لغو (Undo) کلیک کنید.',
+            variant: 'danger',
+            onUndo: () => setScrapCauses(prevSnap),
+          });
+        } else {
+          const prevSnap = [...downtimeCauses];
+          setDowntimeCauses(prev => prev.map(c => (c.id === item.id ? { ...c, isDeleted: true } : c)));
+          recordAudit({
+            entityId: item.id,
+            entityCode: item.id,
+            moduleName: 'پارتو توقفات',
+            actionType: 'SOFT_DELETE',
+            title: `حذف منطقی علت توقف: ${item.title}`,
+            details: `مدت ${item.value} دقیقه از محاسبات پارتو آرشیو شد.`,
+          });
+          showUndoToast({
+            title: `علت توقف «${item.id}» حذف منطقی شد`,
+            detail: 'برای بازگردانی به نمودار پارتو روی لغو (Undo) کلیک کنید.',
+            variant: 'danger',
+            onUndo: () => setDowntimeCauses(prevSnap),
+          });
+        }
+      },
+    });
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4 text-right" dir="rtl">
@@ -162,40 +364,51 @@ export const ScrapParetoChart: React.FC = () => {
                 نمودار پارتو ضایعات و توقفات خط (Scrap & Downtime Pareto — تحلیل ۸۰/۲۰)
               </h3>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                استاندارد IATF 16949 / 8D CAPA
+                استاندارد IATF 16949 / داینامیک و قابل ویرایش
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              رتبه‌بندی نزولی بیشترین علل ضایعات یا توقف خط (از بیشترین به کمترین) به همراه منحنی درصد تجمعی جهت تمرکز روی علل حیاتی (Vital Few).
+              رتبه‌بندی نزولی علل ضایعات و توقفات؛ با کلیک روی آیکون مداد (ویرایش در کشو) می‌توانید مقادیر و اقدام اصلاحی هر ردیف را تغییر دهید.
             </p>
           </div>
         </div>
 
-        {/* Mode Toggle: Scrap vs Downtime */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start">
+        {/* Mode Toggle & Add Button */}
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode('SCRAP')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                mode === 'SCRAP'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>پارتو علل ضایعات کیفی (Scrap)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('DOWNTIME')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                mode === 'DOWNTIME'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>پارتو علل توقفات خط (Downtime)</span>
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setMode('SCRAP')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              mode === 'SCRAP'
-                ? 'bg-slate-900 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={handleAddNewCause}
+            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span>پارتو علل ضایعات کیفی (Scrap)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('DOWNTIME')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              mode === 'DOWNTIME'
-                ? 'bg-slate-900 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>پارتو علل توقفات خط (Downtime)</span>
+            <Plus className="w-3.5 h-3.5 text-emerald-400" />
+            <span>افزودن علت جدید</span>
           </button>
         </div>
       </div>
@@ -223,7 +436,7 @@ export const ScrapParetoChart: React.FC = () => {
         </div>
       </div>
 
-      {/* Minimal Descending Bar Chart Rows */}
+      {/* Minimal Descending Bar Chart Rows with Pencil Edit & Soft Delete */}
       <div className="space-y-3">
         {computedRows.map(row => (
           <div
@@ -258,8 +471,8 @@ export const ScrapParetoChart: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-3 font-mono text-xs shrink-0 self-end sm:self-center">
-                <span className="font-black text-slate-900">
+              <div className="flex items-center gap-2 font-mono text-xs shrink-0 self-end sm:self-center">
+                <span className="font-black text-slate-900 ml-1">
                   {formatNumber(row.value)}{' '}
                   <span className="text-[10px] font-sans font-normal text-slate-500">{row.unitLabel}</span>
                 </span>
@@ -275,6 +488,26 @@ export const ScrapParetoChart: React.FC = () => {
                 >
                   تجمعی: {toPersianDigits(row.cumulativePercent)}٪
                 </span>
+
+                {/* Pencil Edit Icon (Opens Slide-Over Drawer) */}
+                <button
+                  type="button"
+                  onClick={() => handleEditCause(row)}
+                  title="ویرایش در کشو (Edit)"
+                  className="p-1.5 rounded-lg bg-white hover:bg-slate-900 text-slate-600 hover:text-white border border-slate-200 transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Soft Delete Icon (Opens ConfirmDialog + Undo Toast) */}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCause(row)}
+                  title="حذف منطقی (Soft Delete)"
+                  className="p-1.5 rounded-lg bg-white hover:bg-rose-600 text-slate-400 hover:text-white border border-slate-200 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 

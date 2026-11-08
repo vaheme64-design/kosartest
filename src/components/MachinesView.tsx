@@ -43,6 +43,7 @@ import { PlantMaintenanceModuleView } from './maintenance/PlantMaintenanceModule
 import { MasterDataSkeleton } from './ui/Skeleton';
 import { StandardTable, StandardTableHeader, StandardTableRow, StandardTableCell, StandardTableHeadCell } from './common/StandardTable';
 import { SearchableSelect } from './common/SearchableSelect';
+import { useEnterpriseUx } from '../context/EnterpriseUxContext';
 
 interface MachinesViewProps {
   machines: Machine[];
@@ -75,6 +76,7 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
   initialSubTab = 'machines',
   onSubTabChange,
 }) => {
+  const { requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
   type SubTab = 'machines' | 'maintenance' | 'oee' | 'utilization' | 'dies' | 'halls' | 'operators';
   const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialSubTab);
 
@@ -196,14 +198,42 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
     }
   };
 
-  const handleDeleteProcess = async (code: string) => {
-    if (!confirm(`آیا از حذف قابلیت فرآیندی «${code}» اطمینان دارید؟`)) return;
-    try {
-      await fetch(`/api/processes/${code}`, { method: 'DELETE' });
-      await loadProcesses();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteProcess = (code: string) => {
+    const procItem = availableProcesses.find(p => p.code === code);
+    requestConfirm({
+      title: `حذف منطقی قابلیت فرآیندی «${code}»`,
+      description: `آیا از حذف قابلیت فرآیندی «${procItem?.name || code}» از کاتالوگ قابلیت‌های پرس اطمینان دارید؟`,
+      consequences: [
+        'این قابلیت از لیست انتخاب فرآیندهای جدید پرس‌ها حذف می‌شود.',
+        'ماشین‌آلاتی که قبلاً این قابلیت را داشته‌اند بدون تغییر باقی می‌مانند.',
+        'امکان بازگردانی فوری با دکمه «لغو (Undo)» وجود دارد.',
+      ],
+      confirmLabel: 'تایید و حذف قابلیت',
+      variant: 'danger',
+      onConfirm: async () => {
+        const prevList = [...availableProcesses];
+        setAvailableProcesses(prev => prev.filter(p => p.code !== code));
+        try {
+          await fetch(`/api/processes/${code}`, { method: 'DELETE' });
+        } catch (err) {
+          console.error(err);
+        }
+        recordAudit({
+          actionType: 'SOFT_DELETE',
+          moduleTitle: 'مدیریت ماشین‌آلات و قابلیت‌های فرآیندی',
+          entityId: code,
+          entityCode: code,
+          summaryFa: `حذف قابلیت فرآیندی «${procItem?.name || code}»`,
+        });
+        showUndoToast({
+          title: `قابلیت فرآیندی «${code}» حذف شد`,
+          description: 'برای بازگردانی فوری روی «لغو (Undo)» کلیک کنید.',
+          onUndo: () => {
+            setAvailableProcesses(prevList);
+          },
+        });
+      },
+    });
   };
 
   const handleOpenTimesheetReport = async (op: Operator) => {
@@ -239,13 +269,41 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
     setIsOpModalOpen(true);
   };
 
-  const handleDeleteOp = async (op: Operator) => {
-    if (!confirm(`آیا از حذف اپراتور «${op.fullName}» (کد ${op.personnelCode}) اطمینان دارید؟`)) return;
-    if (onDeleteOperator) {
-      await onDeleteOperator(op.id);
-    } else {
-      await fetch(`/api/operators/${op.id}`, { method: 'DELETE' });
-    }
+  const handleDeleteOp = (op: Operator) => {
+    requestConfirm({
+      title: `حذف منطقی اپراتور «${op.fullName}»`,
+      description: `آیا از غیرفعال‌سازی و حذف منطقی اپراتور «${op.fullName}» (کد پرسنلی ${op.personnelCode}) اطمینان دارید؟`,
+      consequences: [
+        'اپراتور از لیست تخصیص شیفت‌های جدید خط تولید خارج می‌شود.',
+        'کارنامه و سوابق تایم‌شیت قبلی اپراتور در سیستم محفوظ می‌ماند.',
+        'در صورت نیاز می‌توانید با دکمه «لغو (Undo)» اپراتور را بازگردانید.',
+      ],
+      confirmLabel: 'تایید و حذف منطقی اپراتور',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (onDeleteOperator) {
+          await onDeleteOperator(op.id);
+        } else {
+          await fetch(`/api/operators/${op.id}`, { method: 'DELETE' });
+        }
+        recordAudit({
+          actionType: 'SOFT_DELETE',
+          moduleTitle: 'مدیریت اپراتورها و پرسنل تولید',
+          entityId: op.id,
+          entityCode: op.personnelCode,
+          summaryFa: `حذف منطقی اپراتور «${op.fullName}» (${op.personnelCode})`,
+        });
+        showUndoToast({
+          title: `اپراتور «${op.fullName}» به صورت منطقی حذف شد`,
+          description: `کد پرسنلی: ${op.personnelCode}`,
+          onUndo: async () => {
+            if (onSaveOperator) {
+              await onSaveOperator(op);
+            }
+          },
+        });
+      },
+    });
   };
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -933,16 +991,22 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADD / EDIT MACHINE */}
+      {/* SLIDE-OVER DRAWER: ADD / EDIT MACHINE */}
       {isMachineModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 shadow-xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex justify-end"
+          onClick={() => setIsMachineModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white border-r border-slate-200 w-full max-w-lg h-full p-6 shadow-2xl overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 bg-white flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-orange-600" />
-                <span>{editingMachine ? 'ویرایش مشخصات ماشین / پرس' : 'ثبت پرس یا دستگاه جدید'}</span>
+                <span>{editingMachine ? 'کشوی ویرایش مشخصات ماشین / پرس' : 'کشوی ثبت پرس یا دستگاه جدید'}</span>
               </h3>
-              <button onClick={() => setIsMachineModalOpen(false)} className="text-slate-400 hover:text-slate-700">
+              <button onClick={() => setIsMachineModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1074,16 +1138,22 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADD / EDIT DIE / MOLD */}
+      {/* SLIDE-OVER DRAWER: ADD / EDIT DIE / MOLD */}
       {isDieModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 shadow-xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex justify-end"
+          onClick={() => setIsDieModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white border-r border-slate-200 w-full max-w-lg h-full p-6 shadow-2xl overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 bg-white flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Wrench className="w-4 h-4 text-blue-600" />
-                <span>{editingDie ? 'ویرایش شناسنامه قالب پرس' : 'ثبت و تعریف قالب پرس جدید'}</span>
+                <span>{editingDie ? 'کشوی ویرایش شناسنامه قالب پرس' : 'کشوی ثبت و تعریف قالب پرس جدید'}</span>
               </h3>
-              <button onClick={() => setIsDieModalOpen(false)} className="text-slate-400 hover:text-slate-700">
+              <button onClick={() => setIsDieModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1222,16 +1292,22 @@ export const MachinesView: React.FC<MachinesViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADD OPERATOR */}
+      {/* SLIDE-OVER DRAWER: ADD / EDIT OPERATOR */}
       {isOpModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex justify-end"
+          onClick={() => setIsOpModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white border-r border-slate-200 w-full max-w-md h-full p-6 shadow-2xl overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 bg-white flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-600" />
-                <span>ثبت اپراتور یا تکنسین خط تولید</span>
+                <span>کشوی ثبت و ویرایش اپراتور خط تولید</span>
               </h3>
-              <button onClick={() => setIsOpModalOpen(false)} className="text-slate-400 hover:text-slate-700">
+              <button onClick={() => setIsOpModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>

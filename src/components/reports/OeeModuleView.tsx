@@ -21,6 +21,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Filter,
+  Edit3,
+  Trash2,
+  History,
 } from 'lucide-react';
 import {
   OeeDashboardSummary,
@@ -32,6 +35,7 @@ import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { ReportModuleSkeleton } from '../common/Skeleton';
 import { ScrapParetoChart } from './ScrapParetoChart';
+import { useEnterpriseUx, AuditTrailTabContent } from '../../context/EnterpriseUxContext';
 
 export interface OeeModuleViewProps {
   machines?: any[];
@@ -40,11 +44,13 @@ export interface OeeModuleViewProps {
 export type DrawerDowntimeCategoryFilter = 'ALL' | 'UNPLANNED_BREAKDOWN' | 'PLANNED_SETUP' | 'MINOR_STOP';
 
 export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
+  const { requestConfirm, showUndoToast, openQuickEditDrawer, recordAudit } = useEnterpriseUx();
   const [data, setData] = useState<OeeDashboardSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [shiftFilter, setShiftFilter] = useState<ShiftFilterKey>('ALL');
   const [hallFilter, setHallFilter] = useState<string>('ALL');
   const [selectedMachine, setSelectedMachine] = useState<OeeMachineRecord | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'DOWNTIME' | 'AUDIT_TRAIL'>('DOWNTIME');
   const [drawerCategoryFilter, setDrawerCategoryFilter] = useState<DrawerDowntimeCategoryFilter>('ALL');
   const [chartViewMode, setChartViewMode] = useState<'OEE_FACTORS' | 'DOWNTIME_STACK'>('OEE_FACTORS');
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,7 +72,65 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
 
   const openMachineDrawer = (machine: OeeMachineRecord, initialCategory: DrawerDowntimeCategoryFilter = 'ALL') => {
     setSelectedMachine(machine);
+    setDrawerTab('DOWNTIME');
     setDrawerCategoryFilter(initialCategory);
+  };
+
+  const handleEditMachineRow = (machine: OeeMachineRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    openQuickEditDrawer({
+      entityId: machine.machineId,
+      entityCode: machine.machineCode,
+      moduleTitle: 'ماژول OEE و شاخص‌های عملکرد دستگاه',
+      drawerTitle: `ویرایش مشخصات و شاخص‌های دستگاه ${machine.machineCode}`,
+      drawerSubtitle: `${machine.machineName} • ${machine.hallName}`,
+      fields: [
+        { key: 'machineName', label: 'نام دستگاه پرس / ایستگاه', value: machine.machineName, type: 'text', required: true },
+        { key: 'activePartName', label: 'قطعه فعال روی خط', value: machine.activePartName, type: 'text', required: true },
+        { key: 'availabilityPercent', label: 'دسترس‌پذیری Availability (%)', value: machine.availabilityPercent, type: 'number', min: 1, max: 100 },
+        { key: 'performancePercent', label: 'عملکرد سرعت Performance (%)', value: machine.performancePercent, type: 'number', min: 1, max: 100 },
+        { key: 'qualityPercent', label: 'نرخ کیفیت Quality (%)', value: machine.qualityPercent, type: 'number', min: 1, max: 100 },
+        { key: 'goodPieces', label: 'تولید قطعه سالم شیفت', value: machine.goodPieces, type: 'number', min: 0 },
+        { key: 'scrapAndReworkPieces', label: 'تعداد ضایعات و دوباره‌کاری', value: machine.scrapAndReworkPieces, type: 'number', min: 0 },
+      ],
+      onSave: values => {
+        if (!data) return;
+        const prevSnapshot = data;
+        const a = Number(values.availabilityPercent) || machine.availabilityPercent;
+        const p = Number(values.performancePercent) || machine.performancePercent;
+        const q = Number(values.qualityPercent) || machine.qualityPercent;
+        const oee = Math.round(((a * p * q) / 10000) * 10) / 10;
+        const updatedMachine: OeeMachineRecord = {
+          ...machine,
+          machineName: String(values.machineName || machine.machineName),
+          activePartName: String(values.activePartName || machine.activePartName),
+          availabilityPercent: a,
+          performancePercent: p,
+          qualityPercent: q,
+          oeePercent: oee,
+          goodPieces: Number(values.goodPieces ?? machine.goodPieces),
+          scrapAndReworkPieces: Number(values.scrapAndReworkPieces ?? machine.scrapAndReworkPieces),
+        };
+        setData(prev =>
+          prev
+            ? {
+                ...prev,
+                machines: prev.machines.map(m => (m.machineId === machine.machineId ? updatedMachine : m)),
+              }
+            : prev
+        );
+        if (selectedMachine?.machineId === machine.machineId) {
+          setSelectedMachine(updatedMachine);
+        }
+        showUndoToast({
+          title: `مشخصات OEE دستگاه «${machine.machineCode}» به ${toPersianDigits(oee)}٪ بروزرسانی شد`,
+          description: 'در صورت نیاز می‌توانید تغییرات اعمال‌شده را به حالت قبل بازگردانید.',
+          onUndo: () => {
+            setData(prevSnapshot);
+          },
+        });
+      },
+    });
   };
 
   const loadOeeData = useCallback(async () => {
@@ -837,10 +901,20 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       )}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 text-[10px] font-sans font-bold">
-                        <Eye className="w-3.5 h-3.5" />
-                        ریز توقفات
-                      </span>
+                      <div className="inline-flex items-center justify-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 text-[10px] font-sans font-bold">
+                          <Eye className="w-3.5 h-3.5" />
+                          ریز توقفات
+                        </span>
+                        <button
+                          type="button"
+                          onClick={e => handleEditMachineRow(m, e)}
+                          className="p-1.5 rounded-lg bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 transition cursor-pointer"
+                          title="ویرایش مشخصات و شاخص‌های دستگاه در کشوی جانبی"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -871,7 +945,7 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                       سرپرست شیفت: {sh.supervisorName} • تیراژ سالم: <span className="font-mono text-slate-900">{formatNumber(sh.totalPieces)}</span> قطعه
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 font-mono text-xs tabular-nums">
+                  <div className="flex items-center gap-2.5 font-mono text-xs tabular-nums">
                     <div className="text-center">
                       <span className="text-[10px] text-slate-500 block font-sans">دسترس‌پذیری</span>
                       <span className="text-cyan-400 font-bold">{toPersianDigits(sh.availabilityPercent)}٪</span>
@@ -887,6 +961,63 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                     <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 font-black">
                       OEE: {toPersianDigits(sh.oeePercent)}٪
                     </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openQuickEditDrawer({
+                          entityId: sh.shiftCode,
+                          entityCode: sh.shiftCode,
+                          moduleTitle: 'مدیریت شیفت‌های کاری و OEE',
+                          drawerTitle: `ویرایش مشخصات ${sh.shiftNameFa}`,
+                          drawerSubtitle: `کد شیفت: ${sh.shiftCode}`,
+                          fields: [
+                            { key: 'shiftNameFa', label: 'نام شیفت کاری', value: sh.shiftNameFa, type: 'text', required: true },
+                            { key: 'supervisorName', label: 'سرپرست شیفت', value: sh.supervisorName, type: 'text', required: true },
+                            { key: 'totalPieces', label: 'تیراژ سالم شیفت (قطعه)', value: sh.totalPieces, type: 'number', min: 0 },
+                            { key: 'availabilityPercent', label: 'دسترس‌پذیری (%)', value: sh.availabilityPercent, type: 'number', min: 1, max: 100 },
+                            { key: 'performancePercent', label: 'عملکرد سرعت (%)', value: sh.performancePercent, type: 'number', min: 1, max: 100 },
+                            { key: 'qualityPercent', label: 'کیفیت (%)', value: sh.qualityPercent, type: 'number', min: 1, max: 100 },
+                          ],
+                          onSave: values => {
+                            const prevData = data;
+                            const a = Number(values.availabilityPercent) || sh.availabilityPercent;
+                            const p = Number(values.performancePercent) || sh.performancePercent;
+                            const q = Number(values.qualityPercent) || sh.qualityPercent;
+                            const oee = Math.round(((a * p * q) / 10000) * 10) / 10;
+                            setData(prev =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    shiftComparison: prev.shiftComparison.map(item =>
+                                      item.shiftCode === sh.shiftCode
+                                        ? {
+                                            ...item,
+                                            shiftNameFa: String(values.shiftNameFa || item.shiftNameFa),
+                                            supervisorName: String(values.supervisorName || item.supervisorName),
+                                            totalPieces: Number(values.totalPieces ?? item.totalPieces),
+                                            availabilityPercent: a,
+                                            performancePercent: p,
+                                            qualityPercent: q,
+                                            oeePercent: oee,
+                                          }
+                                        : item
+                                    ),
+                                  }
+                                : prev
+                            );
+                            showUndoToast({
+                              title: `مشخصات «${values.shiftNameFa || sh.shiftNameFa}» بروزرسانی شد`,
+                              description: `سرپرست: ${values.supervisorName} • OEE: ${toPersianDigits(oee)}٪`,
+                              onUndo: () => setData(prevData),
+                            });
+                          },
+                        })
+                      }
+                      className="p-1.5 rounded-lg bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-700 border border-slate-200 transition cursor-pointer"
+                      title="ویرایش مشخصات شیفت در کشوی جانبی"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1042,10 +1173,46 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   ))}
                 </div>
               )}
+
+              {/* Drawer Sub-Tabs: Downtime Breakdown vs Audit Trail */}
+              <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab('DOWNTIME')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    drawerTab === 'DOWNTIME'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>کالبدشکافی توقفات و TPM</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab('AUDIT_TRAIL')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    drawerTab === 'AUDIT_TRAIL'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>تاریخچه تغییرات (Audit Trail)</span>
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Drawer Content */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {drawerTab === 'AUDIT_TRAIL' ? (
+                <AuditTrailTabContent
+                  entityId={selectedMachine.machineId}
+                  entityCode={selectedMachine.machineCode}
+                  title={`تاریخچه ممیزی و تغییرات دستگاه ${selectedMachine.machineName} (${selectedMachine.machineCode})`}
+                />
+              ) : (
+                <>
               {/* 4 Compact OEE KPI Gauges for Selected Machine */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-slate-50 border border-emerald-500/30 rounded-xl p-3 text-right">
@@ -1305,6 +1472,63 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                                   <span className="px-2.5 py-0.5 rounded-md bg-rose-500/20 text-rose-700 border border-rose-500/30 font-black">
                                     {formatNumber(item.durationMinutes)} دقیقه
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openQuickEditDrawer({
+                                        entityId: selectedMachine.machineId,
+                                        entityCode: item.reasonCode,
+                                        moduleTitle: `توقفات دستگاه ${selectedMachine.machineCode}`,
+                                        drawerTitle: `ویرایش لاگ توقف ${item.reasonCode}`,
+                                        drawerSubtitle: selectedMachine.machineName,
+                                        fields: [
+                                          { key: 'reasonTitleFa', label: 'عنوان علت توقف', value: item.reasonTitleFa, type: 'text', required: true },
+                                          { key: 'durationMinutes', label: 'مدت زمان توقف (دقیقه)', value: item.durationMinutes, type: 'number', min: 1 },
+                                          { key: 'occurrencesCount', label: 'تعداد دفعات رخداد', value: item.occurrencesCount, type: 'number', min: 1 },
+                                          { key: 'operatorOrTechName', label: 'مسئول رسیدگی', value: item.operatorOrTechName, type: 'text' },
+                                          { key: 'rootCauseFa', label: 'علت ریشه‌ای (Root Cause)', value: item.rootCauseFa, type: 'textarea' },
+                                          { key: 'correctiveActionFa', label: 'اقدام اصلاحی و پیشگیرانه', value: item.correctiveActionFa, type: 'textarea' },
+                                        ],
+                                        onSave: values => {
+                                          const prevMachine = selectedMachine;
+                                          const updatedLogs = logs.map(l =>
+                                            l.id === item.id
+                                              ? {
+                                                  ...l,
+                                                  reasonTitleFa: String(values.reasonTitleFa || l.reasonTitleFa),
+                                                  durationMinutes: Number(values.durationMinutes) || l.durationMinutes,
+                                                  occurrencesCount: Number(values.occurrencesCount) || l.occurrencesCount,
+                                                  operatorOrTechName: String(values.operatorOrTechName || l.operatorOrTechName),
+                                                  rootCauseFa: String(values.rootCauseFa || l.rootCauseFa),
+                                                  correctiveActionFa: String(values.correctiveActionFa || l.correctiveActionFa),
+                                                }
+                                              : l
+                                          );
+                                          const updatedMachine = { ...selectedMachine, downtimeLogs: updatedLogs };
+                                          setSelectedMachine(updatedMachine);
+                                          setData(prev =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  machines: prev.machines.map(m =>
+                                                    m.machineId === selectedMachine.machineId ? updatedMachine : m
+                                                  ),
+                                                }
+                                              : prev
+                                          );
+                                          showUndoToast({
+                                            title: `لاگ توقف «${item.reasonCode}» بروزرسانی شد`,
+                                            description: 'تغییرات در شناسنامه توقفات دستگاه ثبت شد.',
+                                            onUndo: () => setSelectedMachine(prevMachine),
+                                          });
+                                        },
+                                      })
+                                    }
+                                    className="p-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition cursor-pointer"
+                                    title="ویرایش این رکورد توقف در کشوی جانبی"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               </div>
 
@@ -1379,6 +1603,8 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
                   ))}
                 </div>
               </div>
+                </>
+              )}
             </div>
           </div>
         </div>

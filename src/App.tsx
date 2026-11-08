@@ -20,6 +20,7 @@ import { ContextualActionMenu } from './components/common/ContextualActionMenu';
 import { OfflineIndicator } from './components/pwa/PWAInstallButton';
 import { AiActionPayload } from './types/ai';
 import { ErpLayoutTemplate, ErpColorTheme } from './types/theme';
+import { EnterpriseUxProvider } from './context/EnterpriseUxContext';
 
 import {
   Part,
@@ -829,7 +830,8 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+    <EnterpriseUxProvider>
+      <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
       {isSidebarFullHeight ? (
         /* Layout A (Image 1 / ERPNext Workspace): Dark Right Sidebar spans full height, White Top Bar sits above main workspace */
         <div className="flex-1 flex flex-col md:flex-row min-h-screen">
@@ -887,7 +889,8 @@ export default function App() {
         parts={parts}
         onExecuteAction={handleExecuteAiAction}
       />
-    </div>
+      </div>
+    </EnterpriseUxProvider>
   );
 }
 

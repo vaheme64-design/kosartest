@@ -51,6 +51,7 @@ import { InventorySubTab } from '../inventory/InventoryModuleView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 import { OrderDetailsDrawer, DrawerTabKey } from './OrderDetailsDrawer';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 export interface HighwayOperationStep {
   stepCode: string;
@@ -91,6 +92,7 @@ export interface HighwayPartScenario {
   contractCode?: string;
   status?: 'ACTIVE' | 'COMPLETED' | 'HALTED' | 'DRAFT';
   isPinned?: boolean;
+  isDeleted?: boolean;
   orderQty: number;
   unitWeightKg: number;
   scrapAllowancePct: number;
@@ -437,6 +439,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   onNavigateSubModule,
   onSubmitVoucher,
 }) => {
+  const { requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
   const [scenarios, setScenarios] = useState<HighwayPartScenario[]>(() => {
     try {
       const saved = localStorage.getItem('kpims_highway_scenarios_v3');
@@ -626,60 +629,90 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     },
   ];
 
-  // Complete Production & Auto Issue Finished Goods Receipt to Warehouse
-  const handleCompleteProduction = async (order: HighwayPartScenario) => {
+  // Complete Production & Auto Issue Finished Goods Receipt to Warehouse (Protected by Defensive UX ConfirmDialog + Undo)
+  const handleCompleteProduction = (order: HighwayPartScenario) => {
     const lastOp = order.operations[order.operations.length - 1];
     const finishedQty = lastOp && lastOp.completedGood > 0 ? lastOp.completedGood : order.orderQty;
-    const fgDocNo = `FG-REC-${Math.floor(1000 + Math.random() * 8999)}`;
-    const nowTime = 'امروز - اتمام تولید سیستمی';
 
-    if (onSubmitVoucher) {
-      await onSubmitVoucher({
-        voucherType: 'RECEIPT',
-        partId: order.partId,
-        stageId: 'STAGE_FINISHED_STORE',
-        quantity: finishedQty,
-        referenceDoc: order.orderCode,
-        notes: `رسید انبار محصول نهایی از دستور تولید ${order.orderCode} | بچ ${order.productionBatchCode} | شماره ذوب ${order.heatNumber || 'HT-99412'}`,
-      }).catch(() => {});
-    }
+    requestConfirm({
+      title: `تایید اتمام تولید و صدور رسید انبار (${order.orderCode})`,
+      message: `آیا از اعلام اتمام تولید قطعه «${order.partName}» به تعداد ${formatNumber(finishedQty)} عدد اطمینان دارید؟`,
+      consequences: [
+        `صدور خودکار سند رسید انبار محصول نهایی برای ${formatNumber(finishedQty)} قطعه سالم`,
+        `انتقال دستور کار ${order.orderCode} از برنامه‌های جاری خط به لیست تکمیل‌شده‌ها`,
+        `بسته شدن ایستگاه‌های عملیاتی (OP) مرتبط با بچ ${order.productionBatchCode}`,
+      ],
+      confirmLabel: 'تایید اتمام و صدور رسید انبار',
+      variant: 'emerald',
+      onConfirm: async () => {
+        const previousSnapshot = [...scenarios];
+        const fgDocNo = `FG-REC-${Math.floor(1000 + Math.random() * 8999)}`;
+        const nowTime = 'امروز - اتمام تولید سیستمی';
 
-    const newLog: IssuedCommandLog = {
-      id: `CMD-${Date.now()}`,
-      docNumber: fgDocNo,
-      type: 'FG_RECEIPT',
-      title: `اتمام کامل تولید دستور ${order.orderCode} و رسید ${formatNumber(finishedQty)} عدد «${order.partName}» به انبار محصول نهایی`,
-      timestamp: nowTime,
-      qtyOrWeight: `${formatNumber(finishedQty)} عدد`,
-      targetStation: 'انبار محصول نهایی',
-    };
-
-    const updated = scenarios.map(scn => {
-      if (scn.id !== order.id) return scn;
-      const updatedOps = scn.operations.map((op, idx) => {
-        if (idx === scn.operations.length - 1 && op.completedGood === 0) {
-          return { ...op, completedGood: finishedQty };
+        if (onSubmitVoucher) {
+          await onSubmitVoucher({
+            voucherType: 'RECEIPT',
+            partId: order.partId,
+            stageId: 'STAGE_FINISHED_STORE',
+            quantity: finishedQty,
+            referenceDoc: order.orderCode,
+            notes: `رسید انبار محصول نهایی از دستور تولید ${order.orderCode} | بچ ${order.productionBatchCode} | شماره ذوب ${order.heatNumber || 'HT-99412'}`,
+          }).catch(() => {});
         }
-        return op;
-      });
-      return {
-        ...scn,
-        status: 'COMPLETED' as const,
-        finishedReceiptVoucherNo: fgDocNo,
-        operations: updatedOps,
-        commandLogs: [newLog, ...(scn.commandLogs || [])],
-      };
-    });
 
-    saveScenarios(updated);
-    setToastMessage({
-      type: 'success',
-      title: `تولید دستور ${order.orderCode} کامل شد و محصول در انبار رسید گردید`,
-      detail: `رسید انبار (${fgDocNo}) برای ${formatNumber(finishedQty)} عدد قطعه «${order.partName}» صادر شد. دستور کاری به تب برنامه‌های تکمیل‌شده منتقل گردید.`,
-      trackOrderId: order.id,
-      navAction: {
-        label: 'مشاهده در کاردکس انبار',
-        onClick: () => onNavigateToTab?.('inventory', 'INQUIRY'),
+        const newLog: IssuedCommandLog = {
+          id: `CMD-${Date.now()}`,
+          docNumber: fgDocNo,
+          type: 'FG_RECEIPT',
+          title: `اتمام کامل تولید دستور ${order.orderCode} و رسید ${formatNumber(finishedQty)} عدد «${order.partName}» به انبار محصول نهایی`,
+          timestamp: nowTime,
+          qtyOrWeight: `${formatNumber(finishedQty)} عدد`,
+          targetStation: 'انبار محصول نهایی',
+        };
+
+        const updated = scenarios.map(scn => {
+          if (scn.id !== order.id) return scn;
+          const updatedOps = scn.operations.map((op, idx) => {
+            if (idx === scn.operations.length - 1 && op.completedGood === 0) {
+              return { ...op, completedGood: finishedQty };
+            }
+            return op;
+          });
+          return {
+            ...scn,
+            status: 'COMPLETED' as const,
+            finishedReceiptVoucherNo: fgDocNo,
+            operations: updatedOps,
+            commandLogs: [newLog, ...(scn.commandLogs || [])],
+          };
+        });
+
+        saveScenarios(updated);
+        recordAudit({
+          entityId: order.id,
+          entityCode: order.orderCode,
+          moduleName: 'پیشخوان تولید (MO)',
+          actionType: 'COMPLETE_MO',
+          title: `اتمام تولید دستور ${order.orderCode} و صدور رسید ${fgDocNo}`,
+          details: `رسید ${formatNumber(finishedQty)} عدد «${order.partName}» با ذوب ${order.heatNumber} در انبار محصول ثبت شد.`,
+        });
+
+        showUndoToast({
+          title: `تولید دستور ${order.orderCode} تکمیل و رسید انبار (${fgDocNo}) صادر شد`,
+          detail: 'تا ۸ ثانیه امکان لغو اتمام تولید (Undo) و بازگرداندن به خط وجود دارد.',
+          variant: 'success',
+          onUndo: () => {
+            saveScenarios(previousSnapshot);
+            recordAudit({
+              entityId: order.id,
+              entityCode: order.orderCode,
+              moduleName: 'پیشخوان تولید (MO)',
+              actionType: 'RESTORE_UNDO',
+              title: `لغو اتمام تولید (Undo) برای دستور ${order.orderCode}`,
+              details: 'دستور کار مجدداً به وضعیت در جریان (ACTIVE) در خط تولید بازگردانده شد.',
+            });
+          },
+        });
       },
     });
   };
@@ -741,42 +774,86 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     saveScenarios(updated);
   };
 
-  // Toggle Line Stop (HALTED vs ACTIVE) from the Drawer Operations Tab
+  // Toggle Line Stop (HALTED vs ACTIVE) Protected by Defensive UX ConfirmDialog + Undo
   const handleToggleLineStop = (order: HighwayPartScenario) => {
     const nextHalted = order.status !== 'HALTED';
-    const docNo = nextHalted
-      ? `STOP-${Math.floor(100 + Math.random() * 899)}`
-      : `RES-${Math.floor(100 + Math.random() * 899)}`;
-    const newLog: IssuedCommandLog = {
-      id: `CMD-${Date.now()}`,
-      docNumber: docNo,
-      type: 'OP_LOGGED',
-      title: nextHalted
-        ? `اعلام توقف موقت خط (Line Stop) برای دستور ${order.orderCode}`
-        : `رفع توقف و راه‌اندازی مجدد خط تولید دستور ${order.orderCode}`,
-      timestamp: 'امروز - ثبت سرپرست خط',
-      qtyOrWeight: nextHalted ? 'توقف خط' : 'فعال‌سازی مجدد',
-      targetStation: order.operations[0]?.hall || 'خط تولید',
-    };
 
-    const updated = scenarios.map(scn => {
-      if (scn.id !== order.id) return scn;
-      return {
-        ...scn,
-        status: (nextHalted ? 'HALTED' : 'ACTIVE') as HighwayPartScenario['status'],
-        commandLogs: [newLog, ...(scn.commandLogs || [])],
-      };
-    });
-    saveScenarios(updated);
-    setToastMessage({
-      type: nextHalted ? 'warning' : 'success',
+    requestConfirm({
       title: nextHalted
-        ? `توقف خط (Line Stop) برای دستور ${order.orderCode} ثبت شد`
-        : `دستور تولید ${order.orderCode} مجدداً در مدار تولید قرار گرفت`,
-      detail: nextHalted
-        ? `قطعه «${order.partName}» به حالت تعلیق درآمد.`
-        : `وضعیت ایستگاه‌های OP دستور «${order.partName}» فعال گردید.`,
-      trackOrderId: order.id,
+        ? `تایید اعلام توقف خط (Line Stop) — ${order.orderCode}`
+        : `تایید رفع توقف و راه‌اندازی مجدد خط — ${order.orderCode}`,
+      message: nextHalted
+        ? `آیا از ثبت توقف موقت خط برای قطعه «${order.partName}» اطمینان دارید؟`
+        : `آیا آماده بازگرداندن دستور تولید «${order.partName}» به مدار تولید فعال هستید؟`,
+      consequences: nextHalted
+        ? [
+            'تغییر وضعیت دستور کار به حالت تعلیق / توقف خط (HALTED)',
+            'ثبت لاگ توقف خط در تاریخچه تغییرات (Audit Trail) و ایستگاه جاری',
+            'توقف موقت ثبت کارکرد تا زمان رفع علت توقف',
+          ]
+        : [
+            'تغییر وضعیت دستور کار به حالت در جریان (ACTIVE)',
+            'فعال‌سازی مجدد ایستگاه عملیاتی جاری جهت ثبت کارکرد اپراتور',
+          ],
+      confirmLabel: nextHalted ? 'بله، ثبت توقف خط' : 'بله، راه‌اندازی مجدد خط',
+      variant: nextHalted ? 'warning' : 'emerald',
+      onConfirm: () => {
+        const previousSnapshot = [...scenarios];
+        const docNo = nextHalted
+          ? `STOP-${Math.floor(100 + Math.random() * 899)}`
+          : `RES-${Math.floor(100 + Math.random() * 899)}`;
+        const newLog: IssuedCommandLog = {
+          id: `CMD-${Date.now()}`,
+          docNumber: docNo,
+          type: 'OP_LOGGED',
+          title: nextHalted
+            ? `اعلام توقف موقت خط (Line Stop) برای دستور ${order.orderCode}`
+            : `رفع توقف و راه‌اندازی مجدد خط تولید دستور ${order.orderCode}`,
+          timestamp: 'امروز - ثبت سرپرست خط',
+          qtyOrWeight: nextHalted ? 'توقف خط' : 'فعال‌سازی مجدد',
+          targetStation: order.operations[0]?.hall || 'خط تولید',
+        };
+
+        const updated = scenarios.map(scn => {
+          if (scn.id !== order.id) return scn;
+          return {
+            ...scn,
+            status: (nextHalted ? 'HALTED' : 'ACTIVE') as HighwayPartScenario['status'],
+            commandLogs: [newLog, ...(scn.commandLogs || [])],
+          };
+        });
+        saveScenarios(updated);
+
+        recordAudit({
+          entityId: order.id,
+          entityCode: order.orderCode,
+          moduleName: 'کنترل خط تولید',
+          actionType: 'LINE_STOP',
+          title: nextHalted
+            ? `ثبت توقف خط (${docNo}) برای دستور ${order.orderCode}`
+            : `رفع توقف خط (${docNo}) برای دستور ${order.orderCode}`,
+          details: `قطعه «${order.partName}» در ایستگاه ${order.operations[0]?.stepCode || 'OP10'}`,
+        });
+
+        showUndoToast({
+          title: nextHalted
+            ? `توقف خط (Line Stop) برای دستور ${order.orderCode} ثبت شد`
+            : `دستور تولید ${order.orderCode} مجدداً فعال شد`,
+          detail: 'برای بازگردانی وضعیت قبلی دستور کار روی لغو (Undo) کلیک کنید.',
+          variant: nextHalted ? 'warning' : 'success',
+          onUndo: () => {
+            saveScenarios(previousSnapshot);
+            recordAudit({
+              entityId: order.id,
+              entityCode: order.orderCode,
+              moduleName: 'کنترل خط تولید',
+              actionType: 'RESTORE_UNDO',
+              title: `لغو تغییر وضعیت توقف خط (Undo) برای ${order.orderCode}`,
+              details: 'وضعیت قبلی دستور کار بازنشانی شد.',
+            });
+          },
+        });
+      },
     });
   };
 
@@ -1064,14 +1141,15 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     return () => window.removeEventListener('kpims:contextual-action', handleContextual);
   }, [scenarios, produciblePartsCatalog, routings, machines, dies]);
 
-  const activeCount = useMemo(() => scenarios.filter(s => s.status !== 'COMPLETED').length, [scenarios]);
-  const completedCount = useMemo(() => scenarios.filter(s => s.status === 'COMPLETED').length, [scenarios]);
-  const pinnedCount = useMemo(() => scenarios.filter(s => s.isPinned).length, [scenarios]);
+  const activeScenarios = useMemo(() => scenarios.filter(s => !s.isDeleted), [scenarios]);
+  const activeCount = useMemo(() => activeScenarios.filter(s => s.status !== 'COMPLETED').length, [activeScenarios]);
+  const completedCount = useMemo(() => activeScenarios.filter(s => s.status === 'COMPLETED').length, [activeScenarios]);
+  const pinnedCount = useMemo(() => activeScenarios.filter(s => s.isPinned).length, [activeScenarios]);
 
-  // Filtered Orders by Search, Car Model, and Schedule Tab
+  // Filtered Orders by Search, Car Model, and Schedule Tab (Excludes Soft-Deleted Orders)
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return scenarios.filter(scn => {
+    return activeScenarios.filter(scn => {
       if (carFilter !== 'ALL' && scn.carModel !== carFilter) return false;
 
       if (scheduleTabFilter === 'ACTIVE' && scn.status === 'COMPLETED') return false;
@@ -1090,7 +1168,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         (scn.productionBatchCode && scn.productionBatchCode.toLowerCase().includes(q))
       );
     });
-  }, [scenarios, searchQuery, carFilter, scheduleTabFilter]);
+  }, [activeScenarios, searchQuery, carFilter, scheduleTabFilter]);
 
   const uniqueCarModels = useMemo(
     () => Array.from(new Set(scenarios.map(s => s.carModel))),
@@ -1337,37 +1415,88 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       saveScenarios([enrichedOrder, ...scenarios]);
       setExpandedOrderId(enrichedOrder.id);
       setExpandedViewMode('OPS');
-      setToastMessage({
-        type: 'success',
-        title: `دستور تولید ${enrichedOrder.orderCode} (بچ ${enrichedOrder.productionBatchCode}) صادر شد`,
-        detail: `کالای «${enrichedOrder.partName}» با کلاف ذوب «${enrichedOrder.heatNumber}» و ${toPersianDigits(enrichedOrder.operations.length)} ایستگاه کاری (OP) ابلاغ شد.`,
-        trackOrderId: enrichedOrder.id,
+      recordAudit({
+        entityId: enrichedOrder.id,
+        entityCode: enrichedOrder.orderCode,
+        moduleName: 'پیشخوان تولید (MO)',
+        actionType: 'CREATE',
+        title: `صدور دستور تولید جدید ${enrichedOrder.orderCode} (${enrichedOrder.partName})`,
+        details: `تیراژ ${formatNumber(enrichedOrder.orderQty)} عدد متصل به ذوب ${enrichedOrder.heatNumber}`,
+      });
+      showUndoToast({
+        title: `دستور تولید ${enrichedOrder.orderCode} صادر شد`,
+        detail: `کالای «${enrichedOrder.partName}» با ذوب ${enrichedOrder.heatNumber} ثبت شد.`,
+        variant: 'success',
       });
     } else {
+      const previousSnapshot = [...scenarios];
       const next = scenarios.map(s => (s.id === enrichedOrder.id ? enrichedOrder : s));
       saveScenarios(next);
-      setToastMessage({
-        type: 'success',
+      recordAudit({
+        entityId: enrichedOrder.id,
+        entityCode: enrichedOrder.orderCode,
+        moduleName: 'پیشخوان تولید (MO)',
+        actionType: 'UPDATE',
+        title: `ویرایش دستور تولید ${enrichedOrder.orderCode} در کشو`,
+        details: `بروزرسانی مشخصات قطعه «${enrichedOrder.partName}» و تیراژ ${formatNumber(enrichedOrder.orderQty)} عدد`,
+      });
+      showUndoToast({
         title: `دستور تولید ${enrichedOrder.orderCode} بروزرسانی شد`,
-        detail: `تغییرات دستور ساخت و شناسنامه ذوب ذخیره گردید.`,
-        trackOrderId: enrichedOrder.id,
+        detail: 'تغییرات دستور ساخت ذخیره گردید.',
+        variant: 'success',
+        onUndo: () => {
+          saveScenarios(previousSnapshot);
+        },
       });
     }
     setEditingOrder(null);
     setIsNewOrderMode(false);
   };
 
-  // Delete Work Order
+  // Soft Delete Work Order (Protected by Defensive UX ConfirmDialog + Gmail-style Undo)
   const handleDeleteOrder = (order: HighwayPartScenario) => {
-    const next = scenarios.filter(s => s.id !== order.id);
-    saveScenarios(next);
-    if (expandedOrderId === order.id) {
-      setExpandedOrderId(null);
-    }
-    setToastMessage({
-      type: 'info',
-      title: `دستور تولید ${order.orderCode} حذف شد`,
-      detail: `قطعه «${order.partName}» از فهرست دستورهای فعال خارج گردید.`,
+    requestConfirm({
+      title: `حذف منطقی (لغو) دستور تولید ${order.orderCode}`,
+      message: `آیا از حذف منطقی دستور تولید قطعه «${order.partName}» به تیراژ ${formatNumber(order.orderQty)} عدد اطمینان دارید؟`,
+      consequences: [
+        `دستور کار ${order.orderCode} به صورت منطقی (Soft Delete) از لیست فعال خارج می‌شود`,
+        `سابقه اسناد و ردیابی ذوب (${order.heatNumber}) در تاریخچه ممیزی (Audit Trail) محفوظ می‌ماند`,
+        `امکان بازگردانی فوری (Undo) پس از حذف وجود دارد`,
+      ],
+      confirmLabel: 'تایید حذف منطقی (Soft Delete)',
+      variant: 'danger',
+      onConfirm: () => {
+        const previousSnapshot = [...scenarios];
+        const next = scenarios.map(s => (s.id === order.id ? { ...s, isDeleted: true } : s));
+        saveScenarios(next);
+        if (expandedOrderId === order.id) {
+          setExpandedOrderId(null);
+        }
+        recordAudit({
+          entityId: order.id,
+          entityCode: order.orderCode,
+          moduleName: 'پیشخوان تولید (MO)',
+          actionType: 'SOFT_DELETE',
+          title: `حذف منطقی (Soft Delete) دستور تولید ${order.orderCode}`,
+          details: `قطعه «${order.partName}» از جدول برنامه‌های جاری آرشیو شد.`,
+        });
+        showUndoToast({
+          title: `دستور تولید ${order.orderCode} حذف منطقی شد`,
+          detail: `قطعه «${order.partName}» آرشیو شد. برای بازگردانی کلیک کنید.`,
+          variant: 'danger',
+          onUndo: () => {
+            saveScenarios(previousSnapshot);
+            recordAudit({
+              entityId: order.id,
+              entityCode: order.orderCode,
+              moduleName: 'پیشخوان تولید (MO)',
+              actionType: 'RESTORE_UNDO',
+              title: `بازگردانی (Undo) دستور تولید ${order.orderCode}`,
+              details: `دستور تولید «${order.partName}» مجدداً به جدول اصلی بازگشت.`,
+            });
+          },
+        });
+      },
     });
   };
 
@@ -1376,6 +1505,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     e.preventDefault();
     if (!editingOpContext) return;
 
+    const previousSnapshot = [...scenarios];
     const { orderId, opIndex, stepData } = editingOpContext;
     const next = scenarios.map(scn => {
       if (scn.id !== orderId) return scn;
@@ -1391,27 +1521,69 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
 
     saveScenarios(next);
     setEditingOpContext(null);
-    setToastMessage({
-      type: 'success',
-      title: opIndex === null ? 'ایستگاه OP جدید به مسیر قطعه اضافه شد' : 'ایستگاه OP ویرایش شد',
-      detail: `عملیات ${stepData.stepCode} (${stepData.stepName}) روی دستگاه «${stepData.machineName}» با قالب «${stepData.dieName}» ثبت شد.`,
-      trackOrderId: orderId,
+    recordAudit({
+      entityId: orderId,
+      moduleName: 'مسیر تولید (Routing)',
+      actionType: opIndex === null ? 'CREATE' : 'UPDATE',
+      title: `${opIndex === null ? 'افزودن' : 'ویرایش'} ایستگاه ${stepData.stepCode} (${stepData.stepName})`,
+      details: `دستگاه: ${stepData.machineName} | قالب: ${stepData.dieName}`,
+    });
+    showUndoToast({
+      title: opIndex === null ? 'ایستگاه OP جدید اضافه شد' : `ایستگاه ${stepData.stepCode} ویرایش شد`,
+      detail: `عملیات روی دستگاه «${stepData.machineName}» ذخیره گردید.`,
+      variant: 'success',
+      onUndo: () => {
+        saveScenarios(previousSnapshot);
+      },
     });
   };
 
-  // Delete an Operation Step
+  // Delete an Operation Step (Protected by ConfirmDialog + Soft Undo)
   const handleDeleteOperationStep = (orderId: string, opIdx: number) => {
-    const next = scenarios.map(scn => {
-      if (scn.id !== orderId) return scn;
-      if (scn.operations.length <= 1) return scn;
-      const filtered = scn.operations.filter((_, i) => i !== opIdx);
-      const fixed = filtered.map((o, i) => ({
-        ...o,
-        isFinal: i === filtered.length - 1,
-      }));
-      return { ...scn, operations: fixed };
+    const targetOrder = scenarios.find(s => s.id === orderId);
+    const targetOp = targetOrder?.operations[opIdx];
+    if (!targetOrder || !targetOp) return;
+
+    requestConfirm({
+      title: `حذف ایستگاه عملیاتی ${targetOp.stepCode} (${targetOp.stepName})`,
+      message: `آیا از حذف مرحله «${targetOp.stepCode}» روی دستگاه «${targetOp.machineName}» از مسیر تولید دستور ${targetOrder.orderCode} اطمینان دارید؟`,
+      consequences: [
+        'بازچینی خودکار ایستگاه پایانی (Final OP) در مسیر تولید قطعه',
+        'ثبت تغییر مسیر تولید در تاریخچه ممیزی (Audit Trail)',
+      ],
+      confirmLabel: 'حذف ایستگاه OP',
+      variant: 'danger',
+      onConfirm: () => {
+        const previousSnapshot = [...scenarios];
+        const next = scenarios.map(scn => {
+          if (scn.id !== orderId) return scn;
+          if (scn.operations.length <= 1) return scn;
+          const filtered = scn.operations.filter((_, i) => i !== opIdx);
+          const fixed = filtered.map((o, i) => ({
+            ...o,
+            isFinal: i === filtered.length - 1,
+          }));
+          return { ...scn, operations: fixed };
+        });
+        saveScenarios(next);
+        recordAudit({
+          entityId: orderId,
+          entityCode: targetOrder.orderCode,
+          moduleName: 'مسیر تولید (Routing)',
+          actionType: 'SOFT_DELETE',
+          title: `حذف مرحله ${targetOp.stepCode} از دستور ${targetOrder.orderCode}`,
+          details: `ایستگاه ${targetOp.stepName} (${targetOp.machineName}) حذف شد.`,
+        });
+        showUndoToast({
+          title: `ایستگاه ${targetOp.stepCode} حذف شد`,
+          detail: 'تا ۸ ثانیه امکان بازگردانی مرحله حذف‌شده وجود دارد.',
+          variant: 'warning',
+          onUndo: () => {
+            saveScenarios(previousSnapshot);
+          },
+        });
+      },
     });
-    saveScenarios(next);
   };
 
   const trackedOrder = useMemo(
@@ -2178,61 +2350,76 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                         </div>
                       </td>
 
-                      {/* 5. Contextual Quick Action (Play when 0%, Pause when in-progress, Check when at final OP) */}
+                      {/* 5. Contextual Quick Action + Inline Drawer Edit (Pencil) */}
                       <td
                         className="py-4 px-5 text-left whitespace-nowrap"
                         onClick={e => e.stopPropagation()}
                       >
-                        {isCompleted ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDispatchFinishedGoods(order)}
-                            title="تکمیل شده — صدور حواله خروج به ساپکو"
-                            className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        ) : isZeroOrHalted ? (
+                        <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => {
-                              if (isHalted) {
-                                handleToggleLineStop(order);
-                              } else {
-                                handleOpenStepLogger(
-                                  order,
-                                  activeStepIdx >= 0 ? activeStepIdx : 0
-                                );
-                              }
+                              setIsNewOrderMode(false);
+                              setAllowManualSheetOverride(Boolean(order.isCustomSheetOverride));
+                              setEditingOrder(order);
                             }}
-                            title={
-                              isHalted
-                                ? 'شروع مجدد و رفع توقف خط (Play)'
-                                : `شروع تولید و ثبت کارکرد (${activeStep?.stepCode || 'OP10'})`
-                            }
-                            className="p-2 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            title="ویرایش سریع دستور تولید در کشو (Edit MO)"
+                            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-900 text-slate-600 hover:text-white border border-slate-200 hover:border-slate-900 transition-colors cursor-pointer inline-flex items-center justify-center"
                           >
-                            <Play className="w-4 h-4 fill-current" />
+                            <Edit3 className="w-3.5 h-3.5" />
                           </button>
-                        ) : isAtFinalStation ? (
-                          <button
-                            type="button"
-                            onClick={() => handleCompleteProduction(order)}
-                            title="ایستگاه آخر — تایید اتمام و صدور رسید انبار (Check)"
-                            className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
-                          >
-                            <Check className="w-4 h-4 stroke-[2.5]" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleLineStop(order)}
-                            title="در جریان تولید — توقف موقت خط (Pause)"
-                            className="p-2 rounded-lg bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-200 hover:border-amber-600 transition-colors cursor-pointer inline-flex items-center justify-center"
-                          >
-                            <Pause className="w-4 h-4 fill-current" />
-                          </button>
-                        )}
+
+                          {isCompleted ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDispatchFinishedGoods(order)}
+                              title="تکمیل شده — صدور حواله خروج به ساپکو"
+                              className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          ) : isZeroOrHalted ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isHalted) {
+                                  handleToggleLineStop(order);
+                                } else {
+                                  handleOpenStepLogger(
+                                    order,
+                                    activeStepIdx >= 0 ? activeStepIdx : 0
+                                  );
+                                }
+                              }}
+                              title={
+                                isHalted
+                                  ? 'شروع مجدد و رفع توقف خط (Play)'
+                                  : `شروع تولید و ثبت کارکرد (${activeStep?.stepCode || 'OP10'})`
+                              }
+                              className="p-2 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Play className="w-4 h-4 fill-current" />
+                            </button>
+                          ) : isAtFinalStation ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCompleteProduction(order)}
+                              title="ایستگاه آخر — تایید اتمام و صدور رسید انبار (Check)"
+                              className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Check className="w-4 h-4 stroke-[2.5]" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLineStop(order)}
+                              title="در جریان تولید — توقف موقت خط (Pause)"
+                              className="p-2 rounded-lg bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-200 hover:border-amber-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Pause className="w-4 h-4 fill-current" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2408,27 +2595,33 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       })()}
 
       {/* ==================================================================== */}
-      {/* MODAL 2: CREATE / EDIT MANUFACTURING ORDER (100% CONNECTED TO PARTS, */}
-      {/* ROUTINGS/OP, BOM SHEETS AND SAPCO COIL HEAT NUMBERS!)                */}
+      {/* SLIDE-OVER DRAWER 2: CREATE / EDIT MANUFACTURING ORDER               */}
       {/* ==================================================================== */}
       {editingOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-2xl w-full p-5 shadow-xl border border-slate-200 space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/35 backdrop-blur-[2px] flex justify-end animate-in fade-in"
+          dir="rtl"
+          onClick={() => setEditingOrder(null)}
+        >
+          <div
+            className="bg-white w-full max-w-2xl h-full p-5 shadow-2xl border-r border-slate-200 space-y-4 overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-xs flex items-center justify-between border-b border-slate-100 pb-3 pt-1">
               <div>
                 <h4 className="font-bold text-sm text-slate-900">
                   {isNewOrderMode
-                    ? 'صدور دستور تولید جدید (MO) — متصل به کاتالوگ کالا، شماره ذوب (Heat) و مراحل OP'
-                    : `ویرایش دستور تولید ${editingOrder.orderCode}`}
+                    ? 'صدور دستور تولید جدید (MO) در کشو — متصل به کاتالوگ کالا، ذوب و OP'
+                    : `ویرایش کشویی دستور تولید ${editingOrder.orderCode}`}
                 </h4>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  با انتخاب کالا، مراحل تولید (OP)، ورق استاندارد (BOM) و شماره ذوب کلاف ساپکو به صورت خودکار متصل می‌شوند.
+                  بدون خروج از جدول پیشخوان، اطلاعات دستور کار، ورق (BOM) و شماره ذوب را ویرایش کنید.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingOrder(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1.5 rounded-lg border border-slate-200"
               >
                 ✕
               </button>

@@ -18,10 +18,13 @@ import {
   Boxes,
   Split,
   Calendar,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { PhysicalCoil, StockOwnership } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
 import { CoilSlittingGenealogyPanel } from './CoilSlittingGenealogyPanel';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 interface PhysicalCoilsViewProps {
   onRefresh?: () => Promise<void>;
@@ -32,6 +35,7 @@ interface PhysicalCoilsViewProps {
 }
 
 export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUser }) => {
+  const { requestConfirm, showUndoToast, openQuickEditDrawer, recordAudit } = useEnterpriseUx();
   const [coils, setCoils] = useState<PhysicalCoil[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -604,6 +608,100 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                             title="مدیریت سهمیه‌ها و قراردادها"
                           >
                             تسهیم
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openQuickEditDrawer({
+                                entityId: coil.id,
+                                entityCode: coil.coilId,
+                                moduleTitle: 'انبار کلاف و رول ورق (Physical Coils)',
+                                drawerTitle: `ویرایش مشخصات کلاف ${coil.coilId}`,
+                                drawerSubtitle: `شماره پکینگ: ${coil.coilPackNumber}`,
+                                fields: [
+                                  { key: 'coilPackNumber', label: 'شماره پکینگ (پلاک ساپکو)', value: coil.coilPackNumber, type: 'text', required: true },
+                                  { key: 'heatNumber', label: 'شماره ذوب (Heat Number)', value: coil.heatNumber || '', type: 'text' },
+                                  { key: 'partName', label: 'شرح ورق / نام کالا', value: coil.partName, type: 'text', required: true },
+                                  {
+                                    key: 'materialGrade',
+                                    label: 'گرید ورق',
+                                    value: coil.materialGrade,
+                                    type: 'select',
+                                    options: [
+                                      { value: 'ST14', label: 'ST14 (کشش عمیق)' },
+                                      { value: 'ST12', label: 'ST12 (معمولی)' },
+                                      { value: 'DC04', label: 'DC04 (فوق کشش)' },
+                                    ],
+                                  },
+                                  { key: 'remainingWeightKg', label: 'وزن مانده در انبار (kg)', value: coil.remainingWeightKg, type: 'number', min: 0 },
+                                  { key: 'warehouseLocationCode', label: 'کد سلول / محل استقرار انبار', value: coil.warehouseLocationCode || '', type: 'text' },
+                                ],
+                                onSave: values => {
+                                  const prevCoils = coils;
+                                  setCoils(prev =>
+                                    prev.map(c =>
+                                      c.id === coil.id
+                                        ? {
+                                            ...c,
+                                            coilPackNumber: String(values.coilPackNumber || c.coilPackNumber),
+                                            heatNumber: String(values.heatNumber ?? c.heatNumber),
+                                            partName: String(values.partName || c.partName),
+                                            materialGrade: String(values.materialGrade || c.materialGrade) as any,
+                                            remainingWeightKg: Number(values.remainingWeightKg ?? c.remainingWeightKg),
+                                            warehouseLocationCode: String(values.warehouseLocationCode ?? c.warehouseLocationCode),
+                                          }
+                                        : c
+                                    )
+                                  );
+                                  showUndoToast({
+                                    title: `مشخصات کلاف «${coil.coilId}» بروزرسانی شد`,
+                                    description: `پکینگ: ${values.coilPackNumber} • مانده: ${formatNumber(Number(values.remainingWeightKg))} kg`,
+                                    onUndo: () => setCoils(prevCoils),
+                                  });
+                                },
+                              })
+                            }
+                            className="p-1.5 bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 rounded-md transition-colors cursor-pointer"
+                            title="ویرایش مشخصات کلاف در کشوی جانبی"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              requestConfirm({
+                                title: `حذف منطقی (بایگانی) کلاف فیزیکی «${coil.coilId}»`,
+                                description: `آیا از بایگانی و حذف منطقی کلاف «${coil.coilId}» (پکینگ ${coil.coilPackNumber}) از لیست موجودی فعال اطمینان دارید؟`,
+                                consequences: [
+                                  `کلاف از جدول کلاف‌های فعال انبار خارج می‌شود (مانده فعلی: ${formatNumber(coil.remainingWeightKg)} کیلوگرم).`,
+                                  'سوابق شناسنامه ذوب و حواله‌های قبلی جهت ممیزی حفظ می‌گردد.',
+                                  'امکان بازگردانی فوری از طریق دکمه «لغو (Undo)» وجود دارد.',
+                                ],
+                                confirmLabel: 'تایید و حذف منطقی کلاف',
+                                variant: 'danger',
+                                onConfirm: () => {
+                                  const prevCoils = coils;
+                                  setCoils(prev => prev.filter(c => c.id !== coil.id));
+                                  recordAudit({
+                                    actionType: 'SOFT_DELETE',
+                                    moduleTitle: 'انبار کلاف و رول ورق (Physical Coils)',
+                                    entityId: coil.id,
+                                    entityCode: coil.coilId,
+                                    summaryFa: `حذف منطقی کلاف فیزیکی «${coil.coilId}» (پکینگ ${coil.coilPackNumber})`,
+                                    detailsFa: `وزن مانده: ${coil.remainingWeightKg} kg • ذوب: ${coil.heatNumber || '—'}`,
+                                  });
+                                  showUndoToast({
+                                    title: `کلاف «${coil.coilId}» به صورت منطقی بایگانی شد`,
+                                    description: 'جهت بازگردانی کلاف به لیست موجودی فعال روی «لغو (Undo)» کلیک کنید.',
+                                    onUndo: () => setCoils(prevCoils),
+                                  });
+                                },
+                              })
+                            }
+                            className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 rounded-md transition-colors cursor-pointer"
+                            title="حذف منطقی (Soft Delete)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
