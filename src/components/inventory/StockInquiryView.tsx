@@ -124,6 +124,112 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
     });
   }, [rawBalances, qcHoldMap]);
 
+  // Mandatory QC Hold Reason Modal State
+  const [qcHoldTargetBalance, setQcHoldTargetBalance] = useState<DetailedStockBalance | null>(null);
+  const [qcHoldReasonText, setQcHoldReasonText] = useState('');
+  const [qcHoldReasonError, setQcHoldReasonError] = useState('');
+
+  const STOCK_QC_HOLD_PRESETS: string[] = [
+    'زنگ‌زدگی سطحی یا اکسیداسیون ورق در انبار',
+    'مغایرت ابعادی / ضخامت با نقشه فنی ساپکو',
+    'عدم تأیید آزمایشگاه متالورژی (گواهی ذوب)',
+    'آسیب فیزیکی پالت یا لبه کلاف در جابجایی',
+    'مشکوک به مخلوط شدن بچ تولیدی (نیاز به سورتینگ ۱۰۰٪)',
+  ];
+
+  const executeBalanceQcHoldChange = async (
+    b: DetailedStockBalance,
+    nextHeld: boolean,
+    mandatoryReasonFa?: string
+  ) => {
+    const holdKey = b.id;
+    const qtyToHold = b.physicalQty;
+    const weightToHold = b.physicalKg || b.physicalQty;
+    const finalReason = (mandatoryReasonFa || '').trim() || 'قرنطینه کیفی در جدول موجودی انبار (QC Hold)';
+
+    const prevMap = { ...qcHoldMap };
+    const updatedMap = { ...qcHoldMap };
+
+    if (nextHeld) {
+      const rec: QcHoldRecord = {
+        key: holdKey,
+        partId: b.partId,
+        partCode: b.partCode,
+        partName: b.partName,
+        lotNumber: b.lotNumber,
+        warehouseName: b.warehouseName,
+        isHeld: true,
+        heldQty: qtyToHold,
+        heldWeightKg: weightToHold,
+        unit: b.unit === 'KG' ? 'KG' : 'PCS',
+        reasonFa: finalReason,
+        updatedAt: new Date().toLocaleString('fa-IR'),
+        actor: 'مدیریت کنترل کیفیت (QC)',
+      };
+      updatedMap[holdKey] = rec;
+      if (b.lotNumber) updatedMap[b.lotNumber] = rec;
+    } else {
+      delete updatedMap[holdKey];
+      if (b.lotNumber) delete updatedMap[b.lotNumber];
+    }
+
+    setQcHoldMap(updatedMap);
+    saveQcHoldMap(updatedMap);
+
+    try {
+      await fetch('/api/inventory/qc-hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: holdKey,
+          partId: b.partId,
+          partCode: b.partCode,
+          materialGrade: b.materialGrade,
+          lotNumber: b.lotNumber,
+          isHeld: nextHeld,
+          heldQty: qtyToHold,
+          heldWeightKg: weightToHold,
+          reasonFa: finalReason,
+        }),
+      });
+      await onRefresh();
+    } catch {
+      // local state already updated
+    }
+
+    recordAudit({
+      actionType: 'STATUS_CHANGE',
+      module: 'انبار و قرنطینه کیفی (QC Hold)',
+      entityId: b.id,
+      entityCode: b.lotNumber || b.partCode,
+      summaryFa: nextHeld
+        ? `قرنطینه کیفی (QC Hold) «${b.partName}» به مقدار ${formatNumber(qtyToHold)} ${b.unit} — علت: ${finalReason}`
+        : `رفع قرنطینه کیفی «${b.partName}» و بازگشت به موجودی آزاد (ATP)`,
+      details: nextHeld
+        ? `علت قرنطینه (QC Hold Reason): ${finalReason} | کسر مستقیم از ATP در انبار و MRP`
+        : `آزادسازی موجودی ${b.partName} و بازگشت به ATP`,
+      beforeSnapshot: { availableQty: b.availableQty, qualityBlockedQty: b.qualityBlockedQty },
+      afterSnapshot: {
+        availableQty: nextHeld ? 0 : b.physicalQty - b.reservedQty,
+        qualityBlockedQty: nextHeld ? qtyToHold : 0,
+        qcHoldReason: nextHeld ? finalReason : null,
+      },
+    });
+
+    showUndoToast({
+      title: nextHeld
+        ? `🔒 «${b.partName}» در قرنطینه کیفی (QC Hold) قرار گرفت`
+        : `🔓 قرنطینه کیفی «${b.partName}» آزاد شد`,
+      description: nextHeld
+        ? `علت: ${finalReason} | مقدار ${formatNumber(qtyToHold)} ${b.unit === 'KG' ? 'kg' : 'عدد'} از ATP کسر گردید.`
+        : 'موجودی به چرخه آزاد تولید بازگشت.',
+      onUndo: () => {
+        setQcHoldMap(prevMap);
+        saveQcHoldMap(prevMap);
+      },
+    });
+  };
+
   const handleToggleQcHoldOnBalance = (b: DetailedStockBalance) => {
     const holdKey = b.id;
     const isCurrentlyHeld = Boolean(
@@ -133,103 +239,41 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
     );
     const nextHeld = !isCurrentlyHeld;
     const qtyToHold = b.physicalQty;
-    const weightToHold = b.physicalKg || b.physicalQty;
+
+    if (nextHeld) {
+      setQcHoldTargetBalance(b);
+      setQcHoldReasonText('');
+      setQcHoldReasonError('');
+      return;
+    }
 
     requestConfirm({
-      title: nextHeld
-        ? `قرنطینه کیفی (QC Hold) موجودی «${b.partName}»`
-        : `رفع قرنطینه کیفی (Release QC Hold) «${b.partName}»`,
-      description: nextHeld
-        ? `آیا از انتقال ردیف موجودی «${b.lotNumber || b.partCode}» در «${b.warehouseName}» به وضعیت قرنطینه کیفی اطمینان دارید؟`
-        : `آیا از تایید کیفی و آزادسازی موجودی «${b.lotNumber || b.partCode}» اطمینان دارید؟`,
-      consequenceText: nextHeld
-        ? `مقدار ${formatNumber(qtyToHold)} ${
-            b.unit === 'KG' ? 'کیلوگرم' : 'عدد'
-          } بلافاصله قفل شده و از فرمول «موجودی آزاد (ATP)» در انبار و ماژول برنامه‌ریزی (MRP) کسر می‌گردد تا در تولید مصرف نشود.`
-        : `مقدار ${formatNumber(qtyToHold)} ${
-            b.unit === 'KG' ? 'کیلوگرم' : 'عدد'
-          } مجدداً به «موجودی آزاد قابل برنامه‌ریزی (ATP)» در انبار و MRP اضافه خواهد شد.`,
-      severity: nextHeld ? 'danger' : 'info',
-      confirmLabel: nextHeld ? 'تأیید قرنطینه کیفی و کسر از ATP' : 'تأیید رفع قرنطینه',
+      title: `رفع قرنطینه کیفی (Release QC Hold) «${b.partName}»`,
+      description: `آیا از تایید کیفی و آزادسازی موجودی «${b.lotNumber || b.partCode}» اطمینان دارید؟`,
+      consequenceText: `مقدار ${formatNumber(qtyToHold)} ${
+        b.unit === 'KG' ? 'کیلوگرم' : 'عدد'
+      } مجدداً به «موجودی آزاد قابل برنامه‌ریزی (ATP)» در انبار و MRP اضافه خواهد شد.`,
+      severity: 'info',
+      confirmLabel: 'تأیید رفع قرنطینه',
       onConfirm: async () => {
-        const prevMap = { ...qcHoldMap };
-        const updatedMap = { ...qcHoldMap };
-
-        if (nextHeld) {
-          const rec: QcHoldRecord = {
-            key: holdKey,
-            partId: b.partId,
-            partCode: b.partCode,
-            partName: b.partName,
-            lotNumber: b.lotNumber,
-            warehouseName: b.warehouseName,
-            isHeld: true,
-            heldQty: qtyToHold,
-            heldWeightKg: weightToHold,
-            unit: b.unit === 'KG' ? 'KG' : 'PCS',
-            reasonFa: 'قرنطینه کیفی در جدول موجودی انبار (QC Hold)',
-            updatedAt: new Date().toLocaleString('fa-IR'),
-            actor: 'مدیریت کنترل کیفیت (QC)',
-          };
-          updatedMap[holdKey] = rec;
-          if (b.lotNumber) updatedMap[b.lotNumber] = rec;
-        } else {
-          delete updatedMap[holdKey];
-          if (b.lotNumber) delete updatedMap[b.lotNumber];
-        }
-
-        setQcHoldMap(updatedMap);
-        saveQcHoldMap(updatedMap);
-
-        try {
-          await fetch('/api/inventory/qc-hold', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              key: holdKey,
-              partId: b.partId,
-              partCode: b.partCode,
-              materialGrade: b.materialGrade,
-              lotNumber: b.lotNumber,
-              isHeld: nextHeld,
-              heldQty: qtyToHold,
-              heldWeightKg: weightToHold,
-            }),
-          });
-          await onRefresh();
-        } catch {
-          // local state already updated
-        }
-
-        recordAudit({
-          actionType: 'STATUS_CHANGE',
-          module: 'انبار و قرنطینه کیفی (QC Hold)',
-          entityId: b.id,
-          entityCode: b.lotNumber || b.partCode,
-          summaryFa: nextHeld
-            ? `قرنطینه کیفی (QC Hold) «${b.partName}» به مقدار ${formatNumber(qtyToHold)} ${b.unit} و کسر مستقیم از ATP در MRP`
-            : `رفع قرنطینه کیفی «${b.partName}» و بازگشت به موجودی آزاد (ATP)`,
-          beforeSnapshot: { availableQty: b.availableQty, qualityBlockedQty: b.qualityBlockedQty },
-          afterSnapshot: {
-            availableQty: nextHeld ? 0 : b.physicalQty - b.reservedQty,
-            qualityBlockedQty: nextHeld ? qtyToHold : 0,
-          },
-        });
-
-        showUndoToast({
-          title: nextHeld
-            ? `🔒 «${b.partName}» در قرنطینه کیفی (QC Hold) قرار گرفت`
-            : `🔓 قرنطینه کیفی «${b.partName}» آزاد شد`,
-          description: nextHeld
-            ? `مقدار ${formatNumber(qtyToHold)} ${b.unit === 'KG' ? 'kg' : 'عدد'} از موجودی آزاد (ATP) و MRP کسر گردید.`
-            : 'موجودی به چرخه آزاد تولید بازگشت.',
-          onUndo: () => {
-            setQcHoldMap(prevMap);
-            saveQcHoldMap(prevMap);
-          },
-        });
+        await executeBalanceQcHoldChange(b, false);
       },
     });
+  };
+
+  const handleConfirmStockQcHoldModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qcHoldTargetBalance) return;
+    const trimmed = qcHoldReasonText.trim();
+    if (!trimmed) {
+      setQcHoldReasonError('ثبت «علت قرنطینه (QC Hold Reason)» پیش از فریز کردن موجودی الزامی است.');
+      return;
+    }
+    const target = qcHoldTargetBalance;
+    setQcHoldTargetBalance(null);
+    setQcHoldReasonText('');
+    setQcHoldReasonError('');
+    await executeBalanceQcHoldChange(target, true, trimmed);
   };
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1823,6 +1867,116 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         </div>
       )}
         </>
+      )}
+
+      {/* Mandatory QC Hold Reason Modal (ثبت اجباری علت قرنطینه کیفی در انبار) */}
+      {qcHoldTargetBalance && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => setQcHoldTargetBalance(null)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 text-right shadow-2xl space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    ثبت اجباری علت قرنطینه کیفی (QC Hold) — {qcHoldTargetBalance.partName}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    کویل‌پک / بچ: <span className="font-mono font-bold text-slate-700">{qcHoldTargetBalance.lotNumber || qcHoldTargetBalance.partCode}</span> | مقدار درگیر:{' '}
+                    <span className="font-mono font-bold text-rose-700">
+                      {formatNumber(qcHoldTargetBalance.physicalQty)} {qcHoldTargetBalance.unit}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQcHoldTargetBalance(null)}
+                className="px-2 py-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmStockQcHoldModal} className="space-y-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200 text-rose-900 text-[11px] leading-relaxed">
+                <strong>هشدار کنترل کیفیت و کسر از ATP:</strong> با فریز و قرنطینه کردن این ردیف، مقدار{' '}
+                <strong className="font-mono">
+                  {formatNumber(qcHoldTargetBalance.physicalQty)} {qcHoldTargetBalance.unit}
+                </strong>{' '}
+                بلافاصله از موجودی آزاد (ATP) در انبار و ماژول MRP کسر می‌گردد. ثبت علت دقیق قرنطینه جهت درج در لاگ حسابرسی (Audit Trail) اجباری است.
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  انتخاب سریع از دلایل متداول عدم انطباق کیفی:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {STOCK_QC_HOLD_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setQcHoldReasonText(preset);
+                        setQcHoldReasonError('');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border transition cursor-pointer ${
+                        qcHoldReasonText === preset
+                          ? 'bg-rose-600 text-white border-rose-600 font-bold'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  علت قرنطینه کیفی (QC Hold Reason) <span className="text-rose-600">* (اجباری)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={qcHoldReasonText}
+                  onChange={e => {
+                    setQcHoldReasonText(e.target.value);
+                    if (e.target.value.trim()) setQcHoldReasonError('');
+                  }}
+                  placeholder="علت دقیق قرنطینه کیفی یا شماره گزارش عدم انطباق (NCR) را وارد نمایید..."
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-rose-500"
+                />
+                {qcHoldReasonError && (
+                  <p className="text-[11px] text-rose-600 font-bold mt-1">{qcHoldReasonError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setQcHoldTargetBalance(null)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>ثبت علت در لاگ و اعمال قرنطینه (QC Hold)</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

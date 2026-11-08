@@ -63,112 +63,150 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
     );
   };
 
+  // Mandatory QC Hold Reason Modal State
+  const [qcHoldModalCoil, setQcHoldModalCoil] = useState<PhysicalCoil | null>(null);
+  const [qcHoldReasonInput, setQcHoldReasonInput] = useState('');
+  const [qcHoldReasonError, setQcHoldReasonError] = useState('');
+
+  const QC_HOLD_REASON_PRESETS = [
+    'زنگ‌زدگی سطحی ورق (Surface Rust / Oxidation)',
+    'مغایرت ضخامت یا عرض با تلرانس فنی ساپکو',
+    'عدم انطباق نتایج تست کشش / سختی با گواهی ذوب',
+    'لهیدگی لبه کلاف در زمان حمل و تخلیه (Edge Damage)',
+    'موج‌دار بودن سطح ورق یا پوسته شدن گالوانیزه',
+  ];
+
+  const executeCoilQcHoldChange = async (coil: PhysicalCoil, nextHeld: boolean, mandatoryReasonFa?: string) => {
+    const prevMap = { ...qcHoldMap };
+    const prevCoils = [...coils];
+    const updatedMap = { ...qcHoldMap };
+    const finalReason = (mandatoryReasonFa || '').trim() || 'قرنطینه کیفی کلاف ورق (QC Hold)';
+
+    if (nextHeld) {
+      const rec: QcHoldRecord = {
+        key: coil.id,
+        partId: coil.partId,
+        partCode: coil.partCode,
+        partName: `${coil.partName} (${coil.coilId})`,
+        lotNumber: coil.coilId,
+        warehouseName: coil.warehouseName,
+        isHeld: true,
+        heldQty: coil.remainingWeightKg,
+        heldWeightKg: coil.remainingWeightKg,
+        unit: 'KG',
+        reasonFa: finalReason,
+        updatedAt: new Date().toLocaleString('fa-IR'),
+        actor: currentUser?.displayName || 'واحد کنترل کیفیت',
+      };
+      updatedMap[coil.id] = rec;
+      updatedMap[coil.coilId] = rec;
+    } else {
+      delete updatedMap[coil.id];
+      delete updatedMap[coil.coilId];
+    }
+
+    setQcHoldMap(updatedMap);
+    saveQcHoldMap(updatedMap);
+    setCoils(prev =>
+      prev.map(c =>
+        c.id === coil.id
+          ? { ...c, qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE' }
+          : c
+      )
+    );
+
+    try {
+      await fetch('/api/inventory/qc-hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: coil.id,
+          partId: coil.partId,
+          partCode: coil.partCode,
+          materialGrade: coil.materialGrade,
+          lotNumber: coil.coilId,
+          isHeld: nextHeld,
+          heldQty: coil.remainingWeightKg,
+          heldWeightKg: coil.remainingWeightKg,
+          reasonFa: finalReason,
+        }),
+      });
+    } catch {
+      // local state updated
+    }
+
+    recordAudit({
+      actionType: 'STATUS_CHANGE',
+      module: 'مدیریت کلاف‌های ورق (QC Hold)',
+      entityId: coil.id,
+      entityCode: coil.coilId,
+      summaryFa: nextHeld
+        ? `قرنطینه کیفی کلاف «${coil.coilId}» (${formatWeightKg(coil.remainingWeightKg)}) — علت: ${finalReason}`
+        : `رفع قرنطینه کیفی کلاف «${coil.coilId}» و بازگشت به ATP`,
+      details: nextHeld
+        ? `علت قرنطینه (QC Hold Reason): ${finalReason} | کسر ${formatWeightKg(coil.remainingWeightKg)} از موجودی آزاد (ATP) در MRP`
+        : `آزادسازی کلاف ${coil.coilId} و بازگشت به موجودی قابل برنامه‌ریزی`,
+      beforeSnapshot: { qualityStatus: coil.qualityStatus },
+      afterSnapshot: {
+        qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE',
+        qcHoldReason: nextHeld ? finalReason : null,
+      },
+    });
+
+    showUndoToast({
+      title: nextHeld
+        ? `🔒 کلاف «${coil.coilId}» در قرنطینه کیفی قرار گرفت`
+        : `🔓 قرنطینه کیفی کلاف «${coil.coilId}» آزاد شد`,
+      description: nextHeld
+        ? `علت: ${finalReason} | ${formatWeightKg(coil.remainingWeightKg)} از ATP کسر شد.`
+        : 'کلاف به چرخه موجودی آزاد بازگشت.',
+      onUndo: () => {
+        setQcHoldMap(prevMap);
+        saveQcHoldMap(prevMap);
+        setCoils(prevCoils);
+      },
+    });
+  };
+
   const handleToggleCoilQcHold = (coil: PhysicalCoil) => {
     const currentlyHeld = isCoilInQcHold(coil);
     const nextHeld = !currentlyHeld;
 
+    if (nextHeld) {
+      // Open Mandatory QC Hold Reason Modal before freezing the coil
+      setQcHoldModalCoil(coil);
+      setQcHoldReasonInput('');
+      setQcHoldReasonError('');
+      return;
+    }
+
     requestConfirm({
-      title: nextHeld
-        ? `قرنطینه کیفی رول ورق (QC Hold) — کلاف «${coil.coilId}»`
-        : `رفع قرنطینه کیفی رول ورق — کلاف «${coil.coilId}»`,
-      description: nextHeld
-        ? `آیا از انتقال کلاف «${coil.coilId}» (شماره ذوب: ${coil.heatNumber || '—'}) با وزن ${formatWeightKg(
-            coil.remainingWeightKg
-          )} به وضعیت قرنطینه کیفی اطمینان دارید؟`
-        : `آیا از تایید کیفی و آزادسازی کلاف «${coil.coilId}» اطمینان دارید؟`,
-      consequenceText: nextHeld
-        ? `وزن ${formatWeightKg(
-            coil.remainingWeightKg
-          )} این کلاف قفل شده و مستقیماً از فرمول «موجودی آزاد (ATP)» در ماژول برنامه‌ریزی (MRP) کسر می‌گردد تا به خطوط پرس حواله نشود.`
-        : `وزن ${formatWeightKg(
-            coil.remainingWeightKg
-          )} مجدداً به موجودی آزاد قابل تخصیص (ATP) در ماژول MRP بازگردانده می‌شود.`,
-      severity: nextHeld ? 'danger' : 'info',
-      confirmLabel: nextHeld ? 'تأیید قرنطینه کیفی کلاف و کسر از ATP' : 'تأیید رفع قرنطینه کلاف',
+      title: `رفع قرنطینه کیفی رول ورق — کلاف «${coil.coilId}»`,
+      description: `آیا از تایید کیفی و آزادسازی کلاف «${coil.coilId}» اطمینان دارید؟`,
+      consequenceText: `وزن ${formatWeightKg(
+        coil.remainingWeightKg
+      )} مجدداً به موجودی آزاد قابل تخصیص (ATP) در ماژول MRP بازگردانده می‌شود.`,
+      severity: 'info',
+      confirmLabel: 'تأیید رفع قرنطینه کلاف',
       onConfirm: async () => {
-        const prevMap = { ...qcHoldMap };
-        const prevCoils = [...coils];
-        const updatedMap = { ...qcHoldMap };
-
-        if (nextHeld) {
-          const rec: QcHoldRecord = {
-            key: coil.id,
-            partId: coil.partId,
-            partCode: coil.partCode,
-            partName: `${coil.partName} (${coil.coilId})`,
-            lotNumber: coil.coilId,
-            warehouseName: coil.warehouseName,
-            isHeld: true,
-            heldQty: coil.remainingWeightKg,
-            heldWeightKg: coil.remainingWeightKg,
-            unit: 'KG',
-            reasonFa: 'قرنطینه کیفی کلاف ورق (QC Hold)',
-            updatedAt: new Date().toLocaleString('fa-IR'),
-            actor: currentUser?.displayName || 'واحد کنترل کیفیت',
-          };
-          updatedMap[coil.id] = rec;
-          updatedMap[coil.coilId] = rec;
-        } else {
-          delete updatedMap[coil.id];
-          delete updatedMap[coil.coilId];
-        }
-
-        setQcHoldMap(updatedMap);
-        saveQcHoldMap(updatedMap);
-        setCoils(prev =>
-          prev.map(c =>
-            c.id === coil.id
-              ? { ...c, qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE' }
-              : c
-          )
-        );
-
-        try {
-          await fetch('/api/inventory/qc-hold', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              key: coil.id,
-              partId: coil.partId,
-              partCode: coil.partCode,
-              materialGrade: coil.materialGrade,
-              lotNumber: coil.coilId,
-              isHeld: nextHeld,
-              heldQty: coil.remainingWeightKg,
-              heldWeightKg: coil.remainingWeightKg,
-            }),
-          });
-        } catch {
-          // local state updated
-        }
-
-        recordAudit({
-          actionType: 'STATUS_CHANGE',
-          module: 'مدیریت کلاف‌های ورق (QC Hold)',
-          entityId: coil.id,
-          entityCode: coil.coilId,
-          summaryFa: nextHeld
-            ? `قرنطینه کیفی کلاف «${coil.coilId}» (${formatWeightKg(coil.remainingWeightKg)}) و کسر از ATP در MRP`
-            : `رفع قرنطینه کیفی کلاف «${coil.coilId}» و بازگشت به ATP`,
-          beforeSnapshot: { qualityStatus: coil.qualityStatus },
-          afterSnapshot: { qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE' },
-        });
-
-        showUndoToast({
-          title: nextHeld
-            ? `🔒 کلاف «${coil.coilId}» در قرنطینه کیفی قرار گرفت`
-            : `🔓 قرنطینه کیفی کلاف «${coil.coilId}» آزاد شد`,
-          description: nextHeld
-            ? `${formatWeightKg(coil.remainingWeightKg)} از موجودی آزاد (ATP) در MRP کسر شد.`
-            : 'کلاف به چرخه موجودی آزاد بازگشت.',
-          onUndo: () => {
-            setQcHoldMap(prevMap);
-            saveQcHoldMap(prevMap);
-            setCoils(prevCoils);
-          },
-        });
+        await executeCoilQcHoldChange(coil, false);
       },
     });
+  };
+
+  const handleConfirmQcHoldModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qcHoldModalCoil) return;
+    const trimmedReason = qcHoldReasonInput.trim();
+    if (!trimmedReason) {
+      setQcHoldReasonError('ثبت «علت قرنطینه (QC Hold Reason)» قبل از فریز کردن کلاف الزامی است.');
+      return;
+    }
+    const targetCoil = qcHoldModalCoil;
+    setQcHoldModalCoil(null);
+    setQcHoldReasonInput('');
+    setQcHoldReasonError('');
+    await executeCoilQcHoldChange(targetCoil, true, trimmedReason);
   };
 
   // Modals
@@ -1457,6 +1495,111 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                     ذخیره تسهیم
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mandatory QC Hold Reason Modal (ثبت اجباری علت قرنطینه کیفی کلاف) */}
+      {qcHoldModalCoil && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => setQcHoldModalCoil(null)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 text-right shadow-2xl space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    ثبت اجباری علت قرنطینه کیفی (QC Hold) — کلاف {qcHoldModalCoil.coilId}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    شماره ذوب: <span className="font-mono font-bold text-slate-700">{qcHoldModalCoil.heatNumber || '—'}</span> | وزن درگیر:{' '}
+                    <span className="font-mono font-bold text-rose-700">{formatWeightKg(qcHoldModalCoil.remainingWeightKg)}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQcHoldModalCoil(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmQcHoldModalSubmit} className="space-y-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200 text-rose-900 text-[11px] leading-relaxed">
+                <strong>هشدار کنترل کیفیت و برنامه‌ریزی (ATP):</strong> با ثبت قرنطینه کیفی، مقدار{' '}
+                <strong className="font-mono">{formatWeightKg(qcHoldModalCoil.remainingWeightKg)}</strong> از موجودی آزاد قابل تخصیص (ATP) در ماژول MRP کسر شده و حواله آن به خط تولید مسدود می‌گردد. درج علت دقیق قرنطینه در لاگ حسابرسی (Audit Trail) اجباری است.
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  انتخاب سریع از دلایل متداول عدم انطباق کیفی:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {QC_HOLD_REASON_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setQcHoldReasonInput(preset);
+                        setQcHoldReasonError('');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border transition cursor-pointer ${
+                        qcHoldReasonInput === preset
+                          ? 'bg-rose-600 text-white border-rose-600 font-bold'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  علت قرنطینه کیفی (QC Hold Reason) <span className="text-rose-600">* (اجباری)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={qcHoldReasonInput}
+                  onChange={e => {
+                    setQcHoldReasonInput(e.target.value);
+                    if (e.target.value.trim()) setQcHoldReasonError('');
+                  }}
+                  placeholder="شرح دقیق عیب ظاهری، مغایرت ابعادی یا شماره برگه عدم انطباق (NCR) را وارد نمایید..."
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-rose-500"
+                />
+                {qcHoldReasonError && (
+                  <p className="text-[11px] text-rose-600 font-bold mt-1">{qcHoldReasonError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setQcHoldModalCoil(null)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>ثبت علت در لاگ و اعمال قرنطینه (QC Hold)</span>
+                </button>
               </div>
             </form>
           </div>

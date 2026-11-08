@@ -29,6 +29,7 @@ import {
   GitFork,
   Car,
   FolderTree,
+  Copy,
 } from 'lucide-react';
 import {
   Part,
@@ -1368,6 +1369,24 @@ export const MasterDataHubView: React.FC<MasterDataHubViewProps> = ({
                               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
                             >
                               ویرایش
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingOperation(null);
+                                setOperationForm({
+                                  ...op,
+                                  id: undefined,
+                                  code: `${op.code}-COPY`,
+                                  name: `${op.name} (کپی)`,
+                                });
+                                setIsOperationModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-900 hover:text-white inline-flex items-center gap-1 transition-colors cursor-pointer"
+                              title="کپی‌گیری سریع (Duplicate) برای ایجاد عملیات مشابه"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>کپی‌گیری</span>
                             </button>
                             <button
                               type="button"

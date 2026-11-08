@@ -6,6 +6,7 @@ import {
   Edit3,
   Trash2,
   Plus,
+  RotateCcw,
 } from 'lucide-react';
 import { PhysicalCoil } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
@@ -246,9 +247,13 @@ const INITIAL_SLITTING_TREES: ParentCoilSlittingTree[] = [
 
 interface CoilSlittingGenealogyPanelProps {
   coils?: PhysicalCoil[];
+  onReverseSlitting?: (parentCoilCode: string, restoredWeightKg: number) => void;
 }
 
-export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProps> = ({ coils = [] }) => {
+export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProps> = ({
+  coils = [],
+  onReverseSlitting,
+}) => {
   const { openQuickEditDrawer, requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
 
   const [treesState, setTreesState] = useState<ParentCoilSlittingTree[]>(() => {
@@ -358,6 +363,16 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
     [slittingTrees, selectedTreeId]
   );
 
+  const updateActiveTree = (updater: (tree: ParentCoilSlittingTree) => ParentCoilSlittingTree) => {
+    setTreesState(prev => {
+      const exists = prev.some(t => t.parentId === activeTree.parentId);
+      if (exists) {
+        return prev.map(t => (t.parentId === activeTree.parentId ? updater(t) : t));
+      }
+      return [...prev, updater(activeTree)];
+    });
+  };
+
   const visibleChildren = useMemo(
     () => activeTree.children.filter(c => !c.isDeleted),
     [activeTree]
@@ -380,6 +395,81 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
     () => visibleChildren.filter(c => c.type === 'EDGE_SCRAP').reduce((s, c) => s + c.weightKg, 0),
     [visibleChildren]
   );
+
+  // Reverse Slitting (ابطال برش کلاف مادر و بازگردانی وزن نوارهای فرعی به رول مادر)
+  const handleReverseSlitting = () => {
+    const childStripsToRemove = visibleChildren.filter(c => c.type !== 'REMNANT_COIL');
+    const reclaimedWeightKg = totalSlitWeight + scrapWeight;
+
+    requestConfirm({
+      title: `ابطال برش کلاف (Reverse Slitting) — رول مادر ${activeTree.parentCoilCode}`,
+      message: `آیا از ابطال کامل عملیات برش کلاف «${activeTree.parentCoilCode}» (شماره ذوب: ${activeTree.heatNumber}) اطمینان دارید؟`,
+      consequences: [
+        `حذف نوارها و شیت‌های فرعی برش‌خورده (${toPersianDigits(childStripsToRemove.length)} ردیف فرعی: ${childStripsToRemove.map(c => c.childCode).join('، ') || '—'})`,
+        `بازگشت کامل وزن مصرفی و پرت (${formatNumber(reclaimedWeightKg)} کیلوگرم) به موجودی رول مادر (جمع کل مجدد: ${formatNumber(activeTree.originalWeightKg)} kg)`,
+        'ثبت سند ابطال برش در تاریخچه حسابرسی (Audit Trail) با قابلیت بازگردانی فوری (Undo)',
+      ],
+      confirmLabel: 'تأیید ابطال برش و بازگشت وزن به رول مادر',
+      variant: 'danger',
+      onConfirm: () => {
+        const prevSnap = [...treesState];
+
+        updateActiveTree(t => {
+          const hasRemnant = t.children.some(c => c.type === 'REMNANT_COIL');
+          const updatedChildren: ChildSlitNode[] = t.children.map(c => {
+            if (c.type === 'REMNANT_COIL') {
+              return {
+                ...c,
+                isDeleted: false,
+                weightKg: t.originalWeightKg,
+                typeLabel: 'رول مادر کامل (پس از ابطال برش / Reverse Slitting)',
+                dimensionsLabel: `عرض ${t.originalWidthMm}mm × ضخامت ${t.thicknessMm}mm`,
+              };
+            }
+            return { ...c, isDeleted: true };
+          });
+
+          if (!hasRemnant) {
+            updatedChildren.push({
+              id: `REM-REV-${Date.now()}`,
+              childCode: `REM-${t.parentCoilCode}`,
+              type: 'REMNANT_COIL',
+              typeLabel: 'رول مادر کامل (پس از ابطال برش / Reverse Slitting)',
+              dimensionsLabel: `عرض ${t.originalWidthMm}mm × ضخامت ${t.thicknessMm}mm`,
+              weightKg: t.originalWeightKg,
+              warehouseLocation: 'انبار رول ورق (زون A-01)',
+              status: 'IN_STOCK',
+            });
+          }
+
+          return {
+            ...t,
+            children: updatedChildren,
+          };
+        });
+
+        onReverseSlitting?.(activeTree.parentCoilCode, activeTree.originalWeightKg);
+
+        recordAudit({
+          entityId: activeTree.parentId,
+          entityCode: activeTree.parentCoilCode,
+          moduleName: 'شجره‌نامه برش کلاف (Reverse Slitting)',
+          actionType: 'STATUS_CHANGE',
+          title: `ابطال برش کلاف (Reverse Slitting) برای رول مادر ${activeTree.parentCoilCode}`,
+          details: `حذف ${childStripsToRemove.length} نوار فرعی و بازگشت ${formatNumber(reclaimedWeightKg)} kg به رول مادر (ذوب ${activeTree.heatNumber})`,
+        });
+
+        showUndoToast({
+          title: `عملیات برش کلاف «${activeTree.parentCoilCode}» ابطال شد`,
+          detail: `${formatNumber(reclaimedWeightKg)} کیلوگرم از نوارهای فرعی به رول مادر بازگردانده شد.`,
+          variant: 'warning',
+          onUndo: () => {
+            setTreesState(prevSnap);
+          },
+        });
+      },
+    });
+  };
 
   // Edit Parent Coil in Slide-Over Drawer
   const handleEditParentCoil = () => {
@@ -761,10 +851,21 @@ export const CoilSlittingGenealogyPanel: React.FC<CoilSlittingGenealogyPanelProp
               <span className="text-slate-400">|</span>
               <span className="text-slate-600">تاریخ برش: {activeTree.slittingDate}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
                 {toPersianDigits(visibleChildren.length)} خروجی فرعی (Child) از ذوب {activeTree.heatNumber}
               </span>
+              {totalSlitWeight > 0 && (
+                <button
+                  type="button"
+                  onClick={handleReverseSlitting}
+                  title="ابطال عملیات برش و بازگرداندن وزن نوارهای فرعی به رول مادر"
+                  className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>ابطال برش (Reverse Slitting)</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleAddChildNode}

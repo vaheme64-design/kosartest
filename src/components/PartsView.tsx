@@ -12,6 +12,8 @@ import {
   X,
   Check,
   Pin,
+  Copy,
+  Edit3,
 } from 'lucide-react';
 import { Part, PartCategory, UnitOfMeasure, CarModel } from '../types/inventory';
 import { formatNumber, formatWeightKg, exportToCsv, toPersianDigits } from '../utils/formatters';
@@ -179,6 +181,29 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
     setFormData({ ...p });
     setFormError(null);
     setIsModalOpen(true);
+  };
+
+  const handleDuplicatePart = (p: Part) => {
+    setEditingPart(null);
+    const clonedCode = `${p.code}-COPY`;
+    const clonedName = `${p.name} (کپی)`;
+    setFormData({
+      ...p,
+      id: undefined,
+      code: clonedCode,
+      name: clonedName,
+      sapcoCode: p.sapcoCode ? `${p.sapcoCode}-C` : '',
+    });
+    setFormError(null);
+    setIsModalOpen(true);
+
+    recordAudit({
+      actionType: 'CREATE',
+      module: 'اطلاعات پایه کالاها (Duplicate)',
+      entityId: p.id,
+      entityCode: clonedCode,
+      summaryFa: `آماده‌سازی کپی‌گیری (Duplicate) از رکورد «${p.name}» با کد پیشنهادی ${clonedCode}`,
+    });
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -419,12 +444,26 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
                     <td className="py-3 px-3 font-mono text-indigo-700">{p.materialGrade || '-'}</td>
                     <td className="py-3 px-3 text-slate-400">{p.unit}</td>
                     <td className="py-3 px-3">
-                      <button
-                        onClick={() => handleEditPart(p)}
-                        className="text-xs text-blue-400 hover:text-blue-700 font-medium transition-colors"
-                      >
-                        ویرایش
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditPart(p)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
+                          title="ویرایش مشخصات قطعه / کلاف"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>ویرایش</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicatePart(p)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-900 hover:text-white border border-slate-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
+                          title="کپی‌گیری سریع (Duplicate) برای ایجاد رکورد مشابه"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>کپی‌گیری</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

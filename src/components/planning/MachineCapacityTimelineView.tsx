@@ -348,8 +348,8 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
       prev.map(b => {
         if (b.id !== blockIdToShift) return b;
         const duration = b.endHour - b.startHour;
-        const nextStart = Math.min(22 - duration, targetStartHour);
-        const nextEnd = Math.min(23, nextStart + duration);
+        const nextStart = Number(Math.min(22 - duration, targetStartHour).toFixed(2));
+        const nextEnd = Number(Math.min(23, nextStart + duration).toFixed(2));
         return {
           ...b,
           startHour: nextStart,
@@ -365,16 +365,71 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
     });
   };
 
+  // Per-machine 1-click Auto-Resolve (تسطیح خودکار تداخل ماشین با احتساب زمان تعویض قالب SMED)
+  const handleAutoResolveMachineConflict = (conflict: {
+    blockA: ScheduledMoBlock;
+    blockB: ScheduledMoBlock;
+    overlapHours: number;
+  }) => {
+    const smedMinutes = conflict.blockB.setupMinutes || 30;
+    const smedHours = Number((smedMinutes / 60).toFixed(2));
+    const duration = conflict.blockB.endHour - conflict.blockB.startHour;
+    const targetStart = Number(Math.min(22 - duration, conflict.blockA.endHour + smedHours).toFixed(2));
+    const targetEnd = Number(Math.min(23, targetStart + duration).toFixed(2));
+
+    requestConfirm({
+      title: `تسطیح خودکار (Auto-Resolve) — ${conflict.blockA.machineName}`,
+      message: `آیا از انتقال خودکار دستور تولید دوم (${conflict.blockB.moNumber} — ${conflict.blockB.partName}) به پس از اتمام دستور اول (${conflict.blockA.moNumber}) به همراه زمان تعویض قالب اطمینان دارید؟`,
+      consequences: [
+        `پایان دستور اول (${conflict.blockA.moNumber}): ساعت ${formatHourLabel(conflict.blockA.endHour)}`,
+        `اعمال زمان تعویض قالب استاندارد (SMED): ${toPersianDigits(smedMinutes)} دقیقه (${conflict.blockB.dieCode})`,
+        `بازه جدید دستور دوم (${conflict.blockB.moNumber}): ${formatHourLabel(targetStart)} الی ${formatHourLabel(targetEnd)}`,
+      ],
+      confirmLabel: 'تأیید و تسطیح خودکار (Auto-Resolve)',
+      variant: 'indigo',
+      onConfirm: () => {
+        const prevSnap = [...blocks];
+        setBlocks(prev =>
+          prev.map(b =>
+            b.id === conflict.blockB.id
+              ? {
+                  ...b,
+                  startHour: targetStart,
+                  endHour: targetEnd,
+                }
+              : b
+          )
+        );
+
+        recordAudit({
+          entityId: conflict.blockB.id,
+          entityCode: conflict.blockB.moNumber,
+          moduleName: 'تقویم ظرفیت ماشین‌آلات (Auto-Leveling)',
+          actionType: 'UPDATE',
+          title: `تسطیح خودکار (Auto-Resolve) دستور ${conflict.blockB.moNumber} روی ${conflict.blockB.machineName}`,
+          details: `انتقال به ساعت ${formatHourLabel(targetStart)} تا ${formatHourLabel(targetEnd)} (پایان ${conflict.blockA.moNumber} + ${smedMinutes} دقیقه تعویض قالب SMED)`,
+        });
+
+        showUndoToast({
+          title: `تداخل ماشین «${conflict.blockA.machineName}» به صورت خودکار تسطیح شد`,
+          detail: `دستور ${conflict.blockB.moNumber} با احتساب ${toPersianDigits(smedMinutes)} دقیقه تعویض قالب به ساعت ${formatHourLabel(targetStart)} منتقل گردید.`,
+          variant: 'success',
+          onUndo: () => setBlocks(prevSnap),
+        });
+      },
+    });
+  };
+
   const handleResolveAllConflicts = () => {
     requestConfirm({
-      title: 'تایید تسطیح خودکار تداخل‌های زمانی (Auto-Leveling)',
+      title: 'تایید تسطیح خودکار تداخل‌های زمانی (Auto-Resolve / Auto-Leveling)',
       message: `آیا از جابجایی خودکار ${toPersianDigits(totalConflictsCount)} دستور تولید دارای تداخل زمانی روی پرس‌ها اطمینان دارید؟`,
       consequences: [
-        'انتقال دستورهای همپوشان به اولین بازه آزاد پس از اتمام دستور قبلی',
-        'لحاظ شدن ۳۰ دقیقه زمان تعویض قالب استاندارد (SMED) بین دو دستور کار',
-        'امکان بازگردانی کامل برنامه با دکمه لغو (Undo)',
+        'انتقال دستورهای همپوشان به بلافاصله پس از اتمام دستور اول روی همان ماشین',
+        'اضافه شدن دقیق زمان تعویض قالب (SMED Setup Minutes) هر قطعه بین دو دستور کار',
+        'ثبت در لاگ حسابرسی (Audit Trail) و امکان بازگردانی کامل برنامه با دکمه لغو (Undo)',
       ],
-      confirmLabel: 'تایید و تسطیح تداخل‌ها',
+      confirmLabel: 'تایید و تسطیح خودکار تداخل‌ها',
       variant: 'indigo',
       onConfirm: () => {
         const prevSnap = [...blocks];
@@ -395,8 +450,9 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
               const currBlock = list[i];
               if (!currBlock.isDeleted && !prevBlock.isDeleted && currBlock.startHour < prevBlock.endHour) {
                 const duration = currBlock.endHour - currBlock.startHour;
-                currBlock.startHour = prevBlock.endHour + 0.5;
-                currBlock.endHour = Math.min(23, currBlock.startHour + duration);
+                const smedHours = Number(((currBlock.setupMinutes || 30) / 60).toFixed(2));
+                currBlock.startHour = Number(Math.min(22 - duration, prevBlock.endHour + smedHours).toFixed(2));
+                currBlock.endHour = Number(Math.min(23, currBlock.startHour + duration).toFixed(2));
               }
             }
             resolved.push(...list);
@@ -405,14 +461,14 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
         });
 
         recordAudit({
-          moduleName: 'تقویم ظرفیت ماشین‌آلات',
+          moduleName: 'تقویم ظرفیت ماشین‌آلات (Auto-Leveling)',
           actionType: 'UPDATE',
-          title: 'تسطیح خودکار تداخل‌های زمانی ماشین‌آلات (Auto-Leveling)',
-          details: 'رفع همپوشانی زمانی پرس‌ها با اعمال ۳۰ دقیقه بافر تعویض قالب (SMED)',
+          title: 'تسطیح خودکار تداخل‌های زمانی ماشین‌آلات (Auto-Resolve)',
+          details: 'انتقال دستورات تولید دوم به پایان دستور اول + زمان تعویض قالب (SMED)',
         });
 
         showUndoToast({
-          title: 'تداخل‌های زمانی ماشین‌آلات تسطیح شدند',
+          title: 'تداخل‌های زمانی ماشین‌آلات با احتساب زمان تعویض قالب تسطیح شدند',
           detail: 'تا ۸ ثانیه امکان لغو تسطیح (Undo) وجود دارد.',
           variant: 'success',
           onUndo: () => setBlocks(prevSnap),
@@ -735,22 +791,23 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                       </div>
 
                       {hasConflict && (
-                        <div className="mt-2 px-2 py-1 rounded-lg bg-rose-100/80 border border-rose-300 text-rose-800 text-[10px] font-bold flex items-center justify-between">
-                          <span className="flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                            تداخل: {toPersianDigits(row.conflicts[0].overlapHours)} ساعت همپوشانی
-                          </span>
+                        <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[10px] space-y-1.5">
+                          <div className="flex items-center justify-between font-bold">
+                            <span className="flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                              تداخل: {toPersianDigits(row.conflicts[0].overlapHours)} ساعت همپوشانی
+                            </span>
+                            <span className="font-mono text-[9px] text-rose-700">
+                              SMED: +{toPersianDigits(row.conflicts[0].blockB.setupMinutes || 30)}m
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() =>
-                              handleAutoResolveConflict(
-                                row.conflicts[0].blockB.id,
-                                row.conflicts[0].blockA.endHour + 0.5
-                              )
-                            }
-                            className="underline hover:text-rose-950 cursor-pointer"
+                            onClick={() => handleAutoResolveMachineConflict(row.conflicts[0])}
+                            className="w-full py-1.5 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
                           >
-                            رفع تداخل
+                            <Sparkles className="w-3 h-3" />
+                            <span>تسطیح خودکار (Auto-Resolve)</span>
                           </button>
                         </div>
                       )}
