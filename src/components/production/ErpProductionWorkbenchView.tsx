@@ -31,6 +31,11 @@ import {
   Edit3,
   Trash2,
   Settings,
+  X,
+  ExternalLink,
+  FileText,
+  Users,
+  Cpu,
 } from 'lucide-react';
 import { Part, Routing, DetailedStockBalance, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits, exportToCsv } from '../../utils/formatters';
@@ -574,6 +579,96 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   const [rollForwardToDay, setRollForwardToDay] = useState<number>(2);
   const [isPostingReceipt, setIsPostingReceipt] = useState<boolean>(false);
 
+  // Slide-Over Drawer State for Interactive Drill-Down Across All Reports & OEE Metrics
+  const [drillDownContext, setDrillDownContext] = useState<{
+    title: string;
+    metricLabel: string;
+    metricValue: string | number;
+    description: string;
+    filterBadge?: string;
+    records: Array<{
+      orderCode: string;
+      partName: string;
+      partCode: string;
+      carModel: string;
+      opCode: string;
+      opTitle: string;
+      machineName: string;
+      machineCode: string;
+      stationHall: string;
+      dieCode: string;
+      shiftName: string;
+      dayName: string;
+      targetQty: number;
+      completedGoodQty: number;
+      wipQty: number;
+      scrapQty: number;
+      status: string;
+      receiptDocNumber?: string;
+      isFinalOp?: boolean;
+    }>;
+  } | null>(null);
+  const [drillDownSearch, setDrillDownSearch] = useState<string>('');
+
+  // Unified raw operational records across all parts and operations for live drill-down
+  const allRawRecords = useMemo(() => {
+    const list: Array<{
+      orderCode: string;
+      partName: string;
+      partCode: string;
+      carModel: string;
+      opCode: string;
+      opTitle: string;
+      machineName: string;
+      machineCode: string;
+      stationHall: string;
+      dieCode: string;
+      shiftName: string;
+      dayName: string;
+      targetQty: number;
+      completedGoodQty: number;
+      wipQty: number;
+      scrapQty: number;
+      status: string;
+      receiptDocNumber?: string;
+      isFinalOp?: boolean;
+    }> = [];
+
+    scheduleItems.forEach(item => {
+      item.ops.forEach((op, oIdx) => {
+        const dayObj = WORK_DAYS.find(d => d.index === op.scheduledDayIndex);
+        const computedWip =
+          oIdx === 0
+            ? Math.max(0, item.weeklyTargetQty - op.completedGoodQty)
+            : Math.max(0, item.ops[oIdx - 1].completedGoodQty - op.completedGoodQty);
+
+        list.push({
+          orderCode: item.orderCode,
+          partName: item.partName,
+          partCode: item.partCode,
+          carModel: item.carModel,
+          opCode: op.opCode,
+          opTitle: op.opTitle,
+          machineName: op.machineName,
+          machineCode: op.machineCode,
+          stationHall: op.stationHall,
+          dieCode: op.dieCode,
+          shiftName: op.shiftName,
+          dayName: dayObj ? dayObj.shortName : `روز ${op.scheduledDayIndex}`,
+          targetQty: op.effectiveTargetQty,
+          completedGoodQty: op.completedGoodQty,
+          wipQty: computedWip,
+          scrapQty: op.scrapQty,
+          status: op.status,
+          receiptDocNumber: op.warehouseReceiptDocNumber,
+          isFinalOp: op.isFinalOp,
+        });
+      });
+    });
+
+    return list;
+  }, [scheduleItems]);
+
   // Modal for Adding a New Part with Custom Multi-OP Staggered Schedule
   const [isAddPartModalOpen, setIsAddPartModalOpen] = useState<boolean>(false);
   const [newPartCode, setNewPartCode] = useState<string>('');
@@ -831,20 +926,14 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       return;
     }
 
-    const availableWip = prevOp
-      ? Math.max(0, prevOp.completedGoodQty - op.completedGoodQty)
-      : op.effectiveTargetQty;
-
     setActiveLogContext({ partItem: item, opStep: op });
-    setLogGoodInput(
-      String(
-        availableWip > 0
-          ? availableWip
-          : op.completedGoodQty > 0
-          ? op.completedGoodQty
-          : op.effectiveTargetQty
-      )
-    );
+    // State Sync Correction: Sync with table row columns:
+    // In Daily Shift Plan table row:
+    // - «تیراژ هدف مرحله» = op.effectiveTargetQty
+    // - «تولید سالم» = op.completedGoodQty
+    // - «مانده» = Math.max(0, op.effectiveTargetQty - op.completedGoodQty)
+    // Synchronize logGoodInput directly with op.completedGoodQty so the modal matches the table's "تولید سالم" column exactly!
+    setLogGoodInput(String(op.completedGoodQty || 0));
     setLogScrapInput(String(op.scrapQty || 0));
     setRollForwardToDay(Math.min(6, op.scheduledDayIndex + 1));
   };
@@ -1694,6 +1783,22 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                                   </strong>
                                 </div>
 
+                                {/* Computed WIP Buffer before this OP (فرمول محاسباتی موجودی بین‌ایستگاهی) */}
+                                <div className="px-2 py-1 bg-indigo-50/90 border border-indigo-200 rounded-lg text-[10px] text-indigo-950 flex items-center justify-between">
+                                  <span className="flex items-center gap-1 font-sans text-indigo-800">
+                                    <Layers className="w-3 h-3 text-indigo-600 inline" />
+                                    <span>بافر ورودی / قبل از OP:</span>
+                                  </span>
+                                  <strong className="font-mono font-bold text-indigo-900">
+                                    {formatNumber(
+                                      oIdx === 0
+                                        ? Math.max(0, item.weeklyTargetQty - op.completedGoodQty)
+                                        : Math.max(0, item.ops[oIdx - 1].completedGoodQty - op.completedGoodQty)
+                                    )}{' '}
+                                    عدد
+                                  </strong>
+                                </div>
+
                                 <div className="flex items-center justify-between font-mono">
                                   <span className="font-sans text-slate-500">
                                     {op.isFinalOp ? 'تحویل به انبار:' : 'موجودی بعد از OP:'}
@@ -2165,7 +2270,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
             )}
           </div>
 
-          {/* 4 Industrial KPI Groups: Planning, Production, OEE/Efficiency, PM/Maintenance */}
+          {/* 4 Industrial KPI Groups: Planning, Production, OEE/Efficiency, PM/Maintenance (All Clickable for Drill-Down) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Group 1: Planning KPIs */}
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
@@ -2173,31 +2278,98 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 <span className="text-xs font-bold text-slate-900">۱. شاخص‌های برنامه‌ریزی تولید</span>
                 <Calendar className="w-4 h-4 text-blue-600" />
               </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">درصد تحقق برنامه (Attainment):</span>
-                  <strong className="font-mono text-emerald-700 text-sm">
+              <div className="space-y-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای خام تحقق برنامه و رسید انبار',
+                      metricLabel: 'درصد تحقق برنامه',
+                      metricValue: `${toPersianDigits(kpiSummary.attainmentPct)}٪`,
+                      description: 'مراحل آخر (Final OPs) و میزان تحقق تحویل قطعات به انبار محصول نهایی در برابر تیراژ مصوب',
+                      filterBadge: 'تحقق برنامه',
+                      records: allRawRecords.filter(r => r.isFinalOp),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>درصد تحقق برنامه (Attainment):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-emerald-700 text-sm group-hover:underline">
                     {toPersianDigits(kpiSummary.attainmentPct)}٪
                   </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">تعداد قطعات فعال در برنامه:</span>
-                  <strong className="font-mono text-slate-900">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای کلیه قطعات فعال در برنامه زمان‌بندی',
+                      metricLabel: 'تعداد قطعات فعال',
+                      metricValue: `${toPersianDigits(kpiSummary.totalPartsScheduled)} قطعه`,
+                      description: 'فهرست ۲۰ قطعه فعال در برنامه به تفکیک مدل خودرو، تیراژ و توالی مراحل تولید',
+                      filterBadge: 'قطعات برنامه',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>تعداد قطعات فعال در برنامه:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-slate-900 group-hover:underline">
                     {toPersianDigits(kpiSummary.totalPartsScheduled)} قطعه
                   </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">کل مراحل کاری (OPs):</span>
-                  <strong className="font-mono text-slate-900">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای کل مراحل کاری برنامه‌ریزی‌شده (OPs)',
+                      metricLabel: 'کل مراحل کاری',
+                      metricValue: `${toPersianDigits(kpiSummary.totalOpsCount)} مرحله`,
+                      description: 'لیست کامل مراحل برش، پرس، خم، پانچ، جوشکاری و مونتاژ قطعات در افق زمانی فعال',
+                      filterBadge: 'مراحل OP',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>کل مراحل کاری (OPs):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-slate-900 group-hover:underline">
                     {toPersianDigits(kpiSummary.totalOpsCount)} مرحله
                   </strong>
-                </div>
-                <div className="flex justify-between text-amber-800">
-                  <span>مراحل دارای انتقال به روز بعد:</span>
-                  <strong className="font-mono">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'مراحل دارای انتقال مانده به روز بعد (Roll-Forward)',
+                      metricLabel: 'مراحل انتقالی',
+                      metricValue: `${toPersianDigits(kpiSummary.rolledForwardOpsCount)} مرحله`,
+                      description: 'مراحلی که تیراژ آن‌ها به طور کامل محقق نشده و مانده کار آن‌ها به روز بعد شیفت داده شده است',
+                      filterBadge: 'مانده انتقالی',
+                      records: allRawRecords.filter(r => r.status === 'ROLLED_FORWARD' || r.completedGoodQty < r.targetQty),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-amber-50/50 transition cursor-pointer group text-amber-900"
+                >
+                  <span className="group-hover:text-amber-800 flex items-center gap-1">
+                    <span>مراحل دارای انتقال به روز بعد:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono group-hover:underline">
                     {toPersianDigits(kpiSummary.rolledForwardOpsCount)} مرحله
                   </strong>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -2207,31 +2379,98 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 <span className="text-xs font-bold text-slate-900">۲. شاخص‌های تولید، WIP و انبار</span>
                 <PackageCheck className="w-4 h-4 text-emerald-600" />
               </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">کل عملیات تولید سالم (OPs):</span>
-                  <strong className="font-mono text-slate-900 text-sm">
+              <div className="space-y-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای کل عملیات تولید سالم انجام‌شده (OPs)',
+                      metricLabel: 'تولید سالم',
+                      metricValue: `${formatNumber(kpiSummary.scaledGoodPcs)} ضرب`,
+                      description: 'مجموع ضرب و قطعات سالم ثبت‌شده در تمام ایستگاه‌های سالن‌های پرس، برش و جوش',
+                      filterBadge: 'تولید سالم',
+                      records: allRawRecords.filter(r => r.completedGoodQty > 0),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>کل عملیات تولید سالم (OPs):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-slate-900 text-sm group-hover:underline">
                     {formatNumber(kpiSummary.scaledGoodPcs)} ضرب
                   </strong>
-                </div>
-                <div className="flex justify-between text-emerald-700">
-                  <span>محصول نهایی رسیدشده به انبار:</span>
-                  <strong className="font-mono">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز اسناد و رکوردهای رسید محصول نهایی به انبار',
+                      metricLabel: 'رسید انبار محصول نهایی',
+                      metricValue: `${formatNumber(kpiSummary.scaledWarehouseReceiptsPcs)} عدد`,
+                      description: 'محصولات تکمیل‌شده در مرحله آخر مسیر تولید که سند رسمی رسید انبار برای آن‌ها صادر شده است',
+                      filterBadge: 'رسید انبار',
+                      records: allRawRecords.filter(r => r.isFinalOp && r.completedGoodQty > 0),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-emerald-50/50 transition cursor-pointer group text-emerald-800"
+                >
+                  <span className="group-hover:text-emerald-700 flex items-center gap-1">
+                    <span>محصول نهایی رسیدشده به انبار:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono group-hover:underline">
                     {formatNumber(kpiSummary.scaledWarehouseReceiptsPcs)} عدد
                   </strong>
-                </div>
-                <div className="flex justify-between text-indigo-700">
-                  <span>موجودی نیمه‌ساخته در خط (WIP):</span>
-                  <strong className="font-mono">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای موجودی نیمه‌ساخته بین‌ایستگاهی (WIP) در خطوط',
+                      metricLabel: 'موجودی پای خط (WIP)',
+                      metricValue: `${formatNumber(kpiSummary.totalWipInLinePcs)} عدد`,
+                      description: 'قطعاتی که یک یا چند مرحله را طی کرده و به عنوان بافر ورودی در انتظار مرحله بعدی قرار دارند',
+                      filterBadge: 'موجودی WIP',
+                      records: allRawRecords.filter(r => r.wipQty > 0),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-indigo-50/50 transition cursor-pointer group text-indigo-800"
+                >
+                  <span className="group-hover:text-indigo-700 flex items-center gap-1">
+                    <span>موجودی نیمه‌ساخته در خط (WIP):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono group-hover:underline">
                     {formatNumber(kpiSummary.totalWipInLinePcs)} عدد
                   </strong>
-                </div>
-                <div className="flex justify-between text-rose-700">
-                  <span>ضایعات ثبت‌شده دوره:</span>
-                  <strong className="font-mono">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای ضایعات تولیدی به تفکیک قطعه، قالب و دستگاه',
+                      metricLabel: 'ضایعات ثبت‌شده',
+                      metricValue: `${formatNumber(kpiSummary.scaledScrapPcs)} عدد`,
+                      description: 'قطعات نامنطبق حین راه‌اندازی و فرآیند پرسکاری، پانچ و جوشکاری در تمام شیفت‌ها',
+                      filterBadge: 'ضایعات',
+                      records: allRawRecords.filter(r => r.scrapQty > 0),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-rose-50/50 transition cursor-pointer group text-rose-800"
+                >
+                  <span className="group-hover:text-rose-700 flex items-center gap-1">
+                    <span>ضایعات ثبت‌شده دوره:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono group-hover:underline">
                     {formatNumber(kpiSummary.scaledScrapPcs)} عدد
                   </strong>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -2243,33 +2482,84 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 </span>
                 <Gauge className="w-4 h-4 text-amber-600" />
               </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">شاخص کل اثربخشی (OEE):</span>
-                  <strong className="font-mono text-amber-700 text-sm">
+              <div className="space-y-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای شاخص اثربخشی کلی تجهیزات (OEE کل کارخانه)',
+                      metricLabel: 'OEE کل کارخانه',
+                      metricValue: `${toPersianDigits(kpiSummary.oeePct)}٪`,
+                      description: 'محاسبه تجمیعی دسترس‌پذیری، راندمان عملکرد ضرب و نرخ کیفیت در کلیه ایستگاه‌های کاری',
+                      filterBadge: 'OEE کارخانه',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-amber-50/50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-amber-800 flex items-center gap-1">
+                    <span>شاخص کل اثربخشی (OEE):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-amber-700 text-sm group-hover:underline">
                     {toPersianDigits(kpiSummary.oeePct)}٪
                   </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">دسترس‌پذیری × عملکرد × کیفیت:</span>
+                </button>
+
+                <div className="flex justify-between px-1.5 py-1 text-slate-500">
+                  <span>دسترس‌پذیری × عملکرد × کیفیت:</span>
                   <span className="font-mono text-[11px] text-slate-800">
                     {toPersianDigits(kpiSummary.availabilityPct)}٪ ×{' '}
                     {toPersianDigits(kpiSummary.performancePct)}٪ ×{' '}
                     {toPersianDigits(kpiSummary.qualityPct)}٪
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">کارایی نیروی انسانی (Efficiency):</span>
-                  <strong className="font-mono text-slate-900">
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای کارایی و راندمان نیروی انسانی (Labor Efficiency)',
+                      metricLabel: 'کارایی نیروی انسانی',
+                      metricValue: `${toPersianDigits(kpiSummary.laborEfficiencyPct)}٪`,
+                      description: 'محاسبه ساعات استاندارد تولیدی در مقایسه با ساعات واقعی حضور اپراتورها در شیفت‌ها',
+                      filterBadge: 'راندمان انسانی',
+                      records: allRawRecords.filter(r => r.completedGoodQty > 0),
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>کارایی نیروی انسانی (Efficiency):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-slate-900 group-hover:underline">
                     {toPersianDigits(kpiSummary.laborEfficiencyPct)}٪
                   </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">بهره‌وری ظرفیت ماشین‌آلات:</span>
-                  <strong className="font-mono text-slate-900">
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز بارگذاری و بهره‌وری ظرفیت اسمی ماشین‌آلات و پرس‌ها',
+                      metricLabel: 'بهره‌وری ظرفیت ماشین‌ها',
+                      metricValue: `${toPersianDigits(kpiSummary.machineUtilizationPct)}٪`,
+                      description: 'میزان بهره‌برداری از ظرفیت ۲۴ ساعته تقویمی خطوط پرس و جوشکاری کارخانه',
+                      filterBadge: 'ظرفیت ماشین‌ها',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-blue-700 flex items-center gap-1">
+                    <span>بهره‌وری ظرفیت ماشین‌آلات:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-slate-900 group-hover:underline">
                     {toPersianDigits(kpiSummary.machineUtilizationPct)}٪
                   </strong>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -2281,32 +2571,220 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 </span>
                 <Wrench className="w-4 h-4 text-indigo-600" />
               </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">تحقق برنامه نت پیشگیرانه (PM):</span>
-                  <strong className="font-mono text-emerald-700 text-sm">
+              <div className="space-y-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'تحقق چک‌لیست‌ها و برنامه‌های نت پیشگیرانه (PM Compliance)',
+                      metricLabel: 'تحقق برنامه PM',
+                      metricValue: `${toPersianDigits(kpiSummary.pmCompliancePct)}٪`,
+                      description: 'اجرای بازرسی‌های دوره‌ای روغن‌کاری، کالیبراسیون و تیزکاری قالب‌ها طبق تقویم نت',
+                      filterBadge: 'نت پیشگیرانه',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
+                >
+                  <span className="text-slate-600 group-hover:text-emerald-700 flex items-center gap-1">
+                    <span>تحقق برنامه نت پیشگیرانه (PM):</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono text-emerald-700 text-sm group-hover:underline">
                     {toPersianDigits(kpiSummary.pmCompliancePct)}٪
                   </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">میانگین زمان بین خرابی (MTBF):</span>
+                </button>
+
+                <div className="flex justify-between px-1.5 py-1 text-slate-600">
+                  <span>میانگین زمان بین خرابی (MTBF):</span>
                   <strong className="font-mono text-slate-900">
                     {toPersianDigits(kpiSummary.mtbfHours)} ساعت
                   </strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">میانگین زمان تعمیر (MTTR):</span>
+
+                <div className="flex justify-between px-1.5 py-1 text-slate-600">
+                  <span>میانگین زمان تعمیر (MTTR):</span>
                   <strong className="font-mono text-slate-900">
                     {toPersianDigits(kpiSummary.mttrMinutes)} دقیقه
                   </strong>
                 </div>
-                <div className="flex justify-between text-rose-700">
-                  <span>توقفات اضطراری دوره:</span>
-                  <strong className="font-mono">
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDrillDownContext({
+                      title: 'ریز رکوردهای توقفات اضطراری و خرابی‌های خطوط در دوره',
+                      metricLabel: 'توقفات اضطراری',
+                      metricValue: `${toPersianDigits(kpiSummary.unplannedDowntimeHours)} ساعت`,
+                      description: 'لاگ حوادث مکانیکی، گیرکردن قطعه در قالب و نشت هیدرولیک نیازمند مداخله نت',
+                      filterBadge: 'توقفات اضطراری',
+                      records: allRawRecords,
+                    })
+                  }
+                  className="w-full flex justify-between items-center text-right p-1.5 rounded-lg hover:bg-rose-50/50 transition cursor-pointer group text-rose-800"
+                >
+                  <span className="group-hover:text-rose-700 flex items-center gap-1">
+                    <span>توقفات اضطراری دوره:</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                  </span>
+                  <strong className="font-mono group-hover:underline">
                     {toPersianDigits(kpiSummary.unplannedDowntimeHours)} ساعت
                   </strong>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ==================================================================== */}
+          {/* ENTERPRISE OEE BREAKDOWN BY MACHINE & SEPARATED LABOR EFFICIENCY     */}
+          {/* ==================================================================== */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* 1. OEE Per Machine in Active Shift */}
+            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-amber-600" />
+                  <h4 className="font-bold text-xs text-slate-900">
+                    شاخص OEE به تفکیک ماشین‌آلات (در شیفت فعال امروز: شیفت صبح)
+                  </h4>
+                </div>
+                <span className="text-[10px] bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded font-mono font-bold">
+                  Shift: MORNING • Horizon: TODAY
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="py-2 px-2.5">ماشین و کد</th>
+                      <th className="py-2 px-2.5">سالن / ایستگاه</th>
+                      <th className="py-2 px-2.5">شیفت فعال</th>
+                      <th className="py-2 px-2.5">دسترس‌پذیری (A)</th>
+                      <th className="py-2 px-2.5">عملکرد (P)</th>
+                      <th className="py-2 px-2.5">کیفیت (Q)</th>
+                      <th className="py-2 px-2.5">OEE ماشین</th>
+                      <th className="py-2 px-2.5 text-center">Drill-Down</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-[11px]">
+                    {[
+                      { code: 'PRS-250T-01', name: 'پرس ۲۵۰ تن ۱ (کشش/بلنک)', hall: 'سالن پرس', shift: 'شیفت صبح (جاری)', a: 91.2, p: 84.5, q: 98.4, oee: 75.8 },
+                      { code: 'PRS-160T-01', name: 'پرس ۱۶۰ تن ۱ (خم/پانچ)', hall: 'سالن پرس', shift: 'شیفت صبح (جاری)', a: 89.5, p: 82.0, q: 99.1, oee: 72.7 },
+                      { code: 'SHR-GUI-01', name: 'قیچی گیوتین ۶ متری ۱', hall: 'سالن برش', shift: 'شیفت صبح (جاری)', a: 93.0, p: 88.0, q: 99.5, oee: 81.4 },
+                      { code: 'PRS-800T-G1', name: 'پرس هیدرولیک ۸۰۰ تن', hall: 'سالن پرس سنگین', shift: 'شیفت صبح (جاری)', a: 86.4, p: 79.2, q: 97.8, oee: 66.9 },
+                      { code: 'WLD-SPOT-01', name: 'پرس‌جوش مقاومتی ۱۰۰KVA', hall: 'سالن جوشکاری', shift: 'شیفت صبح (جاری)', a: 87.5, p: 83.0, q: 98.9, oee: 71.8 },
+                      { code: 'WLD-ROB-01', name: 'ربات جوش CO2 شماره ۱', hall: 'سالن جوشکاری', shift: 'شیفت صبح (جاری)', a: 92.1, p: 85.0, q: 99.2, oee: 77.7 },
+                    ].map(m => (
+                      <tr key={m.code} className="hover:bg-slate-50 transition">
+                        <td className="py-2 px-2.5">
+                          <strong className="text-slate-900 block">{m.name}</strong>
+                          <span className="font-mono text-[10px] text-slate-500">{m.code}</span>
+                        </td>
+                        <td className="py-2 px-2.5 text-slate-600">{m.hall}</td>
+                        <td className="py-2 px-2.5">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-800 font-bold">
+                            {m.shift}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2.5 font-mono font-bold text-blue-700">{toPersianDigits(m.a)}٪</td>
+                        <td className="py-2 px-2.5 font-mono font-bold text-indigo-700">{toPersianDigits(m.p)}٪</td>
+                        <td className="py-2 px-2.5 font-mono font-bold text-emerald-700">{toPersianDigits(m.q)}٪</td>
+                        <td className="py-2 px-2.5 font-mono font-bold">
+                          <span className={`px-2 py-0.5 rounded text-[11px] ${
+                            m.oee >= 75
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {toPersianDigits(m.oee)}٪
+                          </span>
+                        </td>
+                        <td className="py-2 px-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `ریز رکوردهای تولید و عملیات ماشین «${m.name}» (${m.code})`,
+                                metricLabel: `OEE ماشین ${m.code}`,
+                                metricValue: `${toPersianDigits(m.oee)}٪`,
+                                description: `دسترس‌پذیری: ${toPersianDigits(m.a)}٪ • راندمان عملکرد: ${toPersianDigits(m.p)}٪ • کیفیت: ${toPersianDigits(m.q)}٪ در سالن ${m.hall}`,
+                                filterBadge: m.code,
+                                records: allRawRecords.filter(r => r.machineCode === m.code),
+                              })
+                            }
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer transition"
+                          >
+                            مشاهده سوابق
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 2. Differentiated Human Labor Efficiency */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <h4 className="font-bold text-xs text-slate-900">
+                      راندمان نیروی انسانی (Labor Efficiency)
+                    </h4>
+                  </div>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                    تفکیک‌شده از OEE ماشین
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2.5 text-xs">
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    در استانداردهای ERP سازمانی (SAP / D365)، شاخص راندمان نیروی انسانی بر مبنای نسبت «ساعت کار استاندارد حاصل از تولید سالم (Earned Hours)» به «کل ساعت حضور اپراتورها (Clocked Hours)» اندازه‌گیری می‌شود و از توقفات مکانیکی دستگاه مجزاست:
+                  </p>
+
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 font-mono text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">ساعت استاندارد کسب‌شده (Earned):</span>
+                      <strong className="text-slate-900">۹۲.۴ ساعت</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">ساعت واقعی حضور اپراتورها (Clocked):</span>
+                      <strong className="text-slate-900">۱۰۳.۲ ساعت</strong>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-200 pt-1 text-emerald-800 font-bold">
+                      <span className="font-sans">راندمان نیروی انسانی (Efficiency):</span>
+                      <span className="text-sm">{toPersianDigits(kpiSummary.laborEfficiencyPct)}٪</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-[10px] text-blue-900 space-y-1">
+                    <strong className="block font-bold">اصل تفکیک نقص مکانیکی از عملکرد انسانی:</strong>
+                    <span>
+                      توقفات ناشی از شکستگی سنبه، نشت روغن یا عیب مدار هیدرولیک فقط در دسترس‌پذیری ماشین (Machine OEE) محاسبه شده و از سوابق کارایی اپراتورها کسر نمی‌گردد.
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setDrillDownContext({
+                    title: 'ریز رکوردهای کارایی و ثبت کارکرد اپراتورها در شیفت فعال',
+                    metricLabel: 'کارایی نیروی انسانی',
+                    metricValue: `${toPersianDigits(kpiSummary.laborEfficiencyPct)}٪`,
+                    description: 'مقایسه نفر-ساعت استاندارد تولید سالم با ساعات کاری ثبت‌شده در شیفت‌های کارخانه',
+                    filterBadge: 'راندمان انسانی',
+                    records: allRawRecords.filter(r => r.completedGoodQty > 0),
+                  })
+                }
+                className="w-full mt-2 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5 transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>بررسی ریز رکوردهای کارایی نیروی انسانی</span>
+              </button>
             </div>
           </div>
 
@@ -2526,7 +3004,22 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                     return (
                       <tr key={item.id} className="hover:bg-slate-50">
                         <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                          {item.orderCode}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `ریز رکوردهای مراحل دستور ساخت ${item.orderCode} (${item.partName})`,
+                                metricLabel: `دستور ${item.orderCode}`,
+                                metricValue: `${formatNumber(item.weeklyTargetQty)} عدد`,
+                                description: `بررسی مراحل و وضعیت تولید قطعه ${item.partName} برای خودرو ${item.carModel}`,
+                                filterBadge: item.orderCode,
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode),
+                              })
+                            }
+                            className="hover:text-blue-700 hover:underline cursor-pointer font-bold"
+                          >
+                            {item.orderCode}
+                          </button>
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="font-bold text-slate-900">{item.partName}</div>
@@ -2542,13 +3035,58 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                           {formatNumber(item.weeklyTargetQty)}
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
-                          {formatNumber(wipPcs)} عدد
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `موجودی نیمه‌ساخته (WIP) در خط برای ${item.partName}`,
+                                metricLabel: `WIP ${item.partCode}`,
+                                metricValue: `${formatNumber(wipPcs)} عدد`,
+                                description: `مراحل دارای موجودی بین‌ایستگاهی برای قطعه ${item.partName}`,
+                                filterBadge: 'WIP قطعه',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode && r.wipQty > 0),
+                              })
+                            }
+                            className="hover:underline cursor-pointer"
+                          >
+                            {formatNumber(wipPcs)} عدد
+                          </button>
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
-                          {formatNumber(item.warehouseReceivedQty)} عدد
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `رسیدهای انبار محصول نهایی برای ${item.partName}`,
+                                metricLabel: `رسید انبار ${item.orderCode}`,
+                                metricValue: `${formatNumber(item.warehouseReceivedQty)} عدد`,
+                                description: `اسناد رسید قطعی انبار صادرشده از تکمیل مرحله آخر این قطعه`,
+                                filterBadge: 'رسید انبار',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode && r.isFinalOp),
+                              })
+                            }
+                            className="hover:underline cursor-pointer"
+                          >
+                            {formatNumber(item.warehouseReceivedQty)} عدد
+                          </button>
                         </td>
                         <td className="py-2.5 px-3 font-mono text-rose-700">
-                          {formatNumber(scrapPcs)}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `ضایعات ثبت‌شده برای قطعه ${item.partName}`,
+                                metricLabel: `ضایعات ${item.partCode}`,
+                                metricValue: `${formatNumber(scrapPcs)} عدد`,
+                                description: `مراحل و ایستگاه‌های ثبت‌کننده ضایعات برای دستور ساخت ${item.orderCode}`,
+                                filterBadge: 'ضایعات قطعه',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode && r.scrapQty > 0),
+                              })
+                            }
+                            className="hover:underline cursor-pointer font-bold"
+                          >
+                            {formatNumber(scrapPcs)}
+                          </button>
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold">
                           <span
@@ -2595,6 +3133,226 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       )}
 
       {/* ==================================================================== */}
+      {/* SLIDE-OVER DRAWER: INTERACTIVE RAW DRILL-DOWN ACROSS ALL REPORTS/OEE */}
+      {/* ==================================================================== */}
+      {drillDownContext && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
+          <div className="relative w-full max-w-4xl bg-white h-full shadow-2xl flex flex-col text-right text-xs">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-900 text-[10px] font-bold">
+                    Drill-Down رکوردهای خام ERP
+                  </span>
+                  {drillDownContext.filterBadge && (
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
+                      {drillDownContext.filterBadge}
+                    </span>
+                  )}
+                </div>
+                <h3 className="font-bold text-base text-slate-900 mt-1">
+                  {drillDownContext.title}
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  {drillDownContext.description} • شاخص انتخابی:{' '}
+                  <strong className="text-slate-900">{drillDownContext.metricLabel} = {drillDownContext.metricValue}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrillDownContext(null)}
+                className="p-1.5 hover:bg-slate-200 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter & Export Toolbar */}
+            <div className="p-3 bg-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 max-w-sm">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="جستجو در دستور ساخت، نام قطعه، ماشین، مرحله..."
+                  value={drillDownSearch}
+                  onChange={e => setDrillDownSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-600 text-xs">
+                <span>تعداد رکوردهای استخراج‌شده:</span>
+                <strong className="font-mono text-slate-900 text-sm">
+                  {toPersianDigits(
+                    drillDownContext.records.filter(r => {
+                      if (!drillDownSearch.trim()) return true;
+                      const q = drillDownSearch.toLowerCase();
+                      return (
+                        r.orderCode.toLowerCase().includes(q) ||
+                        r.partName.toLowerCase().includes(q) ||
+                        r.machineName.toLowerCase().includes(q) ||
+                        r.opCode.toLowerCase().includes(q) ||
+                        r.opTitle.toLowerCase().includes(q)
+                      );
+                    }).length
+                  )}{' '}
+                  ردیف
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filtered = drillDownContext.records.filter(r => {
+                      if (!drillDownSearch.trim()) return true;
+                      const q = drillDownSearch.toLowerCase();
+                      return (
+                        r.orderCode.toLowerCase().includes(q) ||
+                        r.partName.toLowerCase().includes(q) ||
+                        r.machineName.toLowerCase().includes(q) ||
+                        r.opCode.toLowerCase().includes(q) ||
+                        r.opTitle.toLowerCase().includes(q)
+                      );
+                    });
+                    const headers = [
+                      'دستور ساخت (MO)',
+                      'نام قطعه',
+                      'کد قطعه',
+                      'مدل خودرو',
+                      'کد مرحله',
+                      'عنوان مرحله',
+                      'دستگاه',
+                      'سالن',
+                      'قالب',
+                      'شیفت',
+                      'روز',
+                      'تیراژ هدف',
+                      'تولید سالم',
+                      'WIP ورودی',
+                      'ضایعات',
+                      'وضعیت',
+                    ];
+                    const rows = filtered.map(r => [
+                      r.orderCode,
+                      r.partName,
+                      r.partCode,
+                      r.carModel,
+                      r.opCode,
+                      r.opTitle,
+                      r.machineName,
+                      r.stationHall,
+                      r.dieCode,
+                      r.shiftName,
+                      r.dayName,
+                      r.targetQty,
+                      r.completedGoodQty,
+                      r.wipQty,
+                      r.scrapQty,
+                      r.status,
+                    ]);
+                    exportToCsv(`DrillDown_${drillDownContext.metricLabel}`, headers, rows);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>اکسل (CSV)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Raw Records Table */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="py-2 px-2.5">دستور ساخت</th>
+                      <th className="py-2 px-2.5">قطعه و خودرو</th>
+                      <th className="py-2 px-2.5">مرحله (OP)</th>
+                      <th className="py-2 px-2.5">ماشین و سالن</th>
+                      <th className="py-2 px-2.5">قالب</th>
+                      <th className="py-2 px-2.5">شیفت / روز</th>
+                      <th className="py-2 px-2.5">هدف</th>
+                      <th className="py-2 px-2.5 text-emerald-700">تولید سالم</th>
+                      <th className="py-2 px-2.5 text-indigo-700">WIP ورودی</th>
+                      <th className="py-2 px-2.5 text-rose-700">ضایعات</th>
+                      <th className="py-2 px-2.5">وضعیت</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                    {drillDownContext.records
+                      .filter(r => {
+                        if (!drillDownSearch.trim()) return true;
+                        const q = drillDownSearch.toLowerCase();
+                        return (
+                          r.orderCode.toLowerCase().includes(q) ||
+                          r.partName.toLowerCase().includes(q) ||
+                          r.machineName.toLowerCase().includes(q) ||
+                          r.opCode.toLowerCase().includes(q) ||
+                          r.opTitle.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((r, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-slate-50 transition">
+                          <td className="py-2 px-2.5 font-bold text-slate-900">{r.orderCode}</td>
+                          <td className="py-2 px-2.5 font-sans">
+                            <span className="font-bold text-slate-800 block truncate max-w-[130px]">{r.partName}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">{r.partCode} ({r.carModel})</span>
+                          </td>
+                          <td className="py-2 px-2.5">
+                            <span className="font-bold text-blue-700">{r.opCode}</span>
+                            <span className="font-sans text-[10px] text-slate-600 block">{r.opTitle}</span>
+                          </td>
+                          <td className="py-2 px-2.5 font-sans">
+                            <span className="font-bold text-slate-800 block">{r.machineName}</span>
+                            <span className="text-[10px] text-slate-500">{r.stationHall}</span>
+                          </td>
+                          <td className="py-2 px-2.5 text-slate-600">{r.dieCode}</td>
+                          <td className="py-2 px-2.5 font-sans">
+                            <span>{r.shiftName}</span>
+                            <span className="block text-[10px] text-slate-500">{r.dayName}</span>
+                          </td>
+                          <td className="py-2 px-2.5 font-bold text-slate-900">{formatNumber(r.targetQty)}</td>
+                          <td className="py-2 px-2.5 font-bold text-emerald-700">{formatNumber(r.completedGoodQty)}</td>
+                          <td className="py-2 px-2.5 font-bold text-indigo-700">{formatNumber(r.wipQty)}</td>
+                          <td className="py-2 px-2.5 font-bold text-rose-700">{formatNumber(r.scrapQty)}</td>
+                          <td className="py-2 px-2.5 font-sans">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              r.status === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : r.status === 'ROLLED_FORWARD'
+                                ? 'bg-amber-100 text-amber-800'
+                                : r.status === 'IN_PROGRESS'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {r.status === 'COMPLETED' ? 'تکمیل‌شده' : r.status === 'ROLLED_FORWARD' ? 'انتقال‌یافته' : r.status === 'IN_PROGRESS' ? 'در جریان' : 'برنامه‌ریزی'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+              <span className="text-slate-500 text-[11px]">
+                پایان رهگیری رکوردهای ERP • داده‌های زنده منطبق با خطوط تولید و کارگاه
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrillDownContext(null)}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer"
+              >
+                بستن کشو
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
       {/* MODAL 1: LOG OP PRODUCTION, ROLL FORWARD & AUTO WAREHOUSE RECEIPT    */}
       {/* ==================================================================== */}
       {activeLogContext && (
@@ -2606,16 +3364,16 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                   {activeLogContext.partItem.orderCode} • {activeLogContext.opStep.opCode}
                 </span>
                 <h4 className="font-bold text-sm text-slate-900 mt-1">
-                  ثبت تولید مرحله «{activeLogContext.opStep.opTitle}» —{' '}
+                  ثبت کارکرد مرحله «{activeLogContext.opStep.opTitle}» —{' '}
                   {activeLogContext.partItem.partName}
                 </h4>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveLogContext(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm cursor-pointer"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -2633,104 +3391,178 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               </div>
             )}
 
-            <form onSubmit={handleConfirmOpExecution} className="space-y-3.5">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-slate-500 block">دستگاه و قالب:</span>
-                  <strong className="text-slate-900">
-                    {activeLogContext.opStep.machineName} ({activeLogContext.opStep.dieCode})
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">تیراژ هدف این مرحله:</span>
-                  <strong className="font-mono text-slate-900 text-sm">
-                    {formatNumber(activeLogContext.opStep.effectiveTargetQty)} عدد
-                  </strong>
-                </div>
-              </div>
+            {(() => {
+              const partItem = activeLogContext.partItem;
+              const opStep = activeLogContext.opStep;
+              const opIdx = partItem.ops.findIndex(o => o.opId === opStep.opId);
+              const prevOp = opIdx > 0 ? partItem.ops[opIdx - 1] : null;
+              const availableWip = prevOp
+                ? Math.max(0, prevOp.completedGoodQty - opStep.completedGoodQty)
+                : opStep.effectiveTargetQty;
+              const currentRemInTable = Math.max(0, opStep.effectiveTargetQty - opStep.completedGoodQty);
+              const currentInputVal = Number(logGoodInput) || 0;
+              const newRemaining = Math.max(0, opStep.effectiveTargetQty - currentInputVal);
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    تعداد تولید سالم انجام‌شده در این مرحله *
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    required
-                    value={logGoodInput}
-                    onChange={e => setLogGoodInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-emerald-800 focus:outline-none focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">تعداد ضایعات مرحله</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={logScrapInput}
-                    onChange={e => setLogScrapInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-rose-700 focus:outline-none focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Roll-Forward Remaining OP Balance */}
-              {Math.max(
-                0,
-                activeLogContext.opStep.effectiveTargetQty - (Number(logGoodInput) || 0)
-              ) > 0 && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-950">مانده کار این مرحله (Roll-Forward):</span>
-                    <strong className="font-mono text-sm text-amber-900">
-                      {formatNumber(
-                        Math.max(
-                          0,
-                          activeLogContext.opStep.effectiveTargetQty - (Number(logGoodInput) || 0)
-                        )
-                      )}{' '}
-                      عدد
-                    </strong>
+              return (
+                <div className="space-y-3.5">
+                  {/* Table Synchronized Status Banner - دقیقاً سینک با ستون‌های جدول سطر جاری */}
+                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-center">
+                    <div>
+                      <span className="text-slate-500 block text-[10px]">تیراژ هدف مرحله</span>
+                      <strong className="font-mono text-slate-900 font-bold text-xs">
+                        {formatNumber(opStep.effectiveTargetQty)} عدد
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-emerald-700 block text-[10px] font-bold">تولید سالم ثبت‌شده</span>
+                      <strong className="font-mono text-emerald-800 font-bold text-xs">
+                        {formatNumber(opStep.completedGoodQty)} عدد
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-amber-800 block text-[10px] font-bold">مانده جاری (جدول)</span>
+                      <strong className="font-mono text-amber-900 font-bold text-xs">
+                        {formatNumber(currentRemInTable)} عدد
+                      </strong>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-amber-800">انتقال مانده این مرحله به روز:</span>
-                    <select
-                      value={rollForwardToDay}
-                      onChange={e => setRollForwardToDay(Number(e.target.value))}
-                      className="bg-white border border-amber-300 rounded-lg px-2.5 py-1 font-bold text-slate-900"
-                    >
-                      {WORK_DAYS.map(d => (
-                        <option key={d.index} value={d.index}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setActiveLogContext(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPostingReceipt}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer"
-                >
-                  {isPostingReceipt
-                    ? 'در حال ثبت...'
-                    : activeLogContext.opStep.isFinalOp
-                    ? 'ثبت تولید مرحله آخر + صدور رسید خودکار انبار'
-                    : 'ثبت کارکرد مرحله و بروزرسانی موجودی خط (WIP)'}
-                </button>
-              </div>
-            </form>
+                  {prevOp && (
+                    <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] text-indigo-950 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600 inline" />
+                        <span>بافر ورودی آماده از مرحله قبل ({prevOp.opCode}):</span>
+                      </span>
+                      <strong className="font-mono font-bold text-indigo-800">
+                        {formatNumber(availableWip)} عدد (تولید سالم {prevOp.opCode}: {formatNumber(prevOp.completedGoodQty)})
+                      </strong>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <div>
+                      <span className="text-slate-500 block text-[10px]">دستگاه و قالب:</span>
+                      <strong className="text-slate-900 text-xs">
+                        {opStep.machineName} ({opStep.dieCode})
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[10px]">سالن و شیفت:</span>
+                      <strong className="text-slate-900 text-xs">
+                        {opStep.stationHall} • {opStep.shiftName}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleConfirmOpExecution} className="space-y-3.5">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block font-bold text-slate-700">
+                          مجموع تولید سالم نهایی این مرحله (همگام با ستون جدول) *
+                        </label>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setLogGoodInput(String(opStep.effectiveTargetQty))}
+                            className="px-2 py-0.5 rounded text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer font-sans"
+                            title="ثبت کل تیراژ هدف"
+                          >
+                            تکمیل سهمیه ({formatNumber(opStep.effectiveTargetQty)})
+                          </button>
+                          {availableWip > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLogGoodInput(
+                                  String(
+                                    Math.min(
+                                      opStep.effectiveTargetQty,
+                                      opStep.completedGoodQty + availableWip
+                                    )
+                                  )
+                                )
+                              }
+                              className="px-2 py-0.5 rounded text-[10px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 cursor-pointer font-sans"
+                              title="افزودن کل بافر ورودی موجود"
+                            >
+                              ثبت بافر ({formatNumber(availableWip)})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={logGoodInput}
+                        onChange={e => setLogGoodInput(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-emerald-800 focus:outline-none focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">تعداد ضایعات مرحله</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={logScrapInput}
+                          onChange={e => setLogScrapInput(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-rose-700 focus:outline-none focus:bg-white"
+                        />
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-center">
+                        <span className="text-slate-500 block text-[10px]">مانده جدید پس از ثبت:</span>
+                        <strong className="font-mono text-sm font-bold text-amber-900">
+                          {formatNumber(newRemaining)} عدد
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Roll-Forward Day Selector */}
+                    {newRemaining > 0 && (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
+                        <span className="text-amber-900 font-bold">
+                          انتقال مانده ({formatNumber(newRemaining)} عدد) به روز:
+                        </span>
+                        <select
+                          value={rollForwardToDay}
+                          onChange={e => setRollForwardToDay(Number(e.target.value))}
+                          className="bg-white border border-amber-300 rounded-lg px-2.5 py-1 font-bold text-slate-900 cursor-pointer"
+                        >
+                          {WORK_DAYS.map(d => (
+                            <option key={d.index} value={d.index}>
+                              {d.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setActiveLogContext(null)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                      >
+                        انصراف
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isPostingReceipt}
+                        className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer"
+                      >
+                        {isPostingReceipt
+                          ? 'در حال ثبت...'
+                          : opStep.isFinalOp
+                          ? 'ثبت تولید مرحله آخر + صدور رسید خودکار انبار'
+                          : 'ثبت کارکرد مرحله و به‌روزرسانی موجودی خط (WIP)'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

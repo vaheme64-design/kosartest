@@ -21,6 +21,9 @@ import {
   Factory,
   ArrowRight,
   ShieldAlert,
+  Plus,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
@@ -90,91 +93,160 @@ export const ComprehensiveProductionReportView: React.FC = () => {
   const [inspectedMachine, setInspectedMachine] = useState<string | null>(null);
 
   // -------------------------------------------------------------
-  // Data: Machine Downtime Timeline (24 Hours / Shift)
+  // Data: Dynamic Machine Downtime Events (سوابق و رویدادهای زنده توقفات ماشین‌آلات)
   // -------------------------------------------------------------
-  const machineDowntimes: MachineDowntimeEvent[] = useMemo(
-    () => [
-      {
-        id: 'DT-01',
-        machineCode: 'SHR-GUI-01',
-        machineName: 'قیچی گیوتین ۶ متری ۱',
-        hall: 'سالن برش',
-        category: 'SETUP_CHANGE',
-        categoryLabel: 'تنظیم تیغه و فیکسچربندی برش',
-        startHour: '07:30',
-        durationMinutes: 45,
-        reason: 'تعویض لبه تیغه گیوتین جهت برش ورق گرید DC04 با ضخامت ۲ میل',
-        actionTaken: 'تنظیم لقی تیغه به میزان ۰.۱۸ میلیمتر و تست اولیه ۵ قطعه',
-        color: 'bg-amber-500',
-      },
-      {
-        id: 'DT-02',
-        machineCode: 'PRS-250T-01',
-        machineName: 'پرس ۲۵۰ تن ۱ (کشش/بلنک)',
-        hall: 'سالن پرس',
-        category: 'UNPLANNED_BREAKDOWN',
-        categoryLabel: 'خرابی اضطراری هیدرولیک',
-        startHour: '10:15',
-        durationMinutes: 70,
-        reason: 'نشت شیلنگ فشارقوی پمپ مدار کمکی بالشتک کشش (Die Cushion)',
-        actionTaken: 'تیم نت (PM) شیلنگ هیدرولیک تعویض و هواگیری هیدرولیک انجام داد',
-        color: 'bg-rose-600',
-      },
-      {
-        id: 'DT-03',
-        machineCode: 'PRS-160T-01',
-        machineName: 'پرس ۱۶۰ تن ۱ (پانچ/خم)',
-        hall: 'سالن پرس',
-        category: 'SETUP_CHANGE',
-        categoryLabel: 'تعویض قالب (SMED)',
-        startHour: '12:30',
-        durationMinutes: 35,
-        reason: 'خروج قالب بلنک مکمل پژو ۲۰۶ و بارگذاری قالب خم لبه براکت',
-        actionTaken: 'استفاده از کلمپ پنوماتیک و استقرار قالب در ۳۵ دقیقه (زیر ۴۰ دقیقه استاندارد)',
-        color: 'bg-amber-500',
-      },
-      {
-        id: 'DT-04',
-        machineCode: 'PRS-160T-02',
-        machineName: 'پرس ۱۶۰ تن ۲ (فرم/پانچ)',
-        hall: 'سالن پرس',
-        category: 'MINOR_STOP',
-        categoryLabel: 'توقف جزئی / گیرکردن قطعه در قالب',
-        startHour: '14:20',
-        durationMinutes: 20,
-        reason: 'عدم پرش کامل قطعه از روی سنبه به علت نقص در فنر پران (Ejector Pin)',
-        actionTaken: 'روغن‌کاری پین پران و پاکسازی پلیسه‌های سطح ماتریس توسط اپراتور',
-        color: 'bg-orange-500',
-      },
-      {
-        id: 'DT-05',
-        machineCode: 'WLD-SPOT-01',
-        machineName: 'پرس‌جوش مقاومتی ۱ (مهره‌جوش M6)',
-        hall: 'سالن جوشکاری',
-        category: 'MATERIAL_SHORTAGE',
-        categoryLabel: 'تأخیر در تغذیه مهره جوشی M6',
-        startHour: '15:10',
-        durationMinutes: 30,
-        reason: 'اتمام بافر تغذیه اتوماتیک مهره جوشی کاسه‌ای (Vibratory Feeder)',
-        actionTaken: 'شارژ سریع کارتن مهره جوش استاندارد از انبار قطعات مصرفی',
-        color: 'bg-indigo-500',
-      },
-      {
-        id: 'DT-06',
-        machineCode: 'WLD-CO2-ST01',
-        machineName: 'کابین جوش CO2 شماره ۱',
-        hall: 'سالن جوشکاری',
-        category: 'UNPLANNED_BREAKDOWN',
-        categoryLabel: 'سوختن نازل و گیرکردن سیم جوش',
-        startHour: '16:45',
-        durationMinutes: 25,
-        reason: 'جرقه بیش از حد و انسداد نازل تورچ جوشکاری CO2',
-        actionTaken: 'تعویض نازل تماسی و اسپری ضدجرقه (Anti-Spatter)',
-        color: 'bg-rose-600',
-      },
-    ],
-    []
-  );
+  const [machineDowntimes, setMachineDowntimes] = useState<MachineDowntimeEvent[]>([
+    {
+      id: 'DT-01',
+      machineCode: 'SHR-GUI-01',
+      machineName: 'قیچی گیوتین ۶ متری ۱',
+      hall: 'سالن برش',
+      category: 'SETUP_CHANGE',
+      categoryLabel: 'تنظیم تیغه و فیکسچربندی برش',
+      startHour: '07:30',
+      durationMinutes: 45,
+      reason: 'تعویض لبه تیغه گیوتین جهت برش ورق گرید DC04 با ضخامت ۲ میل',
+      actionTaken: 'تنظیم لقی تیغه به میزان ۰.۱۸ میلیمتر و تست اولیه ۵ قطعه',
+      color: 'bg-amber-500',
+    },
+    {
+      id: 'DT-02',
+      machineCode: 'PRS-250T-01',
+      machineName: 'پرس ۲۵۰ تن ۱ (کشش/بلنک)',
+      hall: 'سالن پرس',
+      category: 'UNPLANNED_BREAKDOWN',
+      categoryLabel: 'خرابی اضطراری هیدرولیک',
+      startHour: '10:15',
+      durationMinutes: 70,
+      reason: 'نشت شیلنگ فشارقوی پمپ مدار کمکی بالشتک کشش (Die Cushion)',
+      actionTaken: 'تیم نت (PM) شیلنگ هیدرولیک تعویض و هواگیری هیدرولیک انجام داد',
+      color: 'bg-rose-600',
+    },
+    {
+      id: 'DT-03',
+      machineCode: 'PRS-160T-01',
+      machineName: 'پرس ۱۶۰ تن ۱ (پانچ/خم)',
+      hall: 'سالن پرس',
+      category: 'SETUP_CHANGE',
+      categoryLabel: 'تعویض قالب (SMED)',
+      startHour: '12:30',
+      durationMinutes: 35,
+      reason: 'خروج قالب بلنک مکمل پژو ۲۰۶ و بارگذاری قالب خم لبه براکت',
+      actionTaken: 'استفاده از کلمپ پنوماتیک و استقرار قالب در ۳۵ دقیقه (زیر ۴۰ دقیقه استاندارد)',
+      color: 'bg-amber-500',
+    },
+    {
+      id: 'DT-04',
+      machineCode: 'PRS-160T-02',
+      machineName: 'پرس ۱۶۰ تن ۲ (فرم/پانچ)',
+      hall: 'سالن پرس',
+      category: 'MINOR_STOP',
+      categoryLabel: 'توقف جزئی / گیرکردن قطعه در قالب',
+      startHour: '14:20',
+      durationMinutes: 20,
+      reason: 'عدم پرش کامل قطعه از روی سنبه به علت نقص در فنر پران (Ejector Pin)',
+      actionTaken: 'روغن‌کاری پین پران و پاکسازی پلیسه‌های سطح ماتریس توسط اپراتور',
+      color: 'bg-orange-500',
+    },
+    {
+      id: 'DT-05',
+      machineCode: 'WLD-SPOT-01',
+      machineName: 'پرس‌جوش مقاومتی ۱ (مهره‌جوش M6)',
+      hall: 'سالن جوشکاری',
+      category: 'MATERIAL_SHORTAGE',
+      categoryLabel: 'تأخیر در تغذیه مهره جوشی M6',
+      startHour: '15:10',
+      durationMinutes: 30,
+      reason: 'اتمام بافر تغذیه اتوماتیک مهره جوشی کاسه‌ای (Vibratory Feeder)',
+      actionTaken: 'شارژ سریع کارتن مهره جوش استاندارد از انبار قطعات مصرفی',
+      color: 'bg-indigo-500',
+    },
+    {
+      id: 'DT-06',
+      machineCode: 'WLD-CO2-ST01',
+      machineName: 'کابین جوش CO2 شماره ۱',
+      hall: 'سالن جوشکاری',
+      category: 'UNPLANNED_BREAKDOWN',
+      categoryLabel: 'سوختن نازل و گیرکردن سیم جوش',
+      startHour: '16:45',
+      durationMinutes: 25,
+      reason: 'جرقه بیش از حد و انسداد نازل تورچ جوشکاری CO2',
+      actionTaken: 'تعویض نازل تماسی و اسپری ضدجرقه (Anti-Spatter)',
+      color: 'bg-rose-600',
+    },
+  ]);
+
+  // Modal State for Logging New Machine Downtime Event
+  const [isLogDowntimeModalOpen, setIsLogDowntimeModalOpen] = useState<boolean>(false);
+  const [newDtMachineCode, setNewDtMachineCode] = useState<string>('PRS-250T-01');
+  const [newDtCategory, setNewDtCategory] = useState<
+    'SETUP_CHANGE' | 'UNPLANNED_BREAKDOWN' | 'MINOR_STOP' | 'MATERIAL_SHORTAGE'
+  >('UNPLANNED_BREAKDOWN');
+  const [newDtDuration, setNewDtDuration] = useState<number>(30);
+  const [newDtStartHour, setNewDtStartHour] = useState<string>('11:00');
+  const [newDtReason, setNewDtReason] = useState<string>('');
+  const [newDtAction, setNewDtAction] = useState<string>('');
+
+  const handleAddDowntimeEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const machineMap: Record<string, { name: string; hall: string }> = {
+      'PRS-250T-01': { name: 'پرس ۲۵۰ تن ۱ (کشش/بلنک)', hall: 'سالن پرس' },
+      'PRS-160T-01': { name: 'پرس ۱۶۰ تن ۱ (خم/پانچ)', hall: 'سالن پرس' },
+      'SHR-GUI-01': { name: 'قیچی گیوتین ۶ متری ۱', hall: 'سالن برش' },
+      'PRS-800T-G1': { name: 'پرس هیدرولیک ۸۰۰ تن', hall: 'سالن پرس سنگین' },
+      'WLD-SPOT-01': { name: 'پرس‌جوش مقاومتی ۱ (مهره‌جوش M6)', hall: 'سالن جوشکاری' },
+      'WLD-CO2-ST01': { name: 'کابین جوش CO2 شماره ۱', hall: 'سالن جوشکاری' },
+    };
+    const info = machineMap[newDtMachineCode] || { name: newDtMachineCode, hall: 'سالن تولید' };
+    const labelMap: Record<string, string> = {
+      SETUP_CHANGE: 'تنظیم قالب و ستاپ (SMED)',
+      UNPLANNED_BREAKDOWN: 'خرابی اضطراری مکانیکی / هیدرولیکی',
+      MINOR_STOP: 'توقف کوتاه و رفع گیر قالب',
+      MATERIAL_SHORTAGE: 'تأخیر در تغذیه مواد و ورق پای کار',
+    };
+    const colorMap: Record<string, string> = {
+      SETUP_CHANGE: 'bg-amber-500',
+      UNPLANNED_BREAKDOWN: 'bg-rose-600',
+      MINOR_STOP: 'bg-orange-500',
+      MATERIAL_SHORTAGE: 'bg-indigo-500',
+    };
+
+    const newEvent: MachineDowntimeEvent = {
+      id: `DT-${Date.now().toString().slice(-4)}`,
+      machineCode: newDtMachineCode,
+      machineName: info.name,
+      hall: info.hall,
+      category: newDtCategory,
+      categoryLabel: labelMap[newDtCategory] || 'توقف خط',
+      startHour: newDtStartHour,
+      durationMinutes: Number(newDtDuration) || 15,
+      reason: newDtReason || 'ثبت گزارش توقف در شیفت کاری',
+      actionTaken: newDtAction || 'اقدام اصلاحی توسط تیم نگهداری و تعمیرات (نت)',
+      color: colorMap[newDtCategory] || 'bg-rose-600',
+    };
+
+    setMachineDowntimes(prev => [newEvent, ...prev]);
+
+    // Send to backend /api/oee/log-shift to sync with central engine
+    try {
+      await fetch('/api/oee/log-shift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          machineId: newDtMachineCode,
+          eventType: newDtCategory === 'SETUP_CHANGE' ? 'PLANNED_DOWNTIME' : 'UNPLANNED_DOWNTIME',
+          durationMinutes: Number(newDtDuration) || 15,
+          reasonTitleFa: newDtReason || labelMap[newDtCategory],
+        }),
+      });
+    } catch {
+      // ignore
+    }
+
+    setIsLogDowntimeModalOpen(false);
+    setNewDtReason('');
+    setNewDtAction('');
+  };
 
   // -------------------------------------------------------------
   // Data: Schedule Adherence (انحراف از برنامه تولید)
@@ -312,120 +384,189 @@ export const ComprehensiveProductionReportView: React.FC = () => {
   );
 
   // -------------------------------------------------------------
-  // Data: Tree-Structured OEE Breakdown
-  // OEE = Availability × Performance × Quality
+  // Dynamic OEE Calculation Driven Live by Downtime & Maintenance Logs
   // -------------------------------------------------------------
-  const oeeTree: OeeNodeItem = useMemo(
-    () => ({
+  const dynamicOeeMetrics = useMemo(() => {
+    // 6 machines * 8 hours = 2,880 total calendar operating minutes in shift
+    const totalShiftMinutes = 6 * 480;
+
+    // Categorize actual downtime logs
+    const setupMinutes = machineDowntimes
+      .filter(d => d.category === 'SETUP_CHANGE')
+      .reduce((sum, d) => sum + d.durationMinutes, 0);
+
+    const breakdownMinutes = machineDowntimes
+      .filter(d => d.category === 'UNPLANNED_BREAKDOWN' || d.category === 'MATERIAL_SHORTAGE')
+      .reduce((sum, d) => sum + d.durationMinutes, 0);
+
+    const minorStopsMinutes = machineDowntimes
+      .filter(d => d.category === 'MINOR_STOP')
+      .reduce((sum, d) => sum + d.durationMinutes, 0);
+
+    const totalDowntimeMinutes = setupMinutes + breakdownMinutes;
+    const netOperatingMinutes = Math.max(100, totalShiftMinutes - totalDowntimeMinutes);
+
+    // 1. Availability = (Operating Time / Planned Time) * 100
+    const availPct = Math.round((netOperatingMinutes / totalShiftMinutes) * 1000) / 10;
+    const setupPct = Math.round((setupMinutes / totalShiftMinutes) * 1000) / 10;
+    const breakdownPct = Math.round((breakdownMinutes / totalShiftMinutes) * 1000) / 10;
+
+    // 2. Performance = (Operating Run Speed vs Ideal)
+    const speedLossMinutes = minorStopsMinutes + 35;
+    const perfPct = Math.max(
+      60,
+      Math.min(98, Math.round((1 - speedLossMinutes / netOperatingMinutes) * 1000) / 10)
+    );
+    const minorStopsPct = Math.round((minorStopsMinutes / netOperatingMinutes) * 1000) / 10;
+    const reducedSpeedPct = Math.max(
+      1,
+      Math.round(((speedLossMinutes - minorStopsMinutes) / netOperatingMinutes) * 1000) / 10
+    );
+
+    // 3. Quality = (Good Pieces / Total Pieces)
+    const baseProducedPcs = 7200;
+    const setupScrapPcs = Math.round(setupMinutes * 0.8);
+    const processScrapPcs = Math.round(breakdownMinutes * 0.5) + 38;
+    const totalScrap = setupScrapPcs + processScrapPcs;
+    const qualPct = Math.round(((baseProducedPcs - totalScrap) / baseProducedPcs) * 1000) / 10;
+    const setupScrapPct = Math.round((setupScrapPcs / baseProducedPcs) * 1000) / 10;
+    const processScrapPct = Math.round((processScrapPcs / baseProducedPcs) * 1000) / 10;
+
+    // Root OEE = (A * P * Q) / 10000
+    const oeePct = Math.round(((availPct * perfPct * qualPct) / 10000) * 10) / 10;
+
+    return {
+      totalShiftMinutes,
+      setupMinutes,
+      breakdownMinutes,
+      minorStopsMinutes,
+      totalDowntimeMinutes,
+      availPct,
+      setupPct,
+      breakdownPct,
+      perfPct,
+      minorStopsPct,
+      reducedSpeedPct,
+      qualPct,
+      setupScrapPcs,
+      processScrapPcs,
+      setupScrapPct,
+      processScrapPct,
+      oeePct,
+    };
+  }, [machineDowntimes]);
+
+  const oeeTree: OeeNodeItem = useMemo(() => {
+    const m = dynamicOeeMetrics;
+    return {
       id: 'oee_root',
-      title: 'شاخص اثربخشی کلی تجهیزات (OEE کل کارخانه)',
-      metric: '۷۱.۶٪',
-      percentage: 71.6,
+      title: 'شاخص اثربخشی کلی تجهیزات (OEE کل کارخانه - محاسباتی زنده)',
+      metric: `${toPersianDigits(m.oeePct)}٪`,
+      percentage: m.oeePct,
       color: 'text-amber-700',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-300',
-      description: 'حاصل‌ضرب سه مؤلفه: دسترس‌پذیری (۸۸.۴٪) × راندمان عملکرد (۸۲.۵٪) × کیفیت سالم (۹۸.۲٪)',
+      description: `حاصل‌ضرب پویای مؤلفه‌ها: دسترس‌پذیری (${toPersianDigits(m.availPct)}٪) × راندمان عملکرد (${toPersianDigits(m.perfPct)}٪) × کیفیت سالم (${toPersianDigits(m.qualPct)}٪)`,
       children: [
         {
           id: 'oee_avail',
           title: '۱. نرخ دسترس‌پذیری ماشین‌آلات (Availability)',
-          metric: '۸۸.۴٪',
-          percentage: 88.4,
+          metric: `${toPersianDigits(m.availPct)}٪`,
+          percentage: m.availPct,
           color: 'text-blue-700',
           bgColor: 'bg-blue-50',
           borderColor: 'border-blue-300',
-          description: 'زمان خالص کارکرد ماشین تقسیم بر زمان برنامه‌ریزی‌شده (کسر توقفات نت و تعویض قالب)',
+          description: `زمان کارکرد خالص کسر از کل ${toPersianDigits(m.totalDowntimeMinutes)} دقیقه توقف ثبت‌شده در رویدادها`,
           children: [
             {
               id: 'avail_planned_downtime',
               title: 'توقفات برنامه‌ریزی‌شده / تعویض قالب (SMED)',
-              metric: '۵.۵٪ زمان کل (۵۲ دقیقه)',
-              percentage: 5.5,
+              metric: `${toPersianDigits(m.setupPct)}٪ زمان کل (${toPersianDigits(m.setupMinutes)} دقیقه)`,
+              percentage: m.setupPct,
               color: 'text-slate-700',
               bgColor: 'bg-slate-50',
               borderColor: 'border-slate-200',
-              description: 'میانگین ۳۴ دقیقه زمان استقرار قالب‌های جدید روی پرس‌های ۱۶۰ و ۲۵۰ تن',
+              description: `مجموع زمان توقفات تعویض قالب و ستاپ ثبت‌شده در ${toPersianDigits(machineDowntimes.filter(d => d.category === 'SETUP_CHANGE').length)} رویداد لاگ‌شده`,
             },
             {
               id: 'avail_unplanned_breakdown',
               title: 'خرابی‌های اضطراری مکانیکی و هیدرولیکی',
-              metric: '۶.۱٪ زمان کل (۵۸ دقیقه)',
-              percentage: 6.1,
+              metric: `${toPersianDigits(m.breakdownPct)}٪ زمان کل (${toPersianDigits(m.breakdownMinutes)} دقیقه)`,
+              percentage: m.breakdownPct,
               color: 'text-rose-700',
               bgColor: 'bg-rose-50',
               borderColor: 'border-rose-200',
-              description: 'نشت شیلنگ هیدرولیک پرس ۲۵۰ تن (۷۰ دقیقه) و نقص نازل تورچ CO2',
+              description: `مجموع زمان خرابی‌های اضطراری هیدرولیک و توقفات خط در ${toPersianDigits(machineDowntimes.filter(d => d.category === 'UNPLANNED_BREAKDOWN' || d.category === 'MATERIAL_SHORTAGE').length)} رویداد لاگ‌شده`,
             },
           ],
         },
         {
           id: 'oee_perf',
           title: '۲. راندمان عملکرد و ریتم ضرب (Performance Rate)',
-          metric: '۸۲.۵٪',
-          percentage: 82.5,
+          metric: `${toPersianDigits(m.perfPct)}٪`,
+          percentage: m.perfPct,
           color: 'text-indigo-700',
           bgColor: 'bg-indigo-50',
           borderColor: 'border-indigo-300',
-          description: 'میزان تولید واقعی ضرب پرس در مقایسه با سرعت اسمی استاندارد کاتالوگ قالب',
+          description: 'نسبت ضرب واقعی به ظرفیت اسمی استاندارد (کسر توقفات میکرو و افت سرعت ناشی از جنس ورق)',
           children: [
             {
               id: 'perf_minor_stops',
               title: 'توقفات میکرو (زیر ۵ دقیقه) و پران قطعه',
-              metric: '۹.۵٪ افت سرعت',
-              percentage: 9.5,
+              metric: `${toPersianDigits(m.minorStopsPct)}٪ افت سرعت (${toPersianDigits(m.minorStopsMinutes)} دقیقه)`,
+              percentage: m.minorStopsPct,
               color: 'text-amber-700',
               bgColor: 'bg-amber-50',
               borderColor: 'border-amber-200',
-              description: 'گیرکردن قطعه روی ماتریس، مکث تغذیه نوار ورق و لغزش دست اپراتور',
+              description: 'توقفات کوتاه ناشی از گیرکردن قطعه در قالب و مکث رول‌بازکن',
             },
             {
               id: 'perf_reduced_speed',
-              title: 'کاهش ریتم به علت سختی ورق DC04/DC01A',
-              metric: '۸.۰٪ افت سرعت',
-              percentage: 8.0,
+              title: 'کاهش ریتم اسمی به علت سختی و ضخامت ورق',
+              metric: `${toPersianDigits(m.reducedSpeedPct)}٪ افت سرعت`,
+              percentage: m.reducedSpeedPct,
               color: 'text-indigo-700',
               bgColor: 'bg-indigo-50',
               borderColor: 'border-indigo-200',
-              description: 'احتیاط اپراتور در پرسکاری ورق‌های با ضخامت ۲ میل جهت جلوگیری از چروک‌خوردگی',
+              description: 'احتیاط اپراتور و پرس در شکل‌دهی ورق‌های با استحکام بالا جهت پیشگیری از چروک‌خوردگی و ترک',
             },
           ],
         },
         {
           id: 'oee_qual',
           title: '۳. نرخ کیفیت و تولید سالم (Quality Rate)',
-          metric: '۹۸.۲٪',
-          percentage: 98.2,
+          metric: `${toPersianDigits(m.qualPct)}٪`,
+          percentage: m.qualPct,
           color: 'text-emerald-700',
           bgColor: 'bg-emerald-50',
           borderColor: 'border-emerald-300',
-          description: 'نسبت قطعات تاییدشده سالم به کل قطعات ورودی پرس (تنها ۱.۸٪ ضایعات)',
+          description: `نسبت قطعات سالم تاییدشده (مجموع ضایعات: ${toPersianDigits(m.setupScrapPcs + m.processScrapPcs)} قطعه)`,
           children: [
             {
               id: 'qual_setup_scrap',
-              title: 'ضایعات قطعات تنظیمی ابتدای شیفت',
-              metric: '۰.۶٪ (۴۲ قطعه)',
-              percentage: 0.6,
+              title: 'ضایعات قطعات تنظیمی و راه‌اندازی ابتدای شیفت',
+              metric: `${toPersianDigits(m.setupScrapPct)}٪ (${toPersianDigits(m.setupScrapPcs)} قطعه)`,
+              percentage: m.setupScrapPct,
               color: 'text-emerald-700',
               bgColor: 'bg-emerald-50',
               borderColor: 'border-emerald-200',
-              description: 'قطعات تست اولیه پس از کلمپ قالب جهت کنترل ابعادی با کولیس و گیج کنترلی',
+              description: 'قطعات تست اولیه حین تنظیم لقی قالب و کنترل ابعادی با گیج',
             },
             {
               id: 'qual_process_defects',
-              title: 'ضایعات حین فرایند (پلیسه، ترک و پارگی کشش)',
-              metric: '۱.۲٪ (۸۵ قطعه)',
-              percentage: 1.2,
+              title: 'ضایعات حین فرآیند (پلیسه، ترک و پارگی کشش)',
+              metric: `${toPersianDigits(m.processScrapPct)}٪ (${toPersianDigits(m.processScrapPcs)} قطعه)`,
+              percentage: m.processScrapPct,
               color: 'text-rose-700',
               bgColor: 'bg-rose-50',
               borderColor: 'border-rose-200',
-              description: 'ترک لبه در ناحیه کشش عمیق صندلی چپ و جوش سرد در چند مهره جوشی M6',
+              description: 'ترک لبه در کشش عمیق و جوش سرد شناسایی‌شده در بازرسی‌های حین تولید',
             },
           ],
         },
       ],
-    }),
-    []
-  );
+    };
+  }, [dynamicOeeMetrics, machineDowntimes]);
 
   // Toggle OEE Node Expansion
   const toggleNode = (nodeId: string) => {
@@ -827,7 +968,15 @@ export const ComprehensiveProductionReportView: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setIsLogDowntimeModalOpen(true)}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold cursor-pointer flex items-center gap-1 shadow-2xs transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>ثبت رویداد جدید توقف / خرابی نت</span>
+            </button>
             <button
               type="button"
               onClick={() =>
@@ -1208,6 +1357,132 @@ export const ComprehensiveProductionReportView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* ==================================================================== */}
+      {/* MODAL: LOG NEW DOWNTIME / MAINTENANCE BREAKDOWN (DYNAMIC OEE ENGINE) */}
+      {/* ==================================================================== */}
+      {isLogDowntimeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 text-right text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-600" />
+                <h4 className="font-bold text-sm text-slate-900">
+                  ثبت لاگ توقف دستگاه و باز-محاسبه زنده شاخص OEE
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLogDowntimeModalOpen(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddDowntimeEvent} className="space-y-3.5">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">دستگاه و خط تولید *</label>
+                <select
+                  value={newDtMachineCode}
+                  onChange={e => setNewDtMachineCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-xs text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  <option value="PRS-250T-01">پرس ۲۵۰ تن ۱ (کشش/بلنک - سالن پرس)</option>
+                  <option value="PRS-160T-01">پرس ۱۶۰ تن ۱ (خم/پانچ - سالن پرس)</option>
+                  <option value="SHR-GUI-01">قیچی گیوتین ۶ متری ۱ (سالن برش)</option>
+                  <option value="PRS-800T-G1">پرس هیدرولیک ۸۰۰ تن (سالن پرس سنگین)</option>
+                  <option value="WLD-SPOT-01">پرس‌جوش مقاومتی ۱ (مهره‌جوش M6 - سالن جوش)</option>
+                  <option value="WLD-CO2-ST01">کابین جوش CO2 شماره ۱ (سالن جوش)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">دسته‌بندی توقف *</label>
+                  <select
+                    value={newDtCategory}
+                    onChange={e => setNewDtCategory(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-xs text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                  >
+                    <option value="UNPLANNED_BREAKDOWN">خرابی اضطراری (نت)</option>
+                    <option value="SETUP_CHANGE">تعویض قالب و ستاپ (SMED)</option>
+                    <option value="MINOR_STOP">توقف کوتاه / میکرو</option>
+                    <option value="MATERIAL_SHORTAGE">کسری ورق / مواد اولیه</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">مدت زمان توقف (دقیقه) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={480}
+                    required
+                    value={newDtDuration}
+                    onChange={e => setNewDtDuration(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-xs text-rose-700 focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">ساعت شروع توقف</label>
+                <input
+                  type="text"
+                  placeholder="مثلاً 10:30"
+                  value={newDtStartHour}
+                  onChange={e => setNewDtStartHour(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">علت توقف و ریشه‌یابی عیب *</label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="شرح خرابی، نشت روغن، شکست سنبه، عیب الکتریکی..."
+                  value={newDtReason}
+                  onChange={e => setNewDtReason(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">اقدام اصلاحی و عملیات نت (PM)</label>
+                <input
+                  type="text"
+                  placeholder="تعویض پکینگ، هواگیری، تیزکاری تیغه..."
+                  value={newDtAction}
+                  onChange={e => setNewDtAction(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-900 leading-relaxed">
+                با فشردن دکمه ثبت، زمان توقف مستقیماً از ساعت کارکرد خالص کم شده و شاخص دسترس‌پذیری (Availability) و OEE در نمودار درختی بلافاصله باز-محاسبه می‌گردد.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsLogDowntimeModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>ثبت توقف و باز-محاسبه OEE</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
