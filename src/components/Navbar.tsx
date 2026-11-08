@@ -76,6 +76,7 @@ interface SearchableModuleItem {
 const TAB_TITLES: Record<TabKey, string> = {
   dashboard: 'داشبورد مدیریتی و خلاصه وضعیت',
   master_data: 'اطلاعات پایه',
+  contracts: 'قراردادها و سفارشات (Sales & Contracts)',
   inventory: 'انبار و موجودی',
   production: 'ثبت روزانه تولید و ضایعات',
   wip: 'قطعات در جریان ساخت (WIP)',

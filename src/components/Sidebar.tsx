@@ -50,6 +50,7 @@ import { toPersianDigits } from '../utils/formatters';
 export type TabKey =
   | 'dashboard'
   | 'master_data'
+  | 'contracts'
   | 'inventory'
   | 'production'
   | 'wip'
@@ -400,6 +401,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         count: coilsCount > 0 ? `${toPersianDigits(coilsCount)} رول` : undefined,
         roles: ['ADMIN', 'WAREHOUSE_KEEPER', 'PRODUCTION_MANAGER', 'LINE_SUPERVISOR', 'QC_INSPECTOR'] as UserRoleProfile['role'][],
         subModules: inventorySubModules,
+      },
+      {
+        id: 'flat-contracts',
+        tab: 'contracts' as TabKey,
+        label: 'قراردادها و سفارشات (Sales & Contracts)',
+        flatLabel: 'قراردادها و سفارشات (Sales & Contracts)',
+        keywords: 'قراردادها و سفارشات sales contracts فروش مشتری ساپکو تعهدات تحویل سهمیه زنجیره mrp صدور mo',
+        icon: FileSignature,
+        roles: ['ADMIN', 'PRODUCTION_MANAGER', 'WAREHOUSE_KEEPER'] as UserRoleProfile['role'][],
       },
       {
         id: 'flat-planning',

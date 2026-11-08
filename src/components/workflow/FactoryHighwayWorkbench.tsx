@@ -30,6 +30,10 @@ import {
   Star,
   PackageCheck,
   Truck,
+  PauseCircle,
+  Play,
+  Pause,
+  Check,
 } from 'lucide-react';
 import {
   Part,
@@ -46,6 +50,7 @@ import { TabKey, SubModuleNavParams } from '../Sidebar';
 import { InventorySubTab } from '../inventory/InventoryModuleView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
+import { OrderDetailsDrawer, DrawerTabKey } from './OrderDetailsDrawer';
 
 export interface HighwayOperationStep {
   stepCode: string;
@@ -84,7 +89,7 @@ export interface HighwayPartScenario {
   carModel: string;
   customerName: string;
   contractCode?: string;
-  status?: 'ACTIVE' | 'COMPLETED' | 'DRAFT';
+  status?: 'ACTIVE' | 'COMPLETED' | 'HALTED' | 'DRAFT';
   isPinned?: boolean;
   orderQty: number;
   unitWeightKg: number;
@@ -274,7 +279,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         cycleTimeSec: 18,
         isShared: true,
         sharedWithPart: 'اسکلت پشت صندلی راست (RH)',
-        completedGood: 3000,
+        completedGood: 4000,
         scrapQty: 25,
         isFinal: false,
       },
@@ -286,7 +291,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس ۴۰۰ تن ۲',
         dieName: 'DIE-SEAT-TRM2',
         cycleTimeSec: 15,
-        completedGood: 2200,
+        completedGood: 4000,
         scrapQty: 10,
         isFinal: false,
       },
@@ -298,7 +303,7 @@ const INITIAL_SCENARIOS: HighwayPartScenario[] = [
         machineName: 'پرس ۲۵۰ تن ۱',
         dieName: 'DIE-SEAT-CAL3',
         cycleTimeSec: 14,
-        completedGood: 1800,
+        completedGood: 3200,
         scrapQty: 4,
         isFinal: true,
       },
@@ -523,9 +528,15 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
 
   const [showWarehouseTools, setShowWarehouseTools] = useState(false);
 
-  // Expanded Row Drawer: Closed by default so the user only sees details when they ask!
+  // Master-Detail Slide-Over Drawer State (SAP Fiori / Dynamics 365 Style)
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [expandedViewMode, setExpandedViewMode] = useState<'OPS' | 'BOM'>('OPS');
+  const [drawerTab, setDrawerTab] = useState<DrawerTabKey>('TRACEABILITY');
+
+  const handleOpenOrderDrawer = (orderId: string, tab: DrawerTabKey = 'TRACEABILITY') => {
+    setExpandedOrderId(orderId);
+    setDrawerTab(tab);
+  };
 
   // Live Order & Command Tracking Modal (`پیگیری دستور`)
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
@@ -728,6 +739,45 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
       return scn;
     });
     saveScenarios(updated);
+  };
+
+  // Toggle Line Stop (HALTED vs ACTIVE) from the Drawer Operations Tab
+  const handleToggleLineStop = (order: HighwayPartScenario) => {
+    const nextHalted = order.status !== 'HALTED';
+    const docNo = nextHalted
+      ? `STOP-${Math.floor(100 + Math.random() * 899)}`
+      : `RES-${Math.floor(100 + Math.random() * 899)}`;
+    const newLog: IssuedCommandLog = {
+      id: `CMD-${Date.now()}`,
+      docNumber: docNo,
+      type: 'OP_LOGGED',
+      title: nextHalted
+        ? `اعلام توقف موقت خط (Line Stop) برای دستور ${order.orderCode}`
+        : `رفع توقف و راه‌اندازی مجدد خط تولید دستور ${order.orderCode}`,
+      timestamp: 'امروز - ثبت سرپرست خط',
+      qtyOrWeight: nextHalted ? 'توقف خط' : 'فعال‌سازی مجدد',
+      targetStation: order.operations[0]?.hall || 'خط تولید',
+    };
+
+    const updated = scenarios.map(scn => {
+      if (scn.id !== order.id) return scn;
+      return {
+        ...scn,
+        status: (nextHalted ? 'HALTED' : 'ACTIVE') as HighwayPartScenario['status'],
+        commandLogs: [newLog, ...(scn.commandLogs || [])],
+      };
+    });
+    saveScenarios(updated);
+    setToastMessage({
+      type: nextHalted ? 'warning' : 'success',
+      title: nextHalted
+        ? `توقف خط (Line Stop) برای دستور ${order.orderCode} ثبت شد`
+        : `دستور تولید ${order.orderCode} مجدداً در مدار تولید قرار گرفت`,
+      detail: nextHalted
+        ? `قطعه «${order.partName}» به حالت تعلیق درآمد.`
+        : `وضعیت ایستگاه‌های OP دستور «${order.partName}» فعال گردید.`,
+      trackOrderId: order.id,
+    });
   };
 
   // Available Raw Materials & SAPCO Coils with Heat Number & Batch Number
@@ -1996,23 +2046,21 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
 
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-100/70 text-slate-500 border-b border-slate-200">
+            <thead className="bg-slate-50/90 text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="py-3 px-3 w-8 text-center">📌</th>
-                <th className="py-3.5 px-4 font-semibold">دستور تولید (MO) و بچ ساخت</th>
-                <th className="py-3.5 px-4 font-semibold">کالا / محصول و شماره ذوب ورق (Heat)</th>
-                <th className="py-3.5 px-4 font-semibold">تیراژ دستور</th>
-                <th className="py-3.5 px-4 font-semibold">ایستگاه جاری (OP)</th>
-                <th className="py-3.5 px-4 font-semibold">تحویل به انبار</th>
-                <th className="py-3.5 px-4 font-semibold text-left">عملیات دستور و رسید انبار</th>
+                <th className="py-3.5 px-5 font-semibold">شماره MO</th>
+                <th className="py-3.5 px-5 font-semibold">نام قطعه</th>
+                <th className="py-3.5 px-5 font-semibold">تیراژ</th>
+                <th className="py-3.5 px-5 font-semibold">وضعیت / پیشرفت</th>
+                <th className="py-3.5 px-5 font-semibold text-left w-24">اکشن سریع</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
                     {scheduleTabFilter === 'PINNED'
-                      ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است. برای نشانه‌گذاری قطعات کلیدی، دکمه سنجاق 📌 را کلیک کنید.'
+                      ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است.'
                       : scheduleTabFilter === 'COMPLETED'
                       ? 'هیچ دستور کاری هنوز به اتمام نرسیده است.'
                       : 'هیچ دستور کاری مطابق با عبارت جستجو یافت نشد.'}
@@ -2020,522 +2068,173 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                 </tr>
               ) : (
                 filteredOrders.map(order => {
-                  const isExpanded = expandedOrderId === order.id;
+                  const isSelected = expandedOrderId === order.id;
                   const isCompleted = order.status === 'COMPLETED';
+                  const isHalted = order.status === 'HALTED';
                   const lastOp = order.operations[order.operations.length - 1];
                   const finishedQty = lastOp ? lastOp.completedGood : 0;
                   const progressPct = Math.min(
                     100,
                     Math.round((finishedQty / Math.max(1, order.orderQty)) * 100)
                   );
-                  const netWeightKg = Math.round(order.orderQty * order.unitWeightKg);
-                  const grossRequiredKg = Math.round(
-                    netWeightKg * (1 + order.scrapAllowancePct / 100)
+                  const activeStepIdx = order.operations.findIndex(
+                    op => op.completedGood < order.orderQty
                   );
-
                   const activeStep =
-                    order.operations.find(op => op.completedGood < order.orderQty) || lastOp;
+                    activeStepIdx >= 0 ? order.operations[activeStepIdx] : lastOp;
+                  const isAtFinalStation =
+                    !isCompleted &&
+                    !isHalted &&
+                    progressPct > 0 &&
+                    (Boolean(activeStep?.isFinal) || activeStepIdx === -1);
+                  const isZeroOrHalted = !isCompleted && (progressPct === 0 || isHalted);
 
                   return (
-                    <React.Fragment key={order.id}>
-                      <tr
-                        className={`transition-colors ${
-                          order.isPinned
-                            ? 'bg-amber-50/40 hover:bg-amber-50/70'
-                            : isCompleted
-                            ? 'bg-slate-50/60 opacity-90'
-                            : isExpanded
-                            ? 'bg-slate-50/90'
-                            : 'hover:bg-slate-50/60'
-                        }`}
+                    <tr
+                      key={order.id}
+                      onClick={() => handleOpenOrderDrawer(order.id, 'TRACEABILITY')}
+                      className={`group transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-50/50'
+                          : order.isPinned
+                          ? 'bg-amber-50/25 hover:bg-amber-50/60'
+                          : 'hover:bg-slate-50/90'
+                      }`}
+                    >
+                      {/* 1. MO Number (Clickable Link) */}
+                      <td className="py-4 px-5 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleOpenOrderDrawer(order.id, 'TRACEABILITY');
+                          }}
+                          className="font-mono text-xs font-bold text-indigo-700 group-hover:text-indigo-900 hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span>{order.orderCode}</span>
+                          {order.isPinned && (
+                            <Pin className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
+                          )}
+                        </button>
+                      </td>
+
+                      {/* 2. Part Name (Clean, Without Extra BOM Clutter) */}
+                      <td className="py-4 px-5">
+                        <div className="text-xs font-bold text-slate-900">
+                          {order.partName}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {order.carModel} · <span className="font-mono">{order.partCode}</span>
+                        </div>
+                      </td>
+
+                      {/* 3. Quantity (تیراژ) */}
+                      <td className="py-4 px-5 font-mono text-xs font-bold text-slate-800 tabular-nums whitespace-nowrap">
+                        {formatNumber(order.orderQty)}{' '}
+                        <span className="text-[11px] font-normal text-slate-400">عدد</span>
+                      </td>
+
+                      {/* 4. Status / Progress (Minimal Graphical Progress Bar + Colored Badge) */}
+                      <td className="py-4 px-5 w-64">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          {isCompleted ? (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                              تکمیل شده
+                            </span>
+                          ) : isHalted ? (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                              توقف خط
+                            </span>
+                          ) : isAtFinalStation ? (
+                            <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold font-mono">
+                              ایستگاه آخر ({activeStep?.stepCode})
+                            </span>
+                          ) : progressPct === 0 ? (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold font-mono">
+                              آماده شروع ({activeStep?.stepCode || 'OP10'})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold font-mono">
+                              {activeStep ? `در جریان (${activeStep.stepCode})` : 'در جریان'}
+                            </span>
+                          )}
+                          <span className="font-mono text-[11px] font-semibold text-slate-500 tabular-nums">
+                            {toPersianDigits(progressPct)}٪
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              isCompleted
+                                ? 'bg-emerald-600'
+                                : isHalted
+                                ? 'bg-rose-500'
+                                : isAtFinalStation
+                                ? 'bg-indigo-600'
+                                : 'bg-slate-900'
+                            }`}
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                      </td>
+
+                      {/* 5. Contextual Quick Action (Play when 0%, Pause when in-progress, Check when at final OP) */}
+                      <td
+                        className="py-4 px-5 text-left whitespace-nowrap"
+                        onClick={e => e.stopPropagation()}
                       >
-                        {/* Pin Button */}
-                        <td className="py-4 px-2 text-center">
+                        {isCompleted ? (
                           <button
                             type="button"
-                            onClick={() => handleTogglePinOrder(order.id)}
-                            className={`p-1 rounded transition-colors cursor-pointer ${
-                              order.isPinned
-                                ? 'text-amber-600 hover:text-amber-800'
-                                : 'text-slate-300 hover:text-slate-600'
-                            }`}
-                            title={order.isPinned ? 'حذف نشانه‌گذاری قطعه' : 'نشانه‌گذاری قطعه کلیدی (VIP)'}
+                            onClick={() => handleDispatchFinishedGoods(order)}
+                            title="تکمیل شده — صدور حواله خروج به ساپکو"
+                            className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
                           >
-                            <Pin className={`w-3.5 h-3.5 ${order.isPinned ? 'fill-amber-500' : ''}`} />
+                            <Check className="w-4 h-4" />
                           </button>
-                        </td>
-
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-slate-900">{order.orderCode}</span>
-                            {isCompleted && (
-                              <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                تکمیل شده
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                            بچ: {order.productionBatchCode}
-                          </div>
-                        </td>
-
-                        <td className="py-4 px-4">
-                          <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                            <span>{order.partName}</span>
-                            {order.isPinned && (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
-                                VIP
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 mt-0.5">
-                            <span>{order.carModel}</span>
-                            <span>·</span>
-                            <span className="font-mono text-[11px]">{order.partCode}</span>
-                            {order.heatNumber && (
-                              <span
-                                onClick={() => onNavigateToTab?.('sapco')}
-                                title="مشاهده شجره‌نامه شماره ذوب کلاف ساپکو"
-                                className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono text-[10px] font-bold cursor-pointer hover:bg-amber-100"
-                              >
-                                ذوب: {order.heatNumber}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="py-4 px-4 font-mono text-sm font-bold text-slate-800 tabular-nums whitespace-nowrap">
-                          {formatNumber(order.orderQty)}{' '}
-                          <span className="text-xs font-normal text-slate-500">عدد</span>
-                        </td>
-
-                        <td className="py-4 px-4">
-                          {isCompleted ? (
-                            <span className="text-emerald-700 font-bold flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>رسید انبار محصول ({order.finishedReceiptVoucherNo || 'FG-REC'})</span>
-                            </span>
-                          ) : activeStep ? (
-                            <div className="text-slate-700">
-                              <span className="font-mono font-bold text-slate-900">
-                                {activeStep.stepCode}
-                              </span>{' '}
-                              — {activeStep.stepName}
-                            </div>
-                          ) : (
-                            <span className="text-emerald-700 font-semibold">آماده تحویل</span>
-                          )}
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            {toPersianDigits(order.operations.length)} مرحله OP از مسیر تولید کالا
-                          </div>
-                        </td>
-
-                        <td className="py-4 px-4 w-40">
-                          <div className="flex items-center justify-between font-mono text-xs mb-1 tabular-nums">
-                            <span className="font-bold text-slate-900">
-                              {formatNumber(finishedQty)} عدد
-                            </span>
-                            <span className="text-slate-400">{toPersianDigits(progressPct)}٪</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${isCompleted ? 'bg-emerald-600' : 'bg-slate-900'}`}
-                              style={{ width: `${progressPct}%` }}
-                            />
-                          </div>
-                        </td>
-
-                        <td className="py-4 px-4 text-left whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5">
-                            {/* Complete Production & Issue Goods Receipt Button */}
-                            {!isCompleted ? (
-                              <button
-                                type="button"
-                                onClick={() => handleCompleteProduction(order)}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                                title="اتمام تولید دستور و صدور رسید انبار محصول نهایی"
-                              >
-                                <PackageCheck className="w-3.5 h-3.5" />
-                                <span>اتمام و رسید به انبار</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleDispatchFinishedGoods(order)}
-                                className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                                title="صدور حواله خروج و تحویل محصول نهایی به ساپکو"
-                              >
-                                <Truck className="w-3.5 h-3.5" />
-                                <span>حواله خروج به ساپکو</span>
-                              </button>
-                            )}
-
-                            {/* Track Order Button (`پیگیری دستور`) */}
-                            <button
-                              type="button"
-                              onClick={() => setTrackingOrderId(order.id)}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                              title="پیگیری کامل زنجیره این دستور"
-                            >
-                              <Compass className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>پیگیری دستور</span>
-                            </button>
-
-                            {/* On-Demand: Open Operations Pipeline */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isExpanded && expandedViewMode === 'OPS') {
-                                  setExpandedOrderId(null);
-                                } else {
-                                  setExpandedOrderId(order.id);
-                                  setExpandedViewMode('OPS');
-                                }
-                              }}
-                              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
-                                isExpanded && expandedViewMode === 'OPS'
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
-                              }`}
-                            >
-                              <Hammer className="w-3.5 h-3.5" />
-                              <span>مراحل (OP)</span>
-                            </button>
-
-                            {/* On-Demand: Open Sheet & BOM Details */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isExpanded && expandedViewMode === 'BOM') {
-                                  setExpandedOrderId(null);
-                                } else {
-                                  setExpandedOrderId(order.id);
-                                  setExpandedViewMode('BOM');
-                                }
-                              }}
-                              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
-                                isExpanded && expandedViewMode === 'BOM'
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
-                              }`}
-                            >
-                              <Cpu className="w-3.5 h-3.5" />
-                              <span>ورق و ذوب</span>
-                            </button>
-
-                            {/* Edit Order Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsNewOrderMode(false);
-                                setAllowManualSheetOverride(Boolean(order.isCustomSheetOverride));
-                                setEditingOrder(order);
-                              }}
-                              title="ویرایش دستور تولید"
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 cursor-pointer"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Delete Order Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteOrder(order)}
-                              title="حذف دستور تولید"
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* ====================================================== */}
-                      {/* EXPANDED ON-DEMAND PANEL FOR THIS SPECIFIC WORK ORDER  */}
-                      {/* ====================================================== */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={6} className="bg-slate-50/70 p-4 border-b border-slate-200">
-                            {expandedViewMode === 'OPS' ? (
-                              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                                  <div>
-                                    <h3 className="text-sm font-bold text-slate-900">
-                                      توالی ایستگاه‌های کاری (OP) متصل به مسیر تولید — {order.partName}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                      بچ تولید: <span className="font-mono font-semibold text-slate-700">{order.productionBatchCode}</span> · شماره ذوب ورق: <span className="font-mono font-semibold text-amber-800">{order.heatNumber}</span>
-                                    </p>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const nextStepNum = (order.operations.length + 1) * 10;
-                                        const partDies = dies.filter(
-                                          d =>
-                                            d.partId === order.partId || d.partCode === order.partCode
-                                        );
-                                        const defaultMachine = machines[0];
-                                        const defaultDie = partDies[0] || dies[0];
-                                        setEditingOpContext({
-                                          orderId: order.id,
-                                          partId: order.partId,
-                                          partCode: order.partCode,
-                                          opIndex: null,
-                                          stepData: {
-                                            stepCode: `OP${nextStepNum}`,
-                                            stepName: PROCESS_DEFINITIONS[3].name,
-                                            processType: 'PUNCH_FORM',
-                                            hall:
-                                              defaultMachine?.location ||
-                                              FACTORY_HALLS[3].name,
-                                            machineId: defaultMachine?.id,
-                                            machineName:
-                                              defaultMachine?.name || 'پرس ضربه‌ای ۲۵۰ تن ۱',
-                                            dieId: defaultDie?.id,
-                                            dieName:
-                                              defaultDie?.code || `DIE-${order.partCode.slice(-5)}`,
-                                            cycleTimeSec: 12,
-                                            completedGood: 0,
-                                            scrapQty: 0,
-                                            isFinal: true,
-                                          },
-                                        });
-                                      }}
-                                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                      <span>افزودن مرحله (OP) از بانک عملیات</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setExpandedOrderId(null)}
-                                      className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs cursor-pointer"
-                                    >
-                                      بستن ✕
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-xs text-right">
-                                    <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                                      <tr>
-                                        <th className="py-2.5 px-3 font-semibold">کد OP</th>
-                                        <th className="py-2.5 px-3 font-semibold">عملیات تولید و سالن</th>
-                                        <th className="py-2.5 px-3 font-semibold">دستگاه پرس و قالب متصل</th>
-                                        <th className="py-2.5 px-3 font-semibold">موجودی ورودی (بافر)</th>
-                                        <th className="py-2.5 px-3 font-semibold">تولید سالم</th>
-                                        <th className="py-2.5 px-3 font-semibold">ضایعات</th>
-                                        <th className="py-2.5 px-3 font-semibold text-left">ثبت کارکرد / ویرایش</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                      {order.operations.map((op, idx) => {
-                                        const prevOp = idx > 0 ? order.operations[idx - 1] : null;
-                                        const isLocked = prevOp !== null && prevOp.completedGood === 0;
-                                        const availableFromPrev = prevOp
-                                          ? Math.max(0, prevOp.completedGood - op.completedGood)
-                                          : Math.max(0, order.orderQty - op.completedGood);
-
-                                        return (
-                                          <tr
-                                            key={op.stepCode + idx}
-                                            className={isLocked ? 'bg-slate-50/60 text-slate-400' : ''}
-                                          >
-                                            <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                                              {op.stepCode}
-                                            </td>
-                                            <td className="py-3 px-3">
-                                              <div className="font-semibold text-slate-900">
-                                                {op.stepName}
-                                              </div>
-                                              <div className="text-[11px] text-slate-500">
-                                                {op.hall}
-                                                {op.isShared && op.sharedWithPart
-                                                  ? ` · قالب مشترک با ${op.sharedWithPart}`
-                                                  : ''}
-                                                {op.isFinal ? ' · مرحله نهایی (رسید انبار)' : ''}
-                                              </div>
-                                            </td>
-                                            <td className="py-3 px-3 text-slate-600">
-                                              <div>{op.machineName}</div>
-                                              <div className="text-[11px] font-mono text-slate-400">
-                                                قالب: {op.dieName}
-                                              </div>
-                                            </td>
-                                            <td className="py-3 px-3 font-mono tabular-nums">
-                                              {idx === 0 ? (
-                                                <span>ورق خام ({formatNumber(order.orderQty)})</span>
-                                              ) : isLocked ? (
-                                                <span className="text-slate-400">۰ عدد (بافر خالی)</span>
-                                              ) : (
-                                                <span className="text-slate-800 font-semibold">
-                                                  {formatNumber(availableFromPrev)} آماده در بافر
-                                                </span>
-                                              )}
-                                            </td>
-                                            <td className="py-3 px-3 font-mono font-bold text-slate-900 tabular-nums">
-                                              {formatNumber(op.completedGood)}{' '}
-                                              <span className="text-[11px] font-normal text-slate-400">
-                                                / {formatNumber(order.orderQty)}
-                                              </span>
-                                            </td>
-                                            <td className="py-3 px-3 font-mono text-slate-600 tabular-nums">
-                                              {formatNumber(op.scrapQty)}
-                                            </td>
-                                            <td className="py-3 px-3 text-left whitespace-nowrap">
-                                              <div className="inline-flex items-center gap-1.5">
-                                                {isLocked ? (
-                                                  <span
-                                                    onClick={() => handleOpenStepLogger(order, idx)}
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium cursor-not-allowed"
-                                                  >
-                                                    <Lock className="w-3.5 h-3.5" />
-                                                    <span>قفل تقدم ({prevOp?.stepCode})</span>
-                                                  </span>
-                                                ) : (
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleOpenStepLogger(order, idx)}
-                                                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
-                                                  >
-                                                    ثبت تولید
-                                                  </button>
-                                                )}
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    setEditingOpContext({
-                                                      orderId: order.id,
-                                                      partId: order.partId,
-                                                      partCode: order.partCode,
-                                                      opIndex: idx,
-                                                      stepData: { ...op },
-                                                    })
-                                                  }
-                                                  title="ویرایش ایستگاه"
-                                                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
-                                                >
-                                                  <Edit3 className="w-3.5 h-3.5" />
-                                                </button>
-
-                                                {order.operations.length > 1 && (
-                                                  <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                      handleDeleteOperationStep(order.id, idx)
-                                                    }
-                                                    title="حذف این مرحله"
-                                                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"
-                                                  >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            ) : (
-                              /* ON-DEMAND BOM, COIL & HEAT NUMBER PANEL */
-                              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                                  <div>
-                                    <h3 className="text-sm font-bold text-slate-900">
-                                      شناسنامه ورق، شماره ذوب (Heat No) و درخت محصول (BOM) — {order.partName}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                      {order.rawMaterialName} · کلاف: <span className="font-mono font-bold text-slate-800">{order.coilNumber || '—'}</span> · شماره ذوب: <span className="font-mono font-bold text-amber-800">{order.heatNumber || '—'}</span> · بچ تولید: <span className="font-mono font-bold text-indigo-700">{order.productionBatchCode}</span>
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => onNavigateToTab?.('sapco')}
-                                      className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-semibold cursor-pointer"
-                                    >
-                                      رهگیری کلاف و ذوب در ساپکو ⟵
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setExpandedOrderId(null)}
-                                      className="px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs cursor-pointer"
-                                    >
-                                      بستن ✕
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                                    <span className="text-slate-500">نیاز ناخالص ورق (با پرت):</span>
-                                    <div className="text-sm font-bold text-slate-900 font-mono mt-1 tabular-nums">
-                                      {formatNumber(grossRequiredKg)} کیلوگرم
-                                    </div>
-                                  </div>
-                                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                                    <span className="text-slate-500">موجودی فعلی کلاف/ورق در انبار:</span>
-                                    <div className="text-sm font-bold text-emerald-700 font-mono mt-1 tabular-nums">
-                                      {formatNumber(order.warehouseAvailableKg)} کیلوگرم
-                                    </div>
-                                  </div>
-                                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-                                    <div>
-                                      <span className="text-slate-500">حواله کلاف با شماره ذوب:</span>
-                                      <div className="text-xs font-semibold text-slate-800 mt-1">
-                                        {order.materialIssuedVoucherNo
-                                          ? `صادر شده (${order.materialIssuedVoucherNo})`
-                                          : 'آماده صدور حواله از انبار'}
-                                      </div>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleIssueSheetForOrder(order)}
-                                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
-                                    >
-                                      {order.materialIssuedVoucherNo
-                                        ? 'صدور حواله مجدد'
-                                        : 'صدور حواله ورق'}
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-slate-100 pt-3">
-                                  <div className="text-xs font-bold text-slate-700 mb-2">
-                                    اجزای درخت محصول (BOM):
-                                  </div>
-                                  <div className="divide-y divide-slate-100 text-xs">
-                                    {order.bomSubComponents.map((sub, i) => (
-                                      <div
-                                        key={i}
-                                        className="py-2 flex items-center justify-between"
-                                      >
-                                        <span className="text-slate-800 font-medium">
-                                          {sub.name}{' '}
-                                          <span className="text-slate-400">({sub.stage})</span>
-                                        </span>
-                                        <span className="font-mono font-bold text-slate-900 tabular-nums">
-                                          {formatNumber(sub.qtyPerParent * order.orderQty)}{' '}
-                                          {sub.unit}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                        ) : isZeroOrHalted ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isHalted) {
+                                handleToggleLineStop(order);
+                              } else {
+                                handleOpenStepLogger(
+                                  order,
+                                  activeStepIdx >= 0 ? activeStepIdx : 0
+                                );
+                              }
+                            }}
+                            title={
+                              isHalted
+                                ? 'شروع مجدد و رفع توقف خط (Play)'
+                                : `شروع تولید و ثبت کارکرد (${activeStep?.stepCode || 'OP10'})`
+                            }
+                            className="p-2 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Play className="w-4 h-4 fill-current" />
+                          </button>
+                        ) : isAtFinalStation ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCompleteProduction(order)}
+                            title="ایستگاه آخر — تایید اتمام و صدور رسید انبار (Check)"
+                            className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLineStop(order)}
+                            title="در جریان تولید — توقف موقت خط (Pause)"
+                            className="p-2 rounded-lg bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-200 hover:border-amber-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Pause className="w-4 h-4 fill-current" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -2543,6 +2242,68 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           </table>
         </div>
       </div>
+
+      {/* ==================================================================== */}
+      {/* SLIDE-OVER DETAILS DRAWER (SAP FIORI / DYNAMICS 365 MASTER-DETAIL)   */}
+      {/* ==================================================================== */}
+      <OrderDetailsDrawer
+        order={scenarios.find(s => s.id === expandedOrderId) || null}
+        isOpen={Boolean(expandedOrderId)}
+        initialTab={drawerTab}
+        onClose={() => setExpandedOrderId(null)}
+        onCompleteProduction={handleCompleteProduction}
+        onDispatchFinishedGoods={handleDispatchFinishedGoods}
+        onToggleLineStop={handleToggleLineStop}
+        onIssueSheet={handleIssueSheetForOrder}
+        onOpenStepLogger={(order, opIdx) => handleOpenStepLogger(order, opIdx)}
+        onOpenAddOp={order => {
+          const nextStepNum = (order.operations.length + 1) * 10;
+          const partDies = dies.filter(
+            d => d.partId === order.partId || d.partCode === order.partCode
+          );
+          const defaultMachine = machines[0];
+          const defaultDie = partDies[0] || dies[0];
+          setEditingOpContext({
+            orderId: order.id,
+            partId: order.partId,
+            partCode: order.partCode,
+            opIndex: null,
+            stepData: {
+              stepCode: `OP${nextStepNum}`,
+              stepName: PROCESS_DEFINITIONS[3].name,
+              processType: 'PUNCH_FORM',
+              hall: defaultMachine?.location || FACTORY_HALLS[3].name,
+              machineId: defaultMachine?.id,
+              machineName: defaultMachine?.name || 'پرس ضربه‌ای ۲۵۰ تن ۱',
+              dieId: defaultDie?.id,
+              dieName: defaultDie?.code || `DIE-${order.partCode.slice(-5)}`,
+              cycleTimeSec: 12,
+              completedGood: 0,
+              scrapQty: 0,
+              isFinal: true,
+            },
+          });
+        }}
+        onOpenEditOp={(order, opIdx, op) =>
+          setEditingOpContext({
+            orderId: order.id,
+            partId: order.partId,
+            partCode: order.partCode,
+            opIndex: opIdx,
+            stepData: { ...op },
+          })
+        }
+        onDeleteOp={handleDeleteOperationStep}
+        onOpenTrackModal={orderId => setTrackingOrderId(orderId)}
+        onOpenEditOrder={order => {
+          setIsNewOrderMode(false);
+          setAllowManualSheetOverride(Boolean(order.isCustomSheetOverride));
+          setEditingOrder(order);
+        }}
+        onDeleteOrder={handleDeleteOrder}
+        onTogglePin={handleTogglePinOrder}
+        onNavigateToSapco={() => onNavigateToTab?.('sapco')}
+      />
 
       {/* ==================================================================== */}
       {/* MODAL 1: LOG STEP PRODUCTION                                         */}

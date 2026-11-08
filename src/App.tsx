@@ -12,6 +12,7 @@ import { ProductionWipModuleView } from './components/wip/ProductionWipModuleVie
 import { ProductionPlanningModuleView, PlanningSubTabKey } from './components/planning/ProductionPlanningModuleView';
 import { ErpProductionWorkbenchView, ProductionWorkbenchSubTab } from './components/production/ErpProductionWorkbenchView';
 import { ManagementReportsModuleView } from './components/reports/ManagementReportsModuleView';
+import { SalesContractsModuleView } from './components/contracts/SalesContractsModuleView';
 import { ErpSyncModal } from './components/ErpSyncModal';
 import { TemplateSwitcherModal } from './components/TemplateSwitcherModal';
 import { AiAssistantModal } from './components/AiAssistantModal';
@@ -661,6 +662,17 @@ export default function App() {
             setActiveInventorySubTab('COILS');
           }}
           onNavigateToPlanning={() => setActiveTab('planning')}
+        />
+      )}
+
+      {/* 2.5 Sales & Contracts Module (Contract -> MRP -> MO Chain) */}
+      {activeTab === 'contracts' && (
+        <SalesContractsModuleView
+          parts={parts}
+          currentUser={currentUser}
+          onNavigateToTab={handleDeepNavigate}
+          onNavigateSubModule={handleSubModuleNavigate}
+          onGlobalRefresh={loadAllData}
         />
       )}
 

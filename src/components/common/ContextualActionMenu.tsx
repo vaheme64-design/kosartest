@@ -42,6 +42,7 @@ interface ContextualActionMenuProps {
 const TAB_CONTEXT_LABELS: Record<TabKey, string> = {
   dashboard: 'پیشخوان و دستور کار',
   master_data: 'اطلاعات پایه و BOM',
+  contracts: 'قراردادها و سفارشات',
   inventory: 'انبار و رول ورق',
   planning: 'برنامه‌ریزی و MRP',
   production: 'خط تولید و OP',
