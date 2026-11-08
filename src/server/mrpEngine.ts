@@ -28,6 +28,31 @@ export const activeReservationsStore: InventoryReservation[] = JSON.parse(
   JSON.stringify(INITIAL_INVENTORY_RESERVATIONS)
 );
 
+// Runtime store for QC Hold (قرنطینه کیفی) overrides synced from Inventory & Coils
+export interface ServerQcHoldOverride {
+  key: string;
+  partId?: string;
+  partCode?: string;
+  materialGrade?: string;
+  lotNumber?: string;
+  isHeld: boolean;
+  heldQty: number;
+  heldWeightKg: number;
+  reasonFa: string;
+  updatedAt: string;
+}
+
+export const serverQcHoldStore: Record<string, ServerQcHoldOverride> = {};
+
+// Runtime store for VIP parts (قطعات کلیدی)
+export const serverVipPartsStore: Record<string, boolean> = {
+  'PRT-ECU-BRK-01': true,
+  'SAPCO-ASY-ECU-BRK-01': true,
+  'PRT-PEDAL-01': true,
+  'SAPCO-998120': true,
+  'RM-COIL-DC04-08': true,
+};
+
 /**
  * Format a Jalali date string for display
  */
@@ -101,12 +126,17 @@ export function runFullMrp(options?: {
     const fgPhysical = fgRecords.reduce((sum, b) => sum + b.physicalQty, 0);
     const fgBlocked = fgRecords.reduce((sum, b) => sum + b.qualityBlockedQty, 0);
 
+    const fgBlockedFromStore = Object.values(serverQcHoldStore)
+      .filter(h => h.isHeld && (h.partId === part.id || h.partCode === part.code))
+      .reduce((sum, h) => sum + (h.heldQty || 0), 0);
+    const effectiveFgBlocked = fgBlocked + fgBlockedFromStore;
+
     // FG reservations
     const fgRes = activeReservationsStore.filter(
       r => r.partId === part.id && r.status === 'ACTIVE' && r.warehouseId === 'WH-FINISHED'
     );
     const coveredByFgReservations = fgRes.reduce((sum, r) => sum + r.quantity, 0);
-    const coveredByFgStock = Math.max(0, fgPhysical - fgBlocked - coveredByFgReservations);
+    const coveredByFgStock = Math.max(0, fgPhysical - effectiveFgBlocked - coveredByFgReservations);
 
     // WIP across active operations
     let coveredByWip = 0;
@@ -133,12 +163,19 @@ export function runFullMrp(options?: {
 
     const hasBom = boms.some(b => b.assemblyPartId === part.id || b.assemblyPartCode === part.code);
     const hasRouting = routings.some(r => r.partId === part.id || r.partCode === part.code);
+    const isVIP = Boolean(
+      part.isVIP ||
+      part.isPinned ||
+      serverVipPartsStore[part.id] ||
+      serverVipPartsStore[part.code]
+    );
 
     partRows.push({
       partId: part.id,
       partCode: part.code,
       partName: part.name,
       carModel: part.carModel,
+      isVIP,
       grossDemand: demand.totalDemand,
       coveredByFgStock,
       coveredByFgReservations,
@@ -152,6 +189,12 @@ export function runFullMrp(options?: {
         ...(!hasRouting ? ['عدم ثبت مسیر تولید مصوب'] : []),
       ],
     });
+  });
+
+  // Sort partRows: VIP parts with net requirement first, then by netRequirement descending
+  partRows.sort((a, b) => {
+    if (Boolean(a.isVIP) !== Boolean(b.isVIP)) return a.isVIP ? -1 : 1;
+    return b.netRequirement - a.netRequirement;
   });
 
   // 3. Explode Net Demand through BOM into Raw Materials, Coils & Hardware
@@ -331,7 +374,29 @@ export function runFullMrp(options?: {
         onHandOwned += lr.ownedQty || 0;
         onHandQuarantined += lr.qualityBlockedQty || 0;
       });
+    } else if (ledgerRaw.length > 0) {
+      // Even when coils match, capture any qualityBlockedQty from ledger balances
+      ledgerRaw.forEach(lr => {
+        onHandQuarantined += lr.qualityBlockedQty || 0;
+      });
     }
+
+    // Also include any active QC Hold overrides placed by user in Inventory / Coils
+    Object.values(serverQcHoldStore).forEach(hold => {
+      if (!hold.isHeld) return;
+      const gradeMatch =
+        hold.materialGrade &&
+        req.grade &&
+        (hold.materialGrade.toLowerCase().includes(req.grade.toLowerCase()) ||
+          req.grade.toLowerCase().includes(hold.materialGrade.toLowerCase()));
+      const codeMatch =
+        hold.partCode &&
+        (hold.partCode === req.materialCode ||
+          (req.grade && hold.partCode.toLowerCase().includes(req.grade.toLowerCase())));
+      if (gradeMatch || codeMatch) {
+        onHandQuarantined += Number(hold.heldWeightKg || hold.heldQty || 0);
+      }
+    });
 
     // Active Reservations for this material grade / code
     const activeRes = activeReservationsStore.filter(r => {
@@ -340,9 +405,9 @@ export function runFullMrp(options?: {
     });
     const reservedActive = activeRes.reduce((sum, r) => sum + r.quantityKg, 0);
 
-    // Effective usable stock: (Owned + Consignment) - Reserved
+    // Effective usable stock (ATP): (Owned + Consignment) - Reserved - Quarantined (QC Hold)
     const effectiveStock = includeConsignment ? (onHandOwned + onHandConsignment) : onHandOwned;
-    const netAvailable = Math.max(0, effectiveStock - reservedActive);
+    const netAvailable = Math.max(0, effectiveStock - reservedActive - onHandQuarantined);
 
     // 4.2. Open Contracts with SAPCO / Suppliers
     const matchingContracts = contracts.filter(c => {

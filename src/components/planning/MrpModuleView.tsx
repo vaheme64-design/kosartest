@@ -24,6 +24,7 @@ import {
   ChevronUp,
   FileCheck,
   Lock,
+  Pin,
 } from 'lucide-react';
 import {
   MrpRunResult,
@@ -33,6 +34,12 @@ import {
 } from '../../types/mrp';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { ReportModuleSkeleton } from '../common/Skeleton';
+import { FormulaTooltip } from '../common/FormulaTooltip';
+import {
+  loadQcHoldMap,
+  loadVipPartsMap,
+  QcHoldRecord,
+} from '../../utils/qcHoldStore';
 
 interface MrpModuleViewProps {
   onRefreshGlobal?: () => Promise<void>;
@@ -40,7 +47,115 @@ interface MrpModuleViewProps {
 
 export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal }) => {
   const [activeTab, setActiveTab] = useState<'materials' | 'pre_issue' | 'parts' | 'simulation'>('materials');
-  const [mrpData, setMrpData] = useState<MrpRunResult | null>(null);
+  const [rawMrpData, setMrpData] = useState<MrpRunResult | null>(null);
+  const [qcHoldMap, setQcHoldMap] = useState<Record<string, QcHoldRecord>>(() => loadQcHoldMap());
+  const [vipMap, setVipMap] = useState<Record<string, boolean>>(() => loadVipPartsMap());
+
+  // Simulation Parameters
+  const [simGrowth, setSimGrowth] = useState<number>(0);
+  const [simHorizon, setSimHorizon] = useState<number>(30);
+  const [simIncludeWip, setSimIncludeWip] = useState<boolean>(true);
+  const [simIncludeConsignment, setSimIncludeConsignment] = useState<boolean>(true);
+  const [simulating, setSimulating] = useState(false);
+
+  useEffect(() => {
+    const onHold = () => {
+      setQcHoldMap(loadQcHoldMap());
+    };
+    const onVip = () => {
+      setVipMap(loadVipPartsMap());
+    };
+    window.addEventListener('kpims-qc-hold-changed', onHold);
+    window.addEventListener('kpims-vip-parts-changed', onVip);
+    return () => {
+      window.removeEventListener('kpims-qc-hold-changed', onHold);
+      window.removeEventListener('kpims-vip-parts-changed', onVip);
+    };
+  }, []);
+
+  // Dynamically recompute MRP ATP & VIP priority whenever QC Hold or VIP state changes
+  const mrpData = React.useMemo<MrpRunResult | null>(() => {
+    if (!rawMrpData) return null;
+
+    const updatedParts = rawMrpData.parts
+      .map(p => {
+        const isVIP = Boolean(p.isVIP || vipMap[p.partId] || vipMap[p.partCode]);
+        const partHoldQty = Object.values(qcHoldMap)
+          .filter(h => h.isHeld && (h.partId === p.partId || h.partCode === p.partCode))
+          .reduce((s, h) => s + (h.heldQty || 0), 0);
+        const effectiveFgStock = Math.max(0, p.coveredByFgStock - partHoldQty);
+        const netRequirement = Math.max(
+          0,
+          p.grossDemand - effectiveFgStock - p.coveredByWip - p.coveredByActiveMos
+        );
+        return {
+          ...p,
+          isVIP,
+          coveredByFgStock: effectiveFgStock,
+          netRequirement,
+        };
+      })
+      .sort((a, b) => {
+        if (Boolean(a.isVIP) !== Boolean(b.isVIP)) return a.isVIP ? -1 : 1;
+        return b.netRequirement - a.netRequirement;
+      });
+
+    const updatedMaterials = rawMrpData.materials.map(m => {
+      const extraHoldKg = Object.values(qcHoldMap)
+        .filter(h => {
+          if (!h.isHeld) return false;
+          const matchCode = h.partCode === m.materialCode || (h.lotNumber && m.matchingCoils?.some(c => c.coilNumber === h.lotNumber || c.coilId === h.key));
+          const matchName = h.partName && m.materialGrade && h.partName.toLowerCase().includes(m.materialGrade.toLowerCase());
+          return Boolean(matchCode || matchName);
+        })
+        .reduce((s, h) => s + (h.heldWeightKg || h.heldQty || 0), 0);
+
+      const effectiveQuarantined = Math.max(m.onHandQuarantined || 0, extraHoldKg);
+      const totalPhysical = (m.onHandOwned || 0) + (simIncludeConsignment ? m.onHandConsignment || 0 : 0);
+      // Direct subtraction of QC Hold (onHandQuarantined) from Free Available (ATP):
+      const netAvailable = Math.max(0, totalPhysical - (m.reservedActive || 0) - effectiveQuarantined);
+      const shortageQuantity = Math.max(0, Math.round((m.requiredWeightKg - netAvailable) * 10) / 10);
+      const coveredByContract = Math.min(shortageQuantity, m.openContractQuantity || 0);
+      const hardShortageQuantity = Math.max(0, Math.round((shortageQuantity - coveredByContract) * 10) / 10);
+
+      let severity: MrpMaterialRow['severity'] = 'OK';
+      if (shortageQuantity > 0) {
+        severity = hardShortageQuantity === 0 ? 'SHORTAGE_COVERED_BY_CONTRACT' : 'HARD_SHORTAGE';
+      }
+
+      return {
+        ...m,
+        onHandQuarantined: effectiveQuarantined,
+        netAvailable,
+        shortageQuantity,
+        coveredByContract,
+        hardShortageQuantity,
+        severity,
+      };
+    });
+
+    updatedMaterials.sort((a, b) => {
+      const aVip = a.demandedByParts.some(dp => vipMap[dp.partId] || vipMap[dp.partCode]);
+      const bVip = b.demandedByParts.some(dp => vipMap[dp.partId] || vipMap[dp.partCode]);
+      if (aVip && a.severity !== 'OK' && !(bVip && b.severity !== 'OK')) return -1;
+      if (bVip && b.severity !== 'OK' && !(aVip && a.severity !== 'OK')) return 1;
+      const sevScore = { HARD_SHORTAGE: 3, SHORTAGE_COVERED_BY_CONTRACT: 2, OK: 1 };
+      return sevScore[b.severity] - sevScore[a.severity] || b.shortageQuantity - a.shortageQuantity;
+    });
+
+    return {
+      ...rawMrpData,
+      parts: updatedParts,
+      materials: updatedMaterials,
+      summary: {
+        ...rawMrpData.summary,
+        ok: updatedMaterials.filter(m => m.severity === 'OK').length,
+        contractCovered: updatedMaterials.filter(m => m.severity === 'SHORTAGE_COVERED_BY_CONTRACT').length,
+        hardShortages: updatedMaterials.filter(m => m.severity === 'HARD_SHORTAGE').length,
+        totalShortageWeightKg: updatedMaterials.reduce((s, m) => s + m.hardShortageQuantity, 0),
+      },
+    };
+  }, [rawMrpData, qcHoldMap, vipMap, simIncludeConsignment]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -56,13 +171,6 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
   const [moCheckResult, setMoCheckResult] = useState<MoMaterialCheckResult | null>(null);
   const [checkingMo, setCheckingMo] = useState(false);
   const [reservingMo, setReservingMo] = useState(false);
-
-  // Simulation Parameters
-  const [simGrowth, setSimGrowth] = useState<number>(0);
-  const [simHorizon, setSimHorizon] = useState<number>(30);
-  const [simIncludeWip, setSimIncludeWip] = useState<boolean>(true);
-  const [simIncludeConsignment, setSimIncludeConsignment] = useState<boolean>(true);
-  const [simulating, setSimulating] = useState(false);
 
   // Detail Modal / Popover for parts demanded
   const [expandedMaterialCode, setExpandedMaterialCode] = useState<string | null>(null);
@@ -534,14 +642,44 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                   <tr>
                     <th className="py-3 px-3">کد و عنوان ماده اولیه</th>
                     <th className="py-3 px-3 text-center">گرید و ضخامت</th>
-                    <th className="py-3 px-3 text-center text-indigo-700 font-bold">نیاز کل (kg)</th>
+                    <th className="py-3 px-3 text-center text-indigo-700 font-bold">
+                      <span className="inline-flex items-center">
+                        <span>نیاز کل (kg)</span>
+                        <FormulaTooltip
+                          title="فرمول نیاز ناخالص ماده اولیه (BOM Explosion)"
+                          formula="GrossKg = Σ (NetPartDemand × UnitWeight × (1 + ScrapPct))"
+                          description="حاصل‌ضرب نیاز خالص تولید هر قطعه در وزن استاندارد واحد به علاوه ضریب پرت و ضایعات مصوب."
+                          badgeColor="indigo"
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-3 text-center text-slate-800">موجودی ملکی</th>
                     <th className="py-3 px-3 text-center text-emerald-700">امانی ساپکو</th>
-                    <th className="py-3 px-3 text-center text-rose-600">قرنطینه</th>
+                    <th className="py-3 px-3 text-center text-rose-600">قرنطینه (QC Hold)</th>
                     <th className="py-3 px-3 text-center text-amber-700">رزرو فعال</th>
-                    <th className="py-3 px-3 text-center text-emerald-800 font-bold">موجودی آزاد (ATP)</th>
+                    <th className="py-3 px-3 text-center text-emerald-800 font-bold">
+                      <span className="inline-flex items-center">
+                        <span>موجودی آزاد (ATP)</span>
+                        <FormulaTooltip
+                          title="فرمول موجودی آزاد قابل برنامه‌ریزی (ATP)"
+                          formula="ATP = (Owned + Consignment) - Reserved - QCHold"
+                          description="هر کالا یا رول ورقی که در قرنطینه کیفی (QC Hold) قرار گیرد، مستقیماً از موجودی آزاد (ATP) کسر شده و در تولید لحاظ نمی‌گردد."
+                          badgeColor="emerald"
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-3 text-center text-indigo-700">قرارداد باز</th>
-                    <th className="py-3 px-3 text-center text-rose-700 font-black">کسری قطعی</th>
+                    <th className="py-3 px-3 text-center text-rose-700 font-black">
+                      <span className="inline-flex items-center">
+                        <span>کسری قطعی</span>
+                        <FormulaTooltip
+                          title="فرمول کسری قطعی (Hard Shortage)"
+                          formula="HardShortage = max(0, (RequiredKg - ATP) - OpenContractKg)"
+                          description="مقدار کسری ماده اولیه که نه با موجودی آزاد انبار (ATP) و نه با سهمیه قراردادهای باز ساپکو پوشش داده نمی‌شود."
+                          badgeColor="rose"
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-3 text-center">وضعیت تأمین</th>
                     <th className="py-3 px-3 text-center no-print">قطعات متقاضی</th>
                   </tr>
@@ -549,11 +687,24 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
                 <tbody className="divide-y divide-slate-100 font-mono">
                   {filteredMaterials.map(m => {
                     const isExpanded = expandedMaterialCode === m.materialCode;
+                    const hasVipDemand = m.demandedByParts.some(dp => vipMap[dp.partId] || vipMap[dp.partCode]);
                     return (
                       <React.Fragment key={m.materialId}>
-                        <tr className="hover:bg-slate-100 transition">
+                        <tr
+                          className={`transition ${
+                            hasVipDemand ? 'bg-amber-50/45 hover:bg-amber-50/80' : 'hover:bg-slate-100'
+                          }`}
+                        >
                           <td className="py-3 px-3 font-sans">
-                            <div className="font-bold text-slate-900">{m.materialName}</div>
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                              <span>{m.materialName}</span>
+                              {hasVipDemand && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-extrabold">
+                                  <Pin className="w-2.5 h-2.5 fill-slate-950" />
+                                  مورد نیاز قطعه VIP
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[11px] text-slate-400 font-mono">{m.materialCode}</div>
                           </td>
                           <td className="py-3 px-3 text-center">
@@ -920,9 +1071,22 @@ export const MrpModuleView: React.FC<MrpModuleViewProps> = ({ onRefreshGlobal })
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono">
                 {mrpData.parts.map(p => (
-                  <tr key={p.partId} className="hover:bg-slate-100 transition">
+                  <tr
+                    key={p.partId}
+                    className={`transition ${
+                      p.isVIP ? 'bg-amber-50/60 hover:bg-amber-100/60' : 'hover:bg-slate-100'
+                    }`}
+                  >
                     <td className="py-3 px-3 font-sans">
-                      <div className="font-bold text-slate-900">{p.partName}</div>
+                      <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>{p.partName}</span>
+                        {p.isVIP && (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold border border-amber-500">
+                            <Pin className="w-2.5 h-2.5 fill-slate-950" />
+                            قطعه کلیدی (VIP)
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-slate-400 font-mono">{p.partCode}</div>
                     </td>
                     <td className="py-3 px-3 font-sans text-slate-700">{p.carModel || '-'}</td>

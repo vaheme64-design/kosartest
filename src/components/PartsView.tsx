@@ -16,6 +16,8 @@ import {
 import { Part, PartCategory, UnitOfMeasure, CarModel } from '../types/inventory';
 import { formatNumber, formatWeightKg, exportToCsv, toPersianDigits } from '../utils/formatters';
 import { SearchableSelect } from './common/SearchableSelect';
+import { loadVipPartsMap, saveVipPartsMap, isPartVip } from '../utils/qcHoldStore';
+import { useEnterpriseUx } from '../context/EnterpriseUxContext';
 
 interface PartsViewProps {
   parts: Part[];
@@ -23,6 +25,8 @@ interface PartsViewProps {
 }
 
 export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
+  const { showUndoToast, recordAudit } = useEnterpriseUx();
+  const [vipMap, setVipMap] = useState<Record<string, boolean>>(() => loadVipPartsMap());
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [carModelFilter, setCarModelFilter] = useState<string>('ALL');
@@ -66,21 +70,90 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
     return Array.from(set);
   }, [parts, carModelsList]);
 
-  const filteredParts = useMemo(() => {
-    return parts.filter(p => {
-      if (categoryFilter === 'PINNED' && !p.isPinned) return false;
-      if (categoryFilter !== 'ALL' && categoryFilter !== 'PINNED' && p.category !== categoryFilter) return false;
-      if (carModelFilter !== 'ALL' && p.carModel !== carModelFilter) return false;
-      if (searchTerm) {
-        const q = searchTerm.toLowerCase();
-        const matchesName = p.name.toLowerCase().includes(q);
-        const matchesCode = p.code.toLowerCase().includes(q);
-        const matchesSapco = p.sapcoCode?.toLowerCase().includes(q) || false;
-        if (!matchesName && !matchesCode && !matchesSapco) return false;
-      }
-      return true;
+  useEffect(() => {
+    const handler = () => setVipMap(loadVipPartsMap());
+    window.addEventListener('kpims-vip-parts-changed', handler);
+    return () => window.removeEventListener('kpims-vip-parts-changed', handler);
+  }, []);
+
+  const handleToggleVip = async (part: Part) => {
+    const currentVip = isPartVip(part, vipMap);
+    const nextVip = !currentVip;
+    const prevMap = { ...vipMap };
+    const updatedMap = {
+      ...vipMap,
+      [part.id]: nextVip,
+      [part.code]: nextVip,
+    };
+    setVipMap(updatedMap);
+    saveVipPartsMap(updatedMap);
+
+    await onSavePart({
+      ...part,
+      isVIP: nextVip,
+      isPinned: nextVip,
     });
-  }, [parts, searchTerm, categoryFilter, carModelFilter]);
+
+    recordAudit({
+      actionType: 'UPDATE',
+      module: 'اطلاعات پایه کالاها (PartsView - VIP)',
+      entityId: part.id,
+      entityCode: part.code,
+      summaryFa: nextVip
+        ? `نشانه‌گذاری قطعه «${part.name}» به عنوان قطعه کلیدی استراتژیک (📌 VIP)`
+        : `حذف نشان VIP از قطعه «${part.name}»`,
+      beforeSnapshot: { isVIP: currentVip },
+      afterSnapshot: { isVIP: nextVip },
+    });
+
+    showUndoToast({
+      title: nextVip
+        ? `📌 قطعه «${part.name}» به لیست قطعات کلیدی (VIP) اضافه شد`
+        : `قطعه «${part.name}» از لیست قطعات VIP خارج شد`,
+      description: nextVip
+        ? 'این قطعه در صدر گزارش‌های کسری انبار، MRP و پیشخوان تولید هایلایت خواهد شد.'
+        : 'اولویت نمایش قطعه به حالت عادی بازگشت.',
+      onUndo: () => {
+        setVipMap(prevMap);
+        saveVipPartsMap(prevMap);
+        onSavePart({
+          ...part,
+          isVIP: currentVip,
+          isPinned: currentVip,
+        });
+      },
+    });
+  };
+
+  const vipPartsCount = useMemo(
+    () => parts.filter(p => isPartVip(p, vipMap)).length,
+    [parts, vipMap]
+  );
+
+  const filteredParts = useMemo(() => {
+    return parts
+      .map(p => {
+        const vip = isPartVip(p, vipMap);
+        return { ...p, isVIP: vip, isPinned: vip };
+      })
+      .filter(p => {
+        if (categoryFilter === 'PINNED' && !p.isVIP) return false;
+        if (categoryFilter !== 'ALL' && categoryFilter !== 'PINNED' && p.category !== categoryFilter) return false;
+        if (carModelFilter !== 'ALL' && p.carModel !== carModelFilter) return false;
+        if (searchTerm) {
+          const q = searchTerm.toLowerCase();
+          const matchesName = p.name.toLowerCase().includes(q);
+          const matchesCode = p.code.toLowerCase().includes(q);
+          const matchesSapco = p.sapcoCode?.toLowerCase().includes(q) || false;
+          if (!matchesName && !matchesCode && !matchesSapco) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (Boolean(a.isVIP) !== Boolean(b.isVIP)) return a.isVIP ? -1 : 1;
+        return 0;
+      });
+  }, [parts, searchTerm, categoryFilter, carModelFilter, vipMap]);
 
   const handleOpenNewModal = () => {
     setEditingPart(null);
@@ -245,20 +318,32 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(categoryFilter === 'PINNED' ? 'ALL' : 'PINNED')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+              categoryFilter === 'PINNED'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+            }`}
+          >
+            <Pin className="w-3.5 h-3.5 fill-current" />
+            <span>فقط قطعات کلیدی (VIP): {toPersianDigits(vipPartsCount)}</span>
+          </button>
         </div>
 
-        <div className="text-xs text-slate-400">
-          تعداد: <span className="font-bold text-slate-900">{formatNumber(filteredParts.length)}</span> قطعه
+        <div className="text-xs text-slate-500">
+          تعداد نمایش: <span className="font-bold text-slate-900">{formatNumber(filteredParts.length)}</span> قطعه
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="bg-white border-b border-slate-200 text-slate-400 font-semibold">
-                <th className="py-3 px-2 w-8 text-center">📌</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                <th className="py-3 px-3 w-24 text-center">قطعه کلیدی (📌 VIP)</th>
                 <th className="py-3 px-3">کد کاتالوگ</th>
                 <th className="py-3 px-3">عنوان قطعه / ماده اولیه</th>
                 <th className="py-3 px-3">دسته‌بندی</th>
@@ -275,32 +360,36 @@ export const PartsView: React.FC<PartsViewProps> = ({ parts, onSavePart }) => {
               {filteredParts.map(p => {
                 const isRaw = p.category === 'RAW_MATERIAL';
                 const isFinished = p.category === 'FINISHED_GOOD';
+                const isVip = Boolean(p.isVIP || p.isPinned);
                 return (
                   <tr
                     key={p.id}
                     className={`transition-colors ${
-                      p.isPinned ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-100'
+                      isVip ? 'bg-amber-50/70 hover:bg-amber-100/60' : 'hover:bg-slate-50'
                     }`}
                   >
-                    <td className="py-3 px-2 text-center">
+                    <td className="py-3 px-3 text-center">
                       <button
                         type="button"
-                        onClick={() => onSavePart({ id: p.id, isPinned: !p.isPinned })}
-                        className={`p-1 rounded transition-colors cursor-pointer ${
-                          p.isPinned ? 'text-amber-600 hover:text-amber-800' : 'text-slate-300 hover:text-slate-600'
+                        onClick={() => handleToggleVip(p)}
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 transition-all cursor-pointer ${
+                          isVip
+                            ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-2xs hover:bg-amber-400'
+                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300'
                         }`}
-                        title={p.isPinned ? 'حذف نشانه‌گذاری قطعه' : 'نشانه‌گذاری قطعه کلیدی (VIP)'}
+                        title={isVip ? 'حذف نشان قطعه کلیدی (VIP)' : 'افزودن به قطعات کلیدی استراتژیک (📌 VIP)'}
                       >
-                        <Pin className={`w-3.5 h-3.5 ${p.isPinned ? 'fill-amber-500' : ''}`} />
+                        <Pin className={`w-3.5 h-3.5 ${isVip ? 'fill-slate-950' : ''}`} />
+                        <span>{isVip ? 'VIP فعال' : 'نشان VIP'}</span>
                       </button>
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-amber-400">{p.code}</td>
+                    <td className="py-3 px-3 font-mono font-bold text-slate-900">{p.code}</td>
                     <td className="py-3 px-3 text-slate-900 font-medium max-w-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span>{p.name}</span>
-                        {p.isPinned && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
-                            VIP
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={isVip ? 'font-bold text-slate-950' : ''}>{p.name}</span>
+                        {isVip && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold border border-amber-500">
+                            📌 قطعه کلیدی (VIP)
                           </span>
                         )}
                       </div>

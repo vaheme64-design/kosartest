@@ -52,6 +52,8 @@ import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 import { OrderDetailsDrawer, DrawerTabKey } from './OrderDetailsDrawer';
 import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
+import { FormulaTooltip } from '../common/FormulaTooltip';
+import { loadVipPartsMap, saveVipPartsMap, isPartVip } from '../../utils/qcHoldStore';
 
 export interface HighwayOperationStep {
   stepCode: string;
@@ -578,6 +580,22 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   // Schedule tab filter: ACTIVE | COMPLETED | PINNED | ALL
   const [scheduleTabFilter, setScheduleTabFilter] = useState<'ACTIVE' | 'COMPLETED' | 'PINNED' | 'ALL'>('ACTIVE');
 
+  // Multi-select checkboxes for MO Bulk Actions (Upgrade 4)
+  const [selectedMoIds, setSelectedMoIds] = useState<string[]>([]);
+
+  // Shared VIP Parts map synchronized across PartsView, Inventory, MRP, and Dashboard
+  const [vipMap, setVipMap] = useState<Record<string, boolean>>(() => loadVipPartsMap());
+
+  useEffect(() => {
+    const syncVip = () => setVipMap(loadVipPartsMap());
+    window.addEventListener('kpims-vip-parts-changed', syncVip);
+    return () => window.removeEventListener('kpims-vip-parts-changed', syncVip);
+  }, []);
+
+  const isScenarioVip = (scn: HighwayPartScenario): boolean => {
+    return Boolean(scn.isPinned || isPartVip(scn.partId, scn.partCode, parts, vipMap));
+  };
+
   const saveScenarios = (next: HighwayPartScenario[]) => {
     setScenarios(next);
     try {
@@ -763,15 +781,250 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     });
   };
 
-  // Toggle Pinned / VIP Status for quick manager control
+  // Toggle Pinned / VIP Status for quick manager control (synced with global VIP Parts system)
   const handleTogglePinOrder = (orderId: string) => {
+    const target = scenarios.find(s => s.id === orderId);
+    const nextVip = target ? !isScenarioVip(target) : true;
     const updated = scenarios.map(scn => {
       if (scn.id === orderId) {
-        return { ...scn, isPinned: !scn.isPinned };
+        return { ...scn, isPinned: nextVip };
       }
       return scn;
     });
     saveScenarios(updated);
+    if (target) {
+      const nextMap = {
+        ...vipMap,
+        [target.partId]: nextVip,
+        [target.partCode]: nextVip,
+      };
+      setVipMap(nextMap);
+      saveVipPartsMap(nextMap);
+    }
+  };
+
+  // ============================================================================
+  // BULK ACTIONS FOR SELECTED MOs (Upgrade 4: Start, Pause, Complete & Receipt)
+  // ============================================================================
+  const handleToggleSelectMo = (orderId: string) => {
+    setSelectedMoIds(prev =>
+      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const handleToggleSelectAllVisible = (visibleOrders: HighwayPartScenario[]) => {
+    const visibleIds = visibleOrders.map(o => o.id);
+    const allSelected =
+      visibleIds.length > 0 && visibleIds.every(id => selectedMoIds.includes(id));
+    if (allSelected) {
+      setSelectedMoIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      setSelectedMoIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleBulkStartMos = () => {
+    const targetOrders = scenarios.filter(s => selectedMoIds.includes(s.id) && s.status !== 'COMPLETED');
+    if (targetOrders.length === 0) return;
+
+    requestConfirm({
+      title: `شروع گروهی تولید (${toPersianDigits(targetOrders.length)} دستور کار MO)`,
+      message: `آیا از شروع همزمان و فعال‌سازی خط تولید برای ${toPersianDigits(targetOrders.length)} دستور کار انتخاب‌شده اطمینان دارید؟`,
+      consequences: [
+        `تغییر وضعیت ${toPersianDigits(targetOrders.length)} دستور کار (${targetOrders.map(o => o.orderCode).join('، ')}) به حالت در جریان (ACTIVE)`,
+        'در صورت صفر بودن پیشرفت ایستگاه اول (OP10)، ثبت استارت اولیه تولید (۲۰٪ پیشرفت ایستگاه اول)',
+        'ثبت عملیات شروع گروهی در تاریخچه ممیزی (Audit Trail)',
+      ],
+      confirmLabel: 'تایید و شروع گروهی تولید',
+      variant: 'indigo',
+      onConfirm: () => {
+        const previousSnapshot = [...scenarios];
+        const batchDoc = `BLK-STR-${Math.floor(100 + Math.random() * 899)}`;
+        const updated = scenarios.map(scn => {
+          if (!selectedMoIds.includes(scn.id) || scn.status === 'COMPLETED') return scn;
+          const updatedOps = scn.operations.map((op, idx) => {
+            if (idx === 0 && op.completedGood === 0) {
+              return { ...op, completedGood: Math.max(100, Math.round(scn.orderQty * 0.25)) };
+            }
+            return op;
+          });
+          const logEntry: IssuedCommandLog = {
+            id: `CMD-${Date.now()}-${scn.id}`,
+            docNumber: batchDoc,
+            type: 'OP_LOGGED',
+            title: `شروع گروهی دستور تولید ${scn.orderCode} در ایستگاه ${scn.operations[0]?.stepCode || 'OP10'}`,
+            timestamp: 'امروز - اکشن گروهی مدیر تولید',
+            qtyOrWeight: `${formatNumber(updatedOps[0]?.completedGood || 0)} عدد`,
+            targetStation: scn.operations[0]?.hall || 'خط تولید',
+          };
+          return {
+            ...scn,
+            status: 'ACTIVE' as const,
+            operations: updatedOps,
+            commandLogs: [logEntry, ...(scn.commandLogs || [])],
+          };
+        });
+
+        saveScenarios(updated);
+        setSelectedMoIds([]);
+        recordAudit({
+          entityId: batchDoc,
+          entityCode: batchDoc,
+          moduleName: 'پیشخوان تولید (MO Bulk Actions)',
+          actionType: 'UPDATE',
+          title: `شروع گروهی ${toPersianDigits(targetOrders.length)} دستور تولید (${batchDoc})`,
+          details: `دستورات: ${targetOrders.map(o => o.orderCode).join('، ')}`,
+        });
+        showUndoToast({
+          title: `${toPersianDigits(targetOrders.length)} دستور تولید به صورت گروهی استارت خورد`,
+          detail: 'تا ۸ ثانیه امکان لغو عملیات گروهی (Undo) وجود دارد.',
+          variant: 'success',
+          onUndo: () => saveScenarios(previousSnapshot),
+        });
+      },
+    });
+  };
+
+  const handleBulkPauseMos = () => {
+    const targetOrders = scenarios.filter(
+      s => selectedMoIds.includes(s.id) && s.status !== 'COMPLETED'
+    );
+    if (targetOrders.length === 0) return;
+
+    requestConfirm({
+      title: `توقف گروهی خط تولید (${toPersianDigits(targetOrders.length)} دستور کار MO)`,
+      message: `آیا از اعلام توقف موقت خط (Line Stop) برای ${toPersianDigits(targetOrders.length)} دستور تولید انتخاب‌شده اطمینان دارید؟`,
+      consequences: [
+        `تغییر وضعیت دستورات (${targetOrders.map(o => o.orderCode).join('، ')}) به حالت توقف خط (HALTED)`,
+        'توقف موقت ثبت کارکرد اپراتورها روی ایستگاه‌های مرتبط تا رفع توقف',
+        'ثبت لاگ توقف گروهی در Audit Trail کارخانه',
+      ],
+      confirmLabel: 'بله، ثبت توقف گروهی',
+      variant: 'warning',
+      onConfirm: () => {
+        const previousSnapshot = [...scenarios];
+        const batchDoc = `BLK-STP-${Math.floor(100 + Math.random() * 899)}`;
+        const updated = scenarios.map(scn => {
+          if (!selectedMoIds.includes(scn.id) || scn.status === 'COMPLETED') return scn;
+          const logEntry: IssuedCommandLog = {
+            id: `CMD-${Date.now()}-${scn.id}`,
+            docNumber: batchDoc,
+            type: 'OP_LOGGED',
+            title: `اعلام توقف گروهی خط (Bulk Line Stop) برای دستور ${scn.orderCode}`,
+            timestamp: 'امروز - اکشن گروهی مدیر تولید',
+            qtyOrWeight: 'توقف خط',
+            targetStation: scn.operations[0]?.hall || 'خط تولید',
+          };
+          return {
+            ...scn,
+            status: 'HALTED' as const,
+            commandLogs: [logEntry, ...(scn.commandLogs || [])],
+          };
+        });
+
+        saveScenarios(updated);
+        setSelectedMoIds([]);
+        recordAudit({
+          entityId: batchDoc,
+          entityCode: batchDoc,
+          moduleName: 'پیشخوان تولید (MO Bulk Actions)',
+          actionType: 'LINE_STOP',
+          title: `توقف گروهی ${toPersianDigits(targetOrders.length)} دستور کار (${batchDoc})`,
+          details: `دستورات متوقف‌شده: ${targetOrders.map(o => o.orderCode).join('، ')}`,
+        });
+        showUndoToast({
+          title: `توقف خط گروهی برای ${toPersianDigits(targetOrders.length)} دستور کار ثبت شد`,
+          detail: 'تا ۸ ثانیه امکان لغو توقف گروهی (Undo) وجود دارد.',
+          variant: 'warning',
+          onUndo: () => saveScenarios(previousSnapshot),
+        });
+      },
+    });
+  };
+
+  const handleBulkCompleteMos = () => {
+    const targetOrders = scenarios.filter(
+      s => selectedMoIds.includes(s.id) && s.status !== 'COMPLETED'
+    );
+    if (targetOrders.length === 0) return;
+
+    const totalPieces = targetOrders.reduce((sum, o) => sum + o.orderQty, 0);
+
+    requestConfirm({
+      title: `اتمام تولید و صدور رسید انبار گروهی (${toPersianDigits(targetOrders.length)} دستور MO)`,
+      message: `آیا از اعلام اتمام تولید و صدور خودکار رسید انبار محصول نهایی برای ${toPersianDigits(targetOrders.length)} دستور کار (مجموعاً ${formatNumber(totalPieces)} قطعه) اطمینان دارید؟`,
+      consequences: [
+        `صدور خودکار اسناد رسید انبار محصول نهایی برای ${toPersianDigits(targetOrders.length)} دستور کار`,
+        `افزایش موجودی انبار محصول نهایی به میزان ${formatNumber(totalPieces)} عدد`,
+        `تغییر وضعیت دستورات (${targetOrders.map(o => o.orderCode).join('، ')}) به تکمیل‌شده (COMPLETED)`,
+      ],
+      confirmLabel: 'تایید اتمام و رسید انبار گروهی',
+      variant: 'emerald',
+      onConfirm: async () => {
+        const previousSnapshot = [...scenarios];
+        const batchDoc = `FG-BLK-${Math.floor(1000 + Math.random() * 8999)}`;
+
+        for (const order of targetOrders) {
+          const lastOp = order.operations[order.operations.length - 1];
+          const finishedQty =
+            lastOp && lastOp.completedGood > 0 ? lastOp.completedGood : order.orderQty;
+          if (onSubmitVoucher) {
+            await onSubmitVoucher({
+              voucherType: 'RECEIPT',
+              partId: order.partId,
+              stageId: 'STAGE_FINISHED_STORE',
+              quantity: finishedQty,
+              referenceDoc: order.orderCode,
+              notes: `رسید انبار گروهی (${batchDoc}) از دستور تولید ${order.orderCode} | ذوب ${order.heatNumber || 'HT-99412'}`,
+            }).catch(() => {});
+          }
+        }
+
+        const updated = scenarios.map(scn => {
+          if (!selectedMoIds.includes(scn.id) || scn.status === 'COMPLETED') return scn;
+          const lastOp = scn.operations[scn.operations.length - 1];
+          const finishedQty =
+            lastOp && lastOp.completedGood > 0 ? lastOp.completedGood : scn.orderQty;
+          const updatedOps = scn.operations.map(op => ({
+            ...op,
+            completedGood: Math.max(op.completedGood, finishedQty),
+          }));
+          const logEntry: IssuedCommandLog = {
+            id: `CMD-${Date.now()}-${scn.id}`,
+            docNumber: batchDoc,
+            type: 'FG_RECEIPT',
+            title: `اتمام تولید گروهی دستور ${scn.orderCode} و رسید ${formatNumber(finishedQty)} عدد به انبار محصول نهایی`,
+            timestamp: 'امروز - رسید گروهی انبار',
+            qtyOrWeight: `${formatNumber(finishedQty)} عدد`,
+            targetStation: 'انبار محصول نهایی',
+          };
+          return {
+            ...scn,
+            status: 'COMPLETED' as const,
+            finishedReceiptVoucherNo: batchDoc,
+            operations: updatedOps,
+            commandLogs: [logEntry, ...(scn.commandLogs || [])],
+          };
+        });
+
+        saveScenarios(updated);
+        setSelectedMoIds([]);
+        recordAudit({
+          entityId: batchDoc,
+          entityCode: batchDoc,
+          moduleName: 'پیشخوان تولید (MO Bulk Actions)',
+          actionType: 'COMPLETE_MO',
+          title: `اتمام تولید و رسید انبار گروهی ${toPersianDigits(targetOrders.length)} دستور (${batchDoc})`,
+          details: `دستورات تکمیل‌شده: ${targetOrders.map(o => o.orderCode).join('، ')} | مجموع تیراژ: ${formatNumber(totalPieces)} عدد`,
+        });
+        showUndoToast({
+          title: `${toPersianDigits(targetOrders.length)} دستور تولید تکمیل و رسید انبار (${batchDoc}) صادر شد`,
+          detail: 'تا ۸ ثانیه امکان لغو اتمام گروهی (Undo) وجود دارد.',
+          variant: 'success',
+          onUndo: () => saveScenarios(previousSnapshot),
+        });
+      },
+    });
   };
 
   // Toggle Line Stop (HALTED vs ACTIVE) Protected by Defensive UX ConfirmDialog + Undo
@@ -1144,17 +1397,21 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   const activeScenarios = useMemo(() => scenarios.filter(s => !s.isDeleted), [scenarios]);
   const activeCount = useMemo(() => activeScenarios.filter(s => s.status !== 'COMPLETED').length, [activeScenarios]);
   const completedCount = useMemo(() => activeScenarios.filter(s => s.status === 'COMPLETED').length, [activeScenarios]);
-  const pinnedCount = useMemo(() => activeScenarios.filter(s => s.isPinned).length, [activeScenarios]);
+  const pinnedCount = useMemo(
+    () => activeScenarios.filter(s => isScenarioVip(s)).length,
+    [activeScenarios, parts, vipMap]
+  );
 
-  // Filtered Orders by Search, Car Model, and Schedule Tab (Excludes Soft-Deleted Orders)
+  // Filtered Orders by Search, Car Model, and Schedule Tab (Excludes Soft-Deleted Orders, prioritizes VIP)
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return activeScenarios.filter(scn => {
+    const list = activeScenarios.filter(scn => {
       if (carFilter !== 'ALL' && scn.carModel !== carFilter) return false;
 
+      const vip = isScenarioVip(scn);
       if (scheduleTabFilter === 'ACTIVE' && scn.status === 'COMPLETED') return false;
       if (scheduleTabFilter === 'COMPLETED' && scn.status !== 'COMPLETED') return false;
-      if (scheduleTabFilter === 'PINNED' && !scn.isPinned) return false;
+      if (scheduleTabFilter === 'PINNED' && !vip) return false;
 
       if (!q) return true;
       return (
@@ -1168,7 +1425,8 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         (scn.productionBatchCode && scn.productionBatchCode.toLowerCase().includes(q))
       );
     });
-  }, [activeScenarios, searchQuery, carFilter, scheduleTabFilter]);
+    return [...list].sort((a, b) => Number(isScenarioVip(b)) - Number(isScenarioVip(a)));
+  }, [activeScenarios, searchQuery, carFilter, scheduleTabFilter, parts, vipMap]);
 
   const uniqueCarModels = useMemo(
     () => Array.from(new Set(scenarios.map(s => s.carModel))),
@@ -1847,8 +2105,27 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           {showOeeSection && (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-800">
-                  ۱. اثربخشی جامع تجهیزات (OEE = دسترس‌پذیری × کارایی × کیفیت)
+                <span className="font-bold text-slate-800 inline-flex items-center gap-1.5">
+                  <span>۱. اثربخشی جامع تجهیزات (OEE = دسترس‌پذیری × کارایی × کیفیت)</span>
+                  <FormulaTooltip
+                    title="فرمول محاسبه اثربخشی جامع تجهیزات (OEE)"
+                    formula="OEE = Availability × Performance × Quality"
+                    variables={[
+                      {
+                        symbol: 'Availability (دسترس‌پذیری)',
+                        meaning: 'نسبت زمان کارکرد واقعی پرس به زمان برنامه‌ریزی‌شده شیفت (کسر توقفات قالب و نت)',
+                      },
+                      {
+                        symbol: 'Performance (کارایی سرعت)',
+                        meaning: 'نسبت سیکل زمانی استاندارد قطعه به سیکل واقعی ضرب پرس',
+                      },
+                      {
+                        symbol: 'Quality (ضریب کیفیت)',
+                        meaning: 'نسبت قطعات سالم تولیدی (Good Qty) به کل ضرب انجام‌شده (کسر ضایعات)',
+                      },
+                    ]}
+                    note="هدف استاندارد کلاس جهانی (World-Class OEE) در خطوط پرسکاری خودرو حداقل ۸۵.۰٪ است."
+                  />
                 </span>
                 <button
                   type="button"
@@ -2216,10 +2493,73 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           </div>
         </div>
 
+        {/* Contextual Bulk Action Bar (MO Bulk Actions - Upgrade 4) */}
+        {selectedMoIds.length > 0 && (
+          <div className="bg-slate-900 text-white px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2.5 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold font-mono">
+                {toPersianDigits(selectedMoIds.length)} دستور تولید (MO) انتخاب شده
+              </span>
+              <span className="text-slate-300 hidden sm:inline">
+                عملیات گروهی همزمان روی دستورات انتخابی خط تولید:
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBulkStartMos}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>شروع گروهی (Start)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBulkPauseMos}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Pause className="w-3.5 h-3.5 fill-current" />
+                <span>توقف گروهی (Pause)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBulkCompleteMos}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>رسید انبار گروهی (Complete)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMoIds([])}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                لغو انتخاب
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead className="bg-slate-50/90 text-slate-500 border-b border-slate-200">
               <tr>
+                <th className="py-3.5 px-4 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filteredOrders.length > 0 &&
+                      filteredOrders.every(o => selectedMoIds.includes(o.id))
+                    }
+                    onChange={() => handleToggleSelectAllVisible(filteredOrders)}
+                    title="انتخاب همه دستورات تولید نمایش‌داده‌شده"
+                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                  />
+                </th>
                 <th className="py-3.5 px-5 font-semibold">شماره MO</th>
                 <th className="py-3.5 px-5 font-semibold">نام قطعه</th>
                 <th className="py-3.5 px-5 font-semibold">تیراژ</th>
@@ -2230,7 +2570,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
             <tbody className="divide-y divide-slate-100">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
                     {scheduleTabFilter === 'PINNED'
                       ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است.'
                       : scheduleTabFilter === 'COMPLETED'
@@ -2241,6 +2581,8 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
               ) : (
                 filteredOrders.map(order => {
                   const isSelected = expandedOrderId === order.id;
+                  const isChecked = selectedMoIds.includes(order.id);
+                  const isVip = isScenarioVip(order);
                   const isCompleted = order.status === 'COMPLETED';
                   const isHalted = order.status === 'HALTED';
                   const lastOp = order.operations[order.operations.length - 1];
@@ -2266,13 +2608,28 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                       key={order.id}
                       onClick={() => handleOpenOrderDrawer(order.id, 'TRACEABILITY')}
                       className={`group transition-colors cursor-pointer ${
-                        isSelected
+                        isChecked
+                          ? 'bg-indigo-50/70 hover:bg-indigo-50'
+                          : isSelected
                           ? 'bg-emerald-50/50'
-                          : order.isPinned
-                          ? 'bg-amber-50/25 hover:bg-amber-50/60'
+                          : isVip
+                          ? 'bg-amber-50/35 hover:bg-amber-50/70'
                           : 'hover:bg-slate-50/90'
                       }`}
                     >
+                      {/* 0. Multi-Select Checkbox for Bulk Actions */}
+                      <td
+                        className="py-4 px-4 text-center whitespace-nowrap"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleSelectMo(order.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                        />
+                      </td>
+
                       {/* 1. MO Number (Clickable Link) */}
                       <td className="py-4 px-5 whitespace-nowrap">
                         <button
@@ -2284,16 +2641,19 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                           className="font-mono text-xs font-bold text-indigo-700 group-hover:text-indigo-900 hover:underline inline-flex items-center gap-1.5 cursor-pointer"
                         >
                           <span>{order.orderCode}</span>
-                          {order.isPinned && (
-                            <Pin className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
+                          {isVip && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold inline-flex items-center gap-0.5">
+                              <Pin className="w-2.5 h-2.5 text-amber-600 fill-amber-500 shrink-0" />
+                              <span>VIP</span>
+                            </span>
                           )}
                         </button>
                       </td>
 
                       {/* 2. Part Name (Clean, Without Extra BOM Clutter) */}
                       <td className="py-4 px-5">
-                        <div className="text-xs font-bold text-slate-900">
-                          {order.partName}
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <span>{order.partName}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5">
                           {order.carModel} · <span className="font-mono">{order.partCode}</span>

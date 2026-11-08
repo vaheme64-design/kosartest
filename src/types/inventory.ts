@@ -139,6 +139,7 @@ export interface Part {
   minStock?: number;          // حداقل موجودی اطمینان
   maxStock?: number;          // حداکثر ظرفیت انبار
   isPinned?: boolean;         // نشانه‌گذاری قطعه کلیدی / VIP برای کنترل سریع
+  isVIP?: boolean;            // وضعیت رسمی قطعه کلیدی (VIP) در کل سیستم
   isDemo?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -535,7 +536,7 @@ export interface SapcoContract {
   totalConsumedKg: number;
   closingBalanceKg: number;
   associatedPartCodes: string[];
-  status: 'ACTIVE' | 'FULFILLED' | 'EXPIRED' | 'SUSPENDED';
+  status: 'ACTIVE' | 'FULFILLED' | 'EXPIRED' | 'SUSPENDED' | 'TERMINATED';
   startDate: string;
   endDate: string;
   notes?: string;
@@ -548,6 +549,21 @@ export interface SapcoContract {
     widthMm?: number;
     materialGrade?: string;
   }[];
+  revisions?: ContractRevisionEntry[];
+}
+
+export interface ContractRevisionEntry {
+  id: string;
+  revisionNumber: number;
+  timestamp: string;
+  actor: string;
+  fieldLabelFa: string;
+  oldQty: number;
+  newQty: number;
+  unit: string;
+  oldStatus?: string;
+  newStatus?: string;
+  reasonFa: string;
 }
 
 export interface SapcoContractLedgerEntry {

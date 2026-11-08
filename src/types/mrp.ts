@@ -70,6 +70,7 @@ export interface MrpPartRow {
   partCode: string;
   partName: string;
   carModel?: string;
+  isVIP?: boolean;
   grossDemand: number;
   coveredByFgStock: number;
   coveredByFgReservations: number;

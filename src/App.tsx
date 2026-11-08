@@ -218,6 +218,18 @@ export default function App() {
     loadAllData();
   }, [loadAllData]);
 
+  // Global Ctrl+Space Shortcut for Context-Aware AI Assistant (Upgrade 5)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+        e.preventDefault();
+        setIsAiModalOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handle Voucher Submission (Online + Offline Queue Support)
   const handleSubmitVoucher = async (payload: any) => {
     try {
@@ -261,8 +273,23 @@ export default function App() {
     }
   };
 
-  // Master Data Save/Update
+  // Master Data Save/Update (with optimistic VIP / isPinned sync across all modules)
   const handleSavePart = async (partData: Partial<Part>) => {
+    if (partData.id) {
+      setParts(prev =>
+        prev.map(p =>
+          p.id === partData.id
+            ? {
+                ...p,
+                ...partData,
+                isVIP: partData.isVIP !== undefined ? partData.isVIP : partData.isPinned ?? p.isVIP,
+                isPinned:
+                  partData.isPinned !== undefined ? partData.isPinned : partData.isVIP ?? p.isPinned,
+              }
+            : p
+        )
+      );
+    }
     try {
       const res = await fetch('/api/parts', {
         method: 'POST',
@@ -882,11 +909,14 @@ export default function App() {
         txCount={transactions.length}
       />
 
-      {/* AI Assistant Modal (Voice & Text with Offline Local NLP / Ollama / Groq / OpenRouter / Gemini) */}
+      {/* AI Assistant Modal (Context-Aware Voice & Text with Ctrl+Space) */}
       <AiAssistantModal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
         parts={parts}
+        currentPageTab={activeTab}
+        coils={coils}
+        summary={summary}
         onExecuteAction={handleExecuteAiAction}
       />
       </div>

@@ -27,7 +27,8 @@ export interface AuditTrailEntry {
     | 'RESTORE_UNDO'
     | 'COMPLETE_MO'
     | 'LINE_STOP'
-    | 'MATERIAL_ISSUE';
+    | 'MATERIAL_ISSUE'
+    | 'STATUS_CHANGE';
   title: string;
   details: string;
   actor: string;
@@ -39,9 +40,11 @@ export interface ConfirmDialogOptions {
   message?: string;
   description?: string;
   consequences?: string[];
+  consequenceText?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'warning' | 'emerald' | 'indigo';
+  variant?: 'danger' | 'warning' | 'emerald' | 'indigo' | 'info';
+  severity?: 'danger' | 'warning' | 'emerald' | 'indigo' | 'info';
   onConfirm: () => void | Promise<void>;
 }
 
@@ -82,6 +85,7 @@ export interface QuickEditDrawerOptions {
 export type RecordAuditInput = {
   entityId?: string;
   entityCode?: string;
+  module?: string;
   moduleName?: string;
   moduleTitle?: string;
   actionType: AuditTrailEntry['actionType'];
@@ -90,6 +94,8 @@ export type RecordAuditInput = {
   details?: string;
   detailsFa?: string;
   actor?: string;
+  beforeSnapshot?: any;
+  afterSnapshot?: any;
 };
 
 interface EnterpriseUxContextValue {

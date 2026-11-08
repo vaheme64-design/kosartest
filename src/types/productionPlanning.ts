@@ -1,4 +1,4 @@
-import { ProcessType } from './inventory';
+import { ProcessType, ContractRevisionEntry } from './inventory';
 
 export interface CustomerOrderLine {
   id: string;
@@ -21,8 +21,9 @@ export interface CustomerOrder {
   orderDate: string;
   dueDate: string;
   priority: 1 | 2 | 3;           // 1: فوری / بحرانی, 2: عادی, 3: کم‌اهمیت
-  status: 'OPEN' | 'PARTIALLY_FULFILLED' | 'FULFILLED' | 'CANCELLED';
+  status: 'OPEN' | 'PARTIALLY_FULFILLED' | 'FULFILLED' | 'CANCELLED' | 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   lines: CustomerOrderLine[];
+  revisions?: ContractRevisionEntry[];
   notes?: string;
   createdAt: string;
 }

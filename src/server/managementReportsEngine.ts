@@ -156,7 +156,7 @@ export function getCustomerOrderFulfillmentReport(filters?: ReportFilterParams):
         ? Math.round((line.deliveredQuantity / line.orderedQuantity) * 1000) / 10
         : 0;
 
-      let status: 'OPEN' | 'PARTIALLY_FULFILLED' | 'FULFILLED' | 'DELAYED' | 'CANCELLED' = order.status;
+      let status: CustomerOrderFulfillmentItem['status'] = order.status;
       if (isPastDue) status = 'DELAYED';
       else if (line.remainingQuantity === 0) status = 'FULFILLED';
       else if (line.deliveredQuantity > 0) status = 'PARTIALLY_FULFILLED';

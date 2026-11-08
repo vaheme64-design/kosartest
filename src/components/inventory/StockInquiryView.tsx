@@ -18,6 +18,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   GitBranch,
+  Pin,
+  ShieldAlert,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import {
   DetailedStockBalance,
@@ -34,6 +38,15 @@ import {
   exportToCsv,
 } from '../../utils/formatters';
 import { CoilSlittingGenealogyPanel } from './CoilSlittingGenealogyPanel';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
+import { FormulaTooltip } from '../common/FormulaTooltip';
+import {
+  loadQcHoldMap,
+  saveQcHoldMap,
+  loadVipPartsMap,
+  isPartVip,
+  QcHoldRecord,
+} from '../../utils/qcHoldStore';
 
 export type StockGroupingKey =
   | 'NONE'
@@ -69,12 +82,156 @@ const DEFAULT_VISIBLE_COLUMNS = {
 };
 
 export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
-  balances,
+  balances: rawBalances,
   parts,
   warehouses,
   loading,
   onRefresh,
 }) => {
+  const { requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
+  const [qcHoldMap, setQcHoldMap] = useState<Record<string, QcHoldRecord>>(() => loadQcHoldMap());
+  const [vipMap, setVipMap] = useState<Record<string, boolean>>(() => loadVipPartsMap());
+
+  useEffect(() => {
+    const onHoldChange = () => setQcHoldMap(loadQcHoldMap());
+    const onVipChange = () => setVipMap(loadVipPartsMap());
+    window.addEventListener('kpims-qc-hold-changed', onHoldChange);
+    window.addEventListener('kpims-vip-parts-changed', onVipChange);
+    return () => {
+      window.removeEventListener('kpims-qc-hold-changed', onHoldChange);
+      window.removeEventListener('kpims-vip-parts-changed', onVipChange);
+    };
+  }, []);
+
+  // Apply QC Hold overrides directly to balances so Available (ATP) = Physical - Reserved - QCHold
+  const balances = useMemo(() => {
+    return rawBalances.map(b => {
+      const hold =
+        qcHoldMap[b.id] ||
+        (b.lotNumber ? qcHoldMap[b.lotNumber] : undefined) ||
+        qcHoldMap[`${b.partId}-${b.warehouseId}`];
+      if (!hold || !hold.isHeld) return b;
+      const heldQty = Number(hold.heldQty || b.physicalQty || 0);
+      const effectiveBlocked = Math.min(b.physicalQty, Math.max(b.qualityBlockedQty || 0, heldQty));
+      const newAvailableQty = Math.max(0, b.physicalQty - b.reservedQty - effectiveBlocked);
+      const unitWeight = b.physicalQty > 0 ? b.physicalKg / b.physicalQty : 1;
+      return {
+        ...b,
+        qualityBlockedQty: effectiveBlocked,
+        availableQty: newAvailableQty,
+        availableKg: Math.round(newAvailableQty * unitWeight * 100) / 100,
+      };
+    });
+  }, [rawBalances, qcHoldMap]);
+
+  const handleToggleQcHoldOnBalance = (b: DetailedStockBalance) => {
+    const holdKey = b.id;
+    const isCurrentlyHeld = Boolean(
+      qcHoldMap[holdKey]?.isHeld ||
+        (b.lotNumber && qcHoldMap[b.lotNumber]?.isHeld) ||
+        b.qualityBlockedQty > 0
+    );
+    const nextHeld = !isCurrentlyHeld;
+    const qtyToHold = b.physicalQty;
+    const weightToHold = b.physicalKg || b.physicalQty;
+
+    requestConfirm({
+      title: nextHeld
+        ? `قرنطینه کیفی (QC Hold) موجودی «${b.partName}»`
+        : `رفع قرنطینه کیفی (Release QC Hold) «${b.partName}»`,
+      description: nextHeld
+        ? `آیا از انتقال ردیف موجودی «${b.lotNumber || b.partCode}» در «${b.warehouseName}» به وضعیت قرنطینه کیفی اطمینان دارید؟`
+        : `آیا از تایید کیفی و آزادسازی موجودی «${b.lotNumber || b.partCode}» اطمینان دارید؟`,
+      consequenceText: nextHeld
+        ? `مقدار ${formatNumber(qtyToHold)} ${
+            b.unit === 'KG' ? 'کیلوگرم' : 'عدد'
+          } بلافاصله قفل شده و از فرمول «موجودی آزاد (ATP)» در انبار و ماژول برنامه‌ریزی (MRP) کسر می‌گردد تا در تولید مصرف نشود.`
+        : `مقدار ${formatNumber(qtyToHold)} ${
+            b.unit === 'KG' ? 'کیلوگرم' : 'عدد'
+          } مجدداً به «موجودی آزاد قابل برنامه‌ریزی (ATP)» در انبار و MRP اضافه خواهد شد.`,
+      severity: nextHeld ? 'danger' : 'info',
+      confirmLabel: nextHeld ? 'تأیید قرنطینه کیفی و کسر از ATP' : 'تأیید رفع قرنطینه',
+      onConfirm: async () => {
+        const prevMap = { ...qcHoldMap };
+        const updatedMap = { ...qcHoldMap };
+
+        if (nextHeld) {
+          const rec: QcHoldRecord = {
+            key: holdKey,
+            partId: b.partId,
+            partCode: b.partCode,
+            partName: b.partName,
+            lotNumber: b.lotNumber,
+            warehouseName: b.warehouseName,
+            isHeld: true,
+            heldQty: qtyToHold,
+            heldWeightKg: weightToHold,
+            unit: b.unit === 'KG' ? 'KG' : 'PCS',
+            reasonFa: 'قرنطینه کیفی در جدول موجودی انبار (QC Hold)',
+            updatedAt: new Date().toLocaleString('fa-IR'),
+            actor: 'مدیریت کنترل کیفیت (QC)',
+          };
+          updatedMap[holdKey] = rec;
+          if (b.lotNumber) updatedMap[b.lotNumber] = rec;
+        } else {
+          delete updatedMap[holdKey];
+          if (b.lotNumber) delete updatedMap[b.lotNumber];
+        }
+
+        setQcHoldMap(updatedMap);
+        saveQcHoldMap(updatedMap);
+
+        try {
+          await fetch('/api/inventory/qc-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: holdKey,
+              partId: b.partId,
+              partCode: b.partCode,
+              materialGrade: b.materialGrade,
+              lotNumber: b.lotNumber,
+              isHeld: nextHeld,
+              heldQty: qtyToHold,
+              heldWeightKg: weightToHold,
+            }),
+          });
+          await onRefresh();
+        } catch {
+          // local state already updated
+        }
+
+        recordAudit({
+          actionType: 'STATUS_CHANGE',
+          module: 'انبار و قرنطینه کیفی (QC Hold)',
+          entityId: b.id,
+          entityCode: b.lotNumber || b.partCode,
+          summaryFa: nextHeld
+            ? `قرنطینه کیفی (QC Hold) «${b.partName}» به مقدار ${formatNumber(qtyToHold)} ${b.unit} و کسر مستقیم از ATP در MRP`
+            : `رفع قرنطینه کیفی «${b.partName}» و بازگشت به موجودی آزاد (ATP)`,
+          beforeSnapshot: { availableQty: b.availableQty, qualityBlockedQty: b.qualityBlockedQty },
+          afterSnapshot: {
+            availableQty: nextHeld ? 0 : b.physicalQty - b.reservedQty,
+            qualityBlockedQty: nextHeld ? qtyToHold : 0,
+          },
+        });
+
+        showUndoToast({
+          title: nextHeld
+            ? `🔒 «${b.partName}» در قرنطینه کیفی (QC Hold) قرار گرفت`
+            : `🔓 قرنطینه کیفی «${b.partName}» آزاد شد`,
+          description: nextHeld
+            ? `مقدار ${formatNumber(qtyToHold)} ${b.unit === 'KG' ? 'kg' : 'عدد'} از موجودی آزاد (ATP) و MRP کسر گردید.`
+            : 'موجودی به چرخه آزاد تولید بازگشت.',
+          onUndo: () => {
+            setQcHoldMap(prevMap);
+            saveQcHoldMap(prevMap);
+          },
+        });
+      },
+    });
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPartFilter, setSelectedPartFilter] = useState('ALL');
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState('ALL');
@@ -408,10 +565,14 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         const reorderPoint = getPartReorderPoint(p);
         const needsPurchase = availableTotal < reorderPoint;
         const isCriticalShortage = availableTotal <= reorderPoint * 0.5;
+        const isVIP = isPartVip(p, vipMap);
+        const blockedTotal = pBalances.reduce((s, b) => s + (b.qualityBlockedQty || 0), 0);
         return {
-          part: p,
+          part: { ...p, isVIP, isPinned: isVIP },
+          isVIP,
           physicalTotal,
           availableTotal,
+          blockedTotal,
           lotsCount,
           balances: pBalances,
           reorderPoint,
@@ -429,10 +590,16 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         );
       })
       .sort((a, b) => {
+        // Priority 1: VIP parts with shortage first!
+        if (a.isVIP && a.needsPurchase && !(b.isVIP && b.needsPurchase)) return -1;
+        if (b.isVIP && b.needsPurchase && !(a.isVIP && a.needsPurchase)) return 1;
+        // Priority 2: VIP parts in general
+        if (a.isVIP !== b.isVIP) return a.isVIP ? -1 : 1;
+        // Priority 3: Any part needing purchase
         if (a.needsPurchase !== b.needsPurchase) return a.needsPurchase ? -1 : 1;
         return b.physicalTotal - a.physicalTotal;
       });
-  }, [parts, balances, partSearchQuery, onlyBelowReorderPoint]);
+  }, [parts, balances, partSearchQuery, onlyBelowReorderPoint, vipMap]);
 
   const activeCardexPartSummary =
     catalogPartsWithStock.find(
@@ -674,11 +841,21 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                     className={`w-full text-right p-3.5 transition-all flex items-start justify-between gap-2 cursor-pointer ${
                       isSelected
                         ? 'bg-amber-50/90 border-r-4 border-amber-600'
+                        : item.isVIP
+                        ? 'bg-amber-50/35 hover:bg-amber-50/70 border-r-2 border-amber-400'
                         : 'hover:bg-slate-50'
                     }`}
                   >
                     <div className="space-y-1">
-                      <div className="font-bold text-xs text-slate-900">{item.part.name}</div>
+                      <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>{item.part.name}</span>
+                        {item.isVIP && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-extrabold">
+                            <Pin className="w-2.5 h-2.5 fill-slate-950" />
+                            VIP
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 border border-slate-200">
                           {item.part.code}
@@ -690,6 +867,12 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                             ? 'نیمه‌ساخته'
                             : 'محصول نهایی'}
                         </span>
+                        {item.blockedTotal > 0 && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            <Lock className="w-2.5 h-2.5" />
+                            قرنطینه کیفی (QC Hold)
+                          </span>
+                        )}
                         {item.needsPurchase && (
                           <span
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
@@ -700,7 +883,7 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                             title={`موجودی آزاد (${formatNumber(item.availableTotal)}) کمتر از نقطه سفارش (${formatNumber(item.reorderPoint)}) است`}
                           >
                             <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                            نیاز به خرید
+                            {item.isVIP ? 'کسری اولویت اول (VIP)' : 'نیاز به خرید'}
                           </span>
                         )}
                       </div>
@@ -825,39 +1008,81 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                               <th className="py-2.5 px-3">قرارداد مرتبط</th>
                               <th className="py-2.5 px-3">مالکیت</th>
                               <th className="py-2.5 px-3">موجودی فیزیکی</th>
-                              <th className="py-2.5 px-3 text-emerald-700">موجودی آزاد</th>
+                              <th className="py-2.5 px-3 text-rose-700">قرنطینه کیفی</th>
+                              <th className="py-2.5 px-3 text-emerald-700">
+                                <span className="inline-flex items-center">
+                                  <span>موجودی آزاد (ATP)</span>
+                                  <FormulaTooltip
+                                    title="فرمول موجودی آزاد قابل تخصیص (ATP)"
+                                    formula="ATP = OnHand - Reserved - QCHold"
+                                    description="هر کالایی که در وضعیت قرنطینه کیفی (QC Hold) قرار گیرد، بلافاصله از موجودی آزاد و محاسبات MRP کسر می‌گردد."
+                                    badgeColor="emerald"
+                                  />
+                                </span>
+                              </th>
+                              <th className="py-2.5 px-3 text-center">کنترل کیفیت (QC Hold)</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {activeCardexPartSummary.balances.map(b => (
-                              <tr key={b.id} className="hover:bg-slate-50">
-                                <td className="py-2.5 px-3 font-medium text-slate-900">
-                                  {b.warehouseName}{' '}
-                                  <span className="text-[10px] font-mono text-slate-400">
-                                    ({b.locationCode})
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                                  {b.lotNumber || 'عمومی'}
-                                </td>
-                                <td className="py-2.5 px-3 font-mono text-slate-700">
-                                  {b.contractNumber || 'آزاد'}
-                                </td>
-                                <td className="py-2.5 px-3">
-                                  {b.ownership === 'SAPCO_SUPPLIER_OWNED' ? (
-                                    <span className="text-amber-800 font-semibold">امانی ساپکو</span>
-                                  ) : (
-                                    <span className="text-slate-700">ملکی شرکت</span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                                  {formatNumber(b.physicalQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
-                                </td>
-                                <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
-                                  {formatNumber(b.availableQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
-                                </td>
-                              </tr>
-                            ))}
+                            {activeCardexPartSummary.balances.map(b => {
+                              const isHeld = b.qualityBlockedQty > 0;
+                              return (
+                                <tr
+                                  key={b.id}
+                                  className={isHeld ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-slate-50'}
+                                >
+                                  <td className="py-2.5 px-3 font-medium text-slate-900">
+                                    {b.warehouseName}{' '}
+                                    <span className="text-[10px] font-mono text-slate-400">
+                                      ({b.locationCode})
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                    {b.lotNumber || 'عمومی'}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-700">
+                                    {b.contractNumber || 'آزاد'}
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    {b.ownership === 'SAPCO_SUPPLIER_OWNED' ? (
+                                      <span className="text-amber-800 font-semibold">امانی ساپکو</span>
+                                    ) : (
+                                      <span className="text-slate-700">ملکی شرکت</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                    {formatNumber(b.physicalQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono font-bold text-rose-700">
+                                    {b.qualityBlockedQty > 0
+                                      ? `${formatNumber(b.qualityBlockedQty)} ${b.unit === 'KG' ? 'kg' : 'عدد'}`
+                                      : '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                                    {formatNumber(b.availableQty)} {b.unit === 'KG' ? 'kg' : 'عدد'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleQcHoldOnBalance(b)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 border transition-colors cursor-pointer ${
+                                        isHeld
+                                          ? 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700'
+                                          : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
+                                      }`}
+                                      title={
+                                        isHeld
+                                          ? 'کلیک جهت رفع قرنطینه کیفی و بازگشت به ATP'
+                                          : 'قرنطینه کیفی این ردیف و کسر مستقیم از موجودی آزاد (ATP) در MRP'
+                                      }
+                                    >
+                                      {isHeld ? <Unlock className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
+                                      <span>{isHeld ? 'رفع قرنطینه (QC)' : 'قرنطینه کیفی / QC Hold'}</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -1473,6 +1698,20 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                               {formatDateTime(item.lastTransactionAt)}
                             </td>
                           )}
+                          <td className="py-3 px-3 text-left" onClick={e => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleQcHoldOnBalance(item)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 border transition-colors cursor-pointer ${
+                                item.qualityBlockedQty > 0
+                                  ? 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700'
+                                  : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
+                              }`}
+                            >
+                              <ShieldAlert className="w-3 h-3" />
+                              <span>{item.qualityBlockedQty > 0 ? 'رفع قرنطینه' : 'قرنطینه کیفی / QC Hold'}</span>
+                            </button>
+                          </td>
                         </tr>
 
                         {/* Expandable Details Row */}

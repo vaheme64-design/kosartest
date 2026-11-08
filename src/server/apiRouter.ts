@@ -128,6 +128,8 @@ import {
   runFullMrp,
   checkMoMaterialAvailability,
   autoReserveMoMaterials,
+  serverQcHoldStore,
+  serverVipPartsStore,
 } from './mrpEngine';
 import { ReportFilterParams } from '../types/managementReports';
 import {
@@ -611,7 +613,10 @@ apiRouter.post('/inventory/reverse', (req: Request, res: Response) => {
  */
 apiRouter.get('/parts', (req: Request, res: Response) => {
   const { category, search, carModel } = req.query;
-  let result = [...partsStore];
+  let result = partsStore.map(p => {
+    const vip = Boolean(p.isVIP ?? p.isPinned ?? serverVipPartsStore[p.id] ?? serverVipPartsStore[p.code]);
+    return { ...p, isVIP: vip, isPinned: vip };
+  });
 
   if (category && typeof category === 'string') {
     result = result.filter(p => p.category === category);
@@ -639,17 +644,28 @@ apiRouter.post('/parts', (req: Request, res: Response) => {
 
   const existingIndex = partsStore.findIndex(p => p.id === payload.id || p.code === payload.code);
   const now = new Date().toISOString();
+  const vipFlag = payload.isVIP !== undefined ? Boolean(payload.isVIP) : payload.isPinned !== undefined ? Boolean(payload.isPinned) : undefined;
 
   if (existingIndex >= 0) {
+    const current = partsStore[existingIndex];
+    const effectiveVip = vipFlag !== undefined ? vipFlag : Boolean(current.isVIP ?? current.isPinned);
+    serverVipPartsStore[current.id] = effectiveVip;
+    serverVipPartsStore[current.code] = effectiveVip;
     partsStore[existingIndex] = {
-      ...partsStore[existingIndex],
+      ...current,
       ...payload,
+      isVIP: effectiveVip,
+      isPinned: effectiveVip,
       updatedAt: now,
     };
     return res.json({ success: true, message: 'اطلاعات قطعه به‌روزرسانی شد.', data: partsStore[existingIndex] });
   } else {
+    const effectiveVip = Boolean(vipFlag);
+    const newId = payload.id || `PRT-${Date.now()}`;
+    serverVipPartsStore[newId] = effectiveVip;
+    serverVipPartsStore[payload.code] = effectiveVip;
     const newPart: Part = {
-      id: payload.id || `PRT-${Date.now()}`,
+      id: newId,
       code: payload.code,
       name: payload.name,
       category: payload.category,
@@ -661,6 +677,8 @@ apiRouter.post('/parts', (req: Request, res: Response) => {
       materialGrade: payload.materialGrade || '',
       minStock: Number(payload.minStock) || 0,
       maxStock: Number(payload.maxStock) || 0,
+      isVIP: effectiveVip,
+      isPinned: effectiveVip,
       isDemo: false, // User created parts are real
       createdAt: now,
       updatedAt: now,
@@ -2216,6 +2234,25 @@ apiRouter.get('/inventory/stock-inquiry', (req: Request, res: Response) => {
       );
     }
 
+    // Apply any active QC Hold (قرنطینه کیفی) overrides from serverQcHoldStore so ATP is immediately reduced
+    filtered = filtered.map(b => {
+      const hold =
+        serverQcHoldStore[b.id] ||
+        (b.lotNumber ? serverQcHoldStore[b.lotNumber] : undefined) ||
+        serverQcHoldStore[`${b.partId}-${b.warehouseId}`];
+      if (!hold || !hold.isHeld) return b;
+      const addedBlocked = Number(hold.heldQty || b.availableQty || b.physicalQty || 0);
+      const newBlockedQty = Math.min(b.physicalQty, (b.qualityBlockedQty || 0) + addedBlocked);
+      const newAvailableQty = Math.max(0, b.physicalQty - b.reservedQty - newBlockedQty);
+      const unitWeight = b.physicalQty > 0 ? b.physicalKg / b.physicalQty : 1;
+      return {
+        ...b,
+        qualityBlockedQty: newBlockedQty,
+        availableQty: newAvailableQty,
+        availableKg: Math.round(newAvailableQty * unitWeight * 100) / 100,
+      };
+    });
+
     // Keep zero-stock catalog parts when searching, when explicitly asked, or by default unless onlyAvailable is true
     const isSearching = !!(search && typeof search === 'string' && search.trim()) || (partId && partId !== 'ALL');
     const filterOutZero = req.query.onlyAvailable === 'true' || req.query.onlyNonZero === 'true';
@@ -2228,11 +2265,64 @@ apiRouter.get('/inventory/stock-inquiry', (req: Request, res: Response) => {
       success: true,
       count: filtered.length,
       data: filtered,
+      qcHolds: serverQcHoldStore,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'خطا در استعلام موجودی انبار',
+    });
+  }
+});
+
+/**
+ * 16.8.1 Toggle QC Hold (قرنطینه کیفی) on Warehouse Stock Row or Coil
+ */
+apiRouter.post('/inventory/qc-hold', (req: Request, res: Response) => {
+  try {
+    const { key, partId, partCode, materialGrade, lotNumber, isHeld, heldQty, heldWeightKg, reasonFa } = req.body;
+    if (!key) {
+      return res.status(400).json({ success: false, error: 'شناسه ردیف موجودی یا کلاف الزامی است.' });
+    }
+
+    if (isHeld) {
+      serverQcHoldStore[key] = {
+        key,
+        partId,
+        partCode,
+        materialGrade,
+        lotNumber,
+        isHeld: true,
+        heldQty: Number(heldQty) || 0,
+        heldWeightKg: Number(heldWeightKg || heldQty) || 0,
+        reasonFa: reasonFa || 'قرنطینه کیفی توسط واحد کنترل کیفیت (QC Hold)',
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      delete serverQcHoldStore[key];
+    }
+
+    // Also sync matching physical coil if lotNumber or key matches a coil
+    const targetCoil = physicalCoilsStore.find(
+      c => c.id === key || c.coilId === key || (lotNumber && (c.coilId === lotNumber || c.coilPackNumber === lotNumber))
+    );
+    if (targetCoil) {
+      targetCoil.qualityStatus = isHeld ? 'QUARANTINE' : 'AVAILABLE';
+      targetCoil.physicalStatus = isHeld ? 'BLOCKED' : targetCoil.remainingWeightKg > 0 ? 'AVAILABLE' : 'CONSUMED';
+    }
+
+    res.json({
+      success: true,
+      message: isHeld
+        ? 'موجودی در وضعیت «قرنطینه کیفی (QC Hold)» قرار گرفت و از موجودی آزاد (ATP) و برنامه‌ریزی MRP کسر شد.'
+        : 'رفع قرنطینه انجام شد و موجودی به چرخه آزاد قابل برنامه‌ریزی (ATP) بازگشت.',
+      data: serverQcHoldStore[key] || { key, isHeld: false },
+      qcHolds: serverQcHoldStore,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت وضعیت قرنطینه کیفی',
     });
   }
 });
@@ -2572,20 +2662,47 @@ apiRouter.put('/inventory/contracts/:id', (req: Request, res: Response) => {
     }
 
     const current = contractsStore[contractIndex];
+    const existingRevisions = Array.isArray(current.revisions) ? [...current.revisions] : [];
+    const newAllocatedKg =
+      payload.allocatedWeightKg !== undefined ? Number(payload.allocatedWeightKg) : current.allocatedWeightKg;
+    const newStatus = payload.status || current.status;
+
+    if (newAllocatedKg !== current.allocatedWeightKg || newStatus !== current.status || payload.revisionReasonFa) {
+      existingRevisions.unshift({
+        id: `REV-CNT-${Date.now()}`,
+        revisionNumber: existingRevisions.length + 1,
+        timestamp: new Date().toLocaleString('fa-IR'),
+        actor: payload.actor || 'مدیر بازرگانی و قراردادها',
+        fieldLabelFa:
+          newAllocatedKg !== current.allocatedWeightKg
+            ? 'سهمیه وزنی قرارداد (کیلوگرم)'
+            : 'وضعیت اجرایی قرارداد',
+        oldQty: current.allocatedWeightKg,
+        newQty: newAllocatedKg,
+        unit: 'کیلوگرم',
+        oldStatus: current.status,
+        newStatus,
+        reasonFa: payload.revisionReasonFa || payload.notes || 'اصلاحیه و بازنگری تیراژ/وضعیت قرارداد',
+      });
+    }
+
     const updated: SapcoContract = {
       ...current,
       ...payload,
       id: current.id,
       contractNumber: current.contractNumber, // Prevent altering unique number
+      allocatedWeightKg: newAllocatedKg,
+      status: newStatus,
       commercialLines: payload.commercialLines || current.commercialLines,
       associatedPartCodes: payload.associatedPartCodes || current.associatedPartCodes,
+      revisions: payload.revisions || existingRevisions,
     };
 
     contractsStore[contractIndex] = updated;
 
     res.json({
       success: true,
-      message: `قرارداد شماره «${updated.contractNumber}» به‌روزرسانی شد.`,
+      message: `قرارداد شماره «${updated.contractNumber}» به‌روزرسانی شد و در تاریخچه ویرایش‌ها ثبت گردید.`,
       contract: updated,
     });
   } catch (error) {
@@ -4401,6 +4518,77 @@ apiRouter.post('/planning/customer-orders', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'خطا در ثبت سفارش مشتری',
+    });
+  }
+});
+
+/**
+ * 18.12. Update Customer Order (Edit Order, Status & Track Quantity Revisions)
+ */
+apiRouter.put('/planning/customer-orders/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const payload = req.body;
+    const idx = customerOrdersStore.findIndex(o => o.id === id || o.orderNumber === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'سفارش فروش مورد نظر یافت نشد.' });
+    }
+
+    const current = customerOrdersStore[idx];
+    const oldTotalQty = (current.lines || []).reduce((s, l) => s + l.orderedQuantity, 0);
+    const updatedLines = Array.isArray(payload.lines)
+      ? payload.lines.map((l: any) => ({
+          ...l,
+          orderedQuantity: Number(l.orderedQuantity) || 0,
+          deliveredQuantity: Number(l.deliveredQuantity) || 0,
+          remainingQuantity: Math.max(0, (Number(l.orderedQuantity) || 0) - (Number(l.deliveredQuantity) || 0)),
+        }))
+      : current.lines;
+    const newTotalQty = updatedLines.reduce((s: number, l: any) => s + l.orderedQuantity, 0);
+    const newStatus = payload.status || current.status;
+    const existingRevisions = Array.isArray(current.revisions) ? [...current.revisions] : [];
+
+    if (newTotalQty !== oldTotalQty || newStatus !== current.status || payload.revisionReasonFa) {
+      existingRevisions.unshift({
+        id: `REV-ORD-${Date.now()}`,
+        revisionNumber: existingRevisions.length + 1,
+        timestamp: new Date().toLocaleString('fa-IR'),
+        actor: payload.actor || 'کارشناس فروش و برنامه‌ریزی',
+        fieldLabelFa: newTotalQty !== oldTotalQty ? 'تیراژ کل اقلام سفارش' : 'وضعیت سفارش مشتری',
+        oldQty: oldTotalQty,
+        newQty: newTotalQty,
+        unit: 'عدد',
+        oldStatus: current.status,
+        newStatus,
+        reasonFa: payload.revisionReasonFa || payload.notes || 'ویرایش تیراژ و برنامه تحویل سفارش مشتری',
+      });
+    }
+
+    const updatedOrder: CustomerOrder = {
+      ...current,
+      ...payload,
+      id: current.id,
+      orderNumber: payload.orderNumber || current.orderNumber,
+      status: newStatus,
+      lines: updatedLines,
+      revisions: payload.revisions || existingRevisions,
+    };
+
+    customerOrdersStore[idx] = updatedOrder;
+
+    // Refresh plan suggestions
+    planSuggestionsStore.length = 0;
+    planSuggestionsStore.push(...generateProductionPlanSuggestions());
+
+    res.json({
+      success: true,
+      message: `سفارش شماره «${updatedOrder.orderNumber}» با موفقیت ویرایش شد و بازنگری تیراژ ثبت گردید.`,
+      data: updatedOrder,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ویرایش سفارش مشتری',
     });
   }
 });

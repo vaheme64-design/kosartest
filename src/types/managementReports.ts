@@ -53,7 +53,15 @@ export interface CustomerOrderFulfillmentItem {
   remainingQuantity: number;
   fulfillmentPercent: number;
   dueDate: string;
-  status: 'OPEN' | 'PARTIALLY_FULFILLED' | 'FULFILLED' | 'DELAYED' | 'CANCELLED';
+  status:
+    | 'OPEN'
+    | 'ACTIVE'
+    | 'SUSPENDED'
+    | 'TERMINATED'
+    | 'PARTIALLY_FULFILLED'
+    | 'FULFILLED'
+    | 'DELAYED'
+    | 'CANCELLED';
   daysOverdue: number;
   isDelayed: boolean;
 }
@@ -142,7 +150,7 @@ export interface SapcoMaterialAccountItem {
   closingBookBalanceKg: number;
   physicalStockInPlantKg: number;
   discrepancyKg: number; // physical - closingBook
-  status: 'ACTIVE' | 'DEPLETED' | 'EXPIRED' | 'FULFILLED' | 'SUSPENDED';
+  status: 'ACTIVE' | 'DEPLETED' | 'EXPIRED' | 'FULFILLED' | 'SUSPENDED' | 'TERMINATED';
 }
 
 // 8. Inventory Valuation Quantities (Strictly Quantities without inventing financial rules)

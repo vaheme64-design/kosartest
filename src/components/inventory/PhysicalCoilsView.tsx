@@ -20,11 +20,15 @@ import {
   Calendar,
   Edit3,
   Trash2,
+  ShieldAlert,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { PhysicalCoil, StockOwnership } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
 import { CoilSlittingGenealogyPanel } from './CoilSlittingGenealogyPanel';
 import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
+import { loadQcHoldMap, saveQcHoldMap, QcHoldRecord } from '../../utils/qcHoldStore';
 
 interface PhysicalCoilsViewProps {
   onRefresh?: () => Promise<void>;
@@ -37,11 +41,135 @@ interface PhysicalCoilsViewProps {
 export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUser }) => {
   const { requestConfirm, showUndoToast, openQuickEditDrawer, recordAudit } = useEnterpriseUx();
   const [coils, setCoils] = useState<PhysicalCoil[]>([]);
+  const [qcHoldMap, setQcHoldMap] = useState<Record<string, QcHoldRecord>>(() => loadQcHoldMap());
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [ownershipFilter, setOwnershipFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'FULL' | 'PARTIAL' | 'CONSUMED'>('ALL');
+
+  useEffect(() => {
+    const onHoldChange = () => setQcHoldMap(loadQcHoldMap());
+    window.addEventListener('kpims-qc-hold-changed', onHoldChange);
+    return () => window.removeEventListener('kpims-qc-hold-changed', onHoldChange);
+  }, []);
+
+  const isCoilInQcHold = (c: PhysicalCoil): boolean => {
+    return Boolean(
+      c.qualityStatus === 'QUARANTINE' ||
+        c.qualityStatus === 'QUALITY_BLOCKED' ||
+        qcHoldMap[c.id]?.isHeld ||
+        qcHoldMap[c.coilId]?.isHeld
+    );
+  };
+
+  const handleToggleCoilQcHold = (coil: PhysicalCoil) => {
+    const currentlyHeld = isCoilInQcHold(coil);
+    const nextHeld = !currentlyHeld;
+
+    requestConfirm({
+      title: nextHeld
+        ? `قرنطینه کیفی رول ورق (QC Hold) — کلاف «${coil.coilId}»`
+        : `رفع قرنطینه کیفی رول ورق — کلاف «${coil.coilId}»`,
+      description: nextHeld
+        ? `آیا از انتقال کلاف «${coil.coilId}» (شماره ذوب: ${coil.heatNumber || '—'}) با وزن ${formatWeightKg(
+            coil.remainingWeightKg
+          )} به وضعیت قرنطینه کیفی اطمینان دارید؟`
+        : `آیا از تایید کیفی و آزادسازی کلاف «${coil.coilId}» اطمینان دارید؟`,
+      consequenceText: nextHeld
+        ? `وزن ${formatWeightKg(
+            coil.remainingWeightKg
+          )} این کلاف قفل شده و مستقیماً از فرمول «موجودی آزاد (ATP)» در ماژول برنامه‌ریزی (MRP) کسر می‌گردد تا به خطوط پرس حواله نشود.`
+        : `وزن ${formatWeightKg(
+            coil.remainingWeightKg
+          )} مجدداً به موجودی آزاد قابل تخصیص (ATP) در ماژول MRP بازگردانده می‌شود.`,
+      severity: nextHeld ? 'danger' : 'info',
+      confirmLabel: nextHeld ? 'تأیید قرنطینه کیفی کلاف و کسر از ATP' : 'تأیید رفع قرنطینه کلاف',
+      onConfirm: async () => {
+        const prevMap = { ...qcHoldMap };
+        const prevCoils = [...coils];
+        const updatedMap = { ...qcHoldMap };
+
+        if (nextHeld) {
+          const rec: QcHoldRecord = {
+            key: coil.id,
+            partId: coil.partId,
+            partCode: coil.partCode,
+            partName: `${coil.partName} (${coil.coilId})`,
+            lotNumber: coil.coilId,
+            warehouseName: coil.warehouseName,
+            isHeld: true,
+            heldQty: coil.remainingWeightKg,
+            heldWeightKg: coil.remainingWeightKg,
+            unit: 'KG',
+            reasonFa: 'قرنطینه کیفی کلاف ورق (QC Hold)',
+            updatedAt: new Date().toLocaleString('fa-IR'),
+            actor: currentUser?.displayName || 'واحد کنترل کیفیت',
+          };
+          updatedMap[coil.id] = rec;
+          updatedMap[coil.coilId] = rec;
+        } else {
+          delete updatedMap[coil.id];
+          delete updatedMap[coil.coilId];
+        }
+
+        setQcHoldMap(updatedMap);
+        saveQcHoldMap(updatedMap);
+        setCoils(prev =>
+          prev.map(c =>
+            c.id === coil.id
+              ? { ...c, qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE' }
+              : c
+          )
+        );
+
+        try {
+          await fetch('/api/inventory/qc-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: coil.id,
+              partId: coil.partId,
+              partCode: coil.partCode,
+              materialGrade: coil.materialGrade,
+              lotNumber: coil.coilId,
+              isHeld: nextHeld,
+              heldQty: coil.remainingWeightKg,
+              heldWeightKg: coil.remainingWeightKg,
+            }),
+          });
+        } catch {
+          // local state updated
+        }
+
+        recordAudit({
+          actionType: 'STATUS_CHANGE',
+          module: 'مدیریت کلاف‌های ورق (QC Hold)',
+          entityId: coil.id,
+          entityCode: coil.coilId,
+          summaryFa: nextHeld
+            ? `قرنطینه کیفی کلاف «${coil.coilId}» (${formatWeightKg(coil.remainingWeightKg)}) و کسر از ATP در MRP`
+            : `رفع قرنطینه کیفی کلاف «${coil.coilId}» و بازگشت به ATP`,
+          beforeSnapshot: { qualityStatus: coil.qualityStatus },
+          afterSnapshot: { qualityStatus: nextHeld ? 'QUARANTINE' : 'AVAILABLE' },
+        });
+
+        showUndoToast({
+          title: nextHeld
+            ? `🔒 کلاف «${coil.coilId}» در قرنطینه کیفی قرار گرفت`
+            : `🔓 قرنطینه کیفی کلاف «${coil.coilId}» آزاد شد`,
+          description: nextHeld
+            ? `${formatWeightKg(coil.remainingWeightKg)} از موجودی آزاد (ATP) در MRP کسر شد.`
+            : 'کلاف به چرخه موجودی آزاد بازگشت.',
+          onUndo: () => {
+            setQcHoldMap(prevMap);
+            saveQcHoldMap(prevMap);
+            setCoils(prevCoils);
+          },
+        });
+      },
+    });
+  };
 
   // Modals
   const [selectedCoil, setSelectedCoil] = useState<PhysicalCoil | null>(null);
@@ -500,11 +628,24 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                   const isFull = coil.remainingWeightKg === coil.originalWeightKg && coil.remainingWeightKg > 0;
                   const isPartial = coil.remainingWeightKg < coil.originalWeightKg && coil.remainingWeightKg > 0;
                   const isConsumed = coil.remainingWeightKg <= 0;
+                  const isHeld = isCoilInQcHold(coil);
 
                   return (
-                    <tr key={coil.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr
+                      key={coil.id}
+                      className={`transition-colors ${
+                        isHeld ? 'bg-rose-50/75 hover:bg-rose-50' : 'hover:bg-slate-50/60'
+                      }`}
+                    >
                       <td className="py-3 px-3.5 font-mono font-medium text-slate-900">
-                        {coil.coilId}
+                        <div className="flex items-center gap-1.5">
+                          <span>{coil.coilId}</span>
+                          {isHeld && (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white font-sans text-[9px] font-bold">
+                              QC Hold
+                            </span>
+                          )}
+                        </div>
                         {coil.heatNumber && (
                           <div className="text-[10px] text-slate-400">ذوب: {coil.heatNumber}</div>
                         )}
@@ -513,19 +654,22 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                         {coil.coilPackNumber}
                       </td>
                       <td className="py-3 px-3.5">
-                        {isFull && (
+                        {isHeld ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full font-bold">
+                            <Lock className="w-3 h-3 text-rose-700" />
+                            قرنطینه کیفی (کسر از ATP)
+                          </span>
+                        ) : isFull ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                             کامل (دست‌نخورده)
                           </span>
-                        )}
-                        {isPartial && (
+                        ) : isPartial ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
                             ناقص / ته‌رول
                           </span>
-                        )}
-                        {isConsumed && (
+                        ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full font-medium">
                             پایان‌یافته (صفر)
                           </span>
@@ -545,8 +689,15 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                       <td className="py-3 px-3.5 font-mono text-slate-500">
                         {formatWeightKg(coil.originalWeightKg)}
                       </td>
-                      <td className="py-3 px-3.5 font-mono font-bold text-emerald-700">
-                        {formatWeightKg(coil.remainingWeightKg)}
+                      <td className="py-3 px-3.5 font-mono font-bold">
+                        {isHeld ? (
+                          <div>
+                            <span className="text-rose-700 line-through">{formatWeightKg(coil.remainingWeightKg)}</span>
+                            <span className="block text-[10px] text-rose-600 font-sans">آزاد (ATP): ۰ kg</span>
+                          </div>
+                        ) : (
+                          <span className="text-emerald-700">{formatWeightKg(coil.remainingWeightKg)}</span>
+                        )}
                       </td>
                       <td className="py-3 px-3.5">
                         {coil.allocations && coil.allocations.length > 0 ? (
@@ -567,7 +718,25 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                         <div className="text-[10px] text-slate-400 font-mono">{coil.warehouseLocationCode}</div>
                       </td>
                       <td className="py-3 px-3.5">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCoilQcHold(coil)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1 border cursor-pointer ${
+                              isHeld
+                                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700'
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                            }`}
+                            title={
+                              isHeld
+                                ? 'رفع قرنطینه کیفی و بازگشت به موجودی آزاد (ATP)'
+                                : 'قرنطینه کیفی / QC Hold و کسر از موجودی آزاد (ATP) در MRP'
+                            }
+                          >
+                            {isHeld ? <Unlock className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
+                            <span>{isHeld ? 'رفع قرنطینه' : 'قرنطینه کیفی / QC Hold'}</span>
+                          </button>
+
                           <button
                             onClick={() => {
                               setSelectedCoil(coil);
@@ -575,9 +744,9 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
                               setIssueMode('SINGLE');
                               setIssueModalOpen(true);
                             }}
-                            disabled={coil.remainingWeightKg <= 0}
+                            disabled={coil.remainingWeightKg <= 0 || isHeld}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
-                            title="صدور کلاف به خطوط پرس"
+                            title={isHeld ? 'کلاف در قرنطینه کیفی است و امکان صدور ندارد' : 'صدور کلاف به خطوط پرس'}
                           >
                             <ArrowUpRight className="w-3 h-3 text-slate-500" />
                             <span>خروج / صدور</span>

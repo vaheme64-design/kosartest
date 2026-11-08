@@ -18,15 +18,24 @@ import {
   Layers,
   HelpCircle,
   RefreshCw,
+  AlertTriangle,
+  ShieldAlert,
+  Pin,
+  Compass,
 } from 'lucide-react';
 import { AiProvider, AiSettings, AiActionPayload } from '../types/ai';
-import { Part } from '../types/inventory';
-import { toPersianDigits } from '../utils/formatters';
+import { Part, SapcoCoilReceipt } from '../types/inventory';
+import { TabKey } from './Sidebar';
+import { formatNumber, toPersianDigits } from '../utils/formatters';
+import { loadQcHoldMap, loadVipPartsMap, isPartVip } from '../utils/qcHoldStore';
 
 interface AiAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
   parts: Part[];
+  currentPageTab?: TabKey;
+  coils?: SapcoCoilReceipt[];
+  summary?: any;
   onExecuteAction: (action: AiActionPayload) => void;
 }
 
@@ -46,6 +55,9 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   isOpen,
   onClose,
   parts,
+  currentPageTab = 'dashboard',
+  coils = [],
+  summary,
   onExecuteAction,
 }) => {
   const [activeTab, setActiveTab] = useState<'COMMAND' | 'SETTINGS' | 'GUIDE'>('COMMAND');
@@ -53,6 +65,21 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<AiActionPayload | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [mrpSnapshot, setMrpSnapshot] = useState<any>(null);
+  const [qcHoldMap, setQcHoldMap] = useState<Record<string, any>>(() => loadQcHoldMap());
+  const [vipMap, setVipMap] = useState<Record<string, boolean>>(() => loadVipPartsMap());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setQcHoldMap(loadQcHoldMap());
+    setVipMap(loadVipPartsMap());
+    fetch('/api/mrp/run')
+      .then(r => r.json())
+      .then(json => {
+        if (json.success) setMrpSnapshot(json.data);
+      })
+      .catch(() => {});
+  }, [isOpen]);
 
   // Settings state (Persisted in localStorage)
   const [settings, setSettings] = useState<AiSettings>(() => {
@@ -95,7 +122,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
 
   const toggleSpeechRecognition = () => {
     if (!recognitionRef.current) {
-      alert('مرورگر شما از ورودی صوتی پشتیبانی نمی‌کند یا دسترسی میکروفن داده نشده است.');
+      setErrorMsg('مرورگر شما از ورودی صوتی پشتیبانی نمی‌کند یا دسترسی میکروفن داده نشده است.');
       return;
     }
     if (isListening) {
@@ -185,6 +212,75 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     'انتقال به بخش ماشین‌آلات، پرس‌ها و تعمیرات PM',
   ];
 
+  // Compute Live Context-Aware Insights based on currentPageTab + live ERP state
+  const hardShortageMaterials: any[] = (mrpSnapshot?.materialRows || []).filter(
+    (m: any) => (m.hardShortage || 0) > 0
+  );
+  const vipPartsList = parts.filter(p => isPartVip(p.id, p.code, parts, vipMap));
+  const activeQcHoldEntries = Object.values(qcHoldMap).filter((e: any) => e?.isHeld && e?.heldQty > 0);
+  const quarantinedCoils = coils.filter(
+    c =>
+      (c.status as string) === 'QUARANTINE' ||
+      qcHoldMap[c.id]?.isHeld ||
+      qcHoldMap[c.coilNumber]?.isHeld
+  );
+
+  const pageContextMeta: Record<
+    string,
+    { badge: string; title: string; subtitle: string; quickPrompts: string[] }
+  > = {
+    planning: {
+      badge: 'حساس به صفحه: برنامه‌ریزی و MRP',
+      title: 'تحلیل زنده کسری قطعی مواد اولیه (Hard Shortages) و ظرفیت خطوط',
+      subtitle:
+        hardShortageMaterials.length > 0
+          ? `${toPersianDigits(hardShortageMaterials.length)} گرید ورق دارای کسری قطعی (Hard Shortage) پس از کسر موجودی رزرو و قرنطینه کیفی (QC Hold) هستند.`
+          : 'تمامی نیازمندی‌های ورق (Gross Requirement) توسط موجودی آزاد (ATP) پوشش داده شده‌اند.',
+      quickPrompts: [
+        'لیست ورق‌های دارای کسری قطعی (Hard Shortage) در MRP و صدور رسید فوری',
+        'بررسی وضعیت تامین قطعات کلیدی نشانه‌گذاری‌شده (VIP) در برنامه تولید',
+        'انتقال به تقویم ظرفیت ماشین‌آلات (Capacity Planning) جهت بررسی تداخل پرس‌ها',
+      ],
+    },
+    inventory: {
+      badge: 'حساس به صفحه: مدیریت انبار و قرنطینه (QC Hold)',
+      title: 'پایش موجودی آزاد (ATP)، محموله‌های قرنطینه کیفی و اقلام VIP',
+      subtitle: `در حال حاضر ${toPersianDigits(activeQcHoldEntries.length + quarantinedCoils.length)} محموله/کلاف در قرنطینه کیفی (QC Hold) قرار دارد که از فرمول موجودی آزاد (ATP) کسر شده است.`,
+      quickPrompts: [
+        'بررسی کسری موجودی و اقلام زیر نقطه سفارش (آلارم کسری)',
+        'رسید ۵ تن ورق DC04 با شماره ذوب HT-9912 به انبار ساپکو',
+        'حواله خروج ۸۰۰ کیلوگرم ورق DC04 برای سالن پرس و خط تولید',
+      ],
+    },
+    dashboard: {
+      badge: 'حساس به صفحه: پیشخوان کارخانه و دستورات تولید (MO)',
+      title: 'خلاصه هوشمند وضعیت دستورات کار (MO)، قطعات VIP و ردیابی ذوب',
+      subtitle: `${toPersianDigits(vipPartsList.length)} قطعه کلیدی (VIP) در صدر پایش کارخانه قرار دارند و امکان عملیات گروهی (Bulk Actions) روی دستورات تولید فعال است.`,
+      quickPrompts: [
+        'صدور دستور تولید جدید (MO) برای قطعه براکت ۲۰۶ با تیراژ ۵,۰۰۰ عدد',
+        'پیگیری و ردیابی زنجیره دستور تولید در خط پرس',
+        'ردیابی شماره ذوب HT-99412 و شجره‌نامه کلاف‌های ساپکو',
+      ],
+    },
+    contracts: {
+      badge: 'حساس به صفحه: مدیریت قراردادها و سفارشات ساپکو',
+      title: 'پایش وضعیت قراردادهای فروش (فعال/معلق) و تاریخچه تغییرات تیراژ (Revisions)',
+      subtitle:
+        'هرگونه ویرایش تیراژ قراردادها به صورت خودکار در تاریخچه ویرایش‌ها (Revisions) ثبت و در محاسبات MRP لحاظ می‌گردد.',
+      quickPrompts: [
+        'انتقال به ماژول برنامه‌ریزی و MRP جهت بررسی تاثیر قراردادها بر کسری ورق',
+        'بررسی موجودی محصول نهایی آماده تحویل به قراردادهای ساپکو',
+      ],
+    },
+  };
+
+  const activePageContext = pageContextMeta[currentPageTab] || {
+    badge: `حساس به ماژول: ${currentPageTab.toUpperCase()}`,
+    title: 'پایش هوشمند زنجیره تامین، تولید و انبار (Context-Aware ERP AI)',
+    subtitle: `${toPersianDigits(vipPartsList.length)} قطعه VIP، ${toPersianDigits(hardShortageMaterials.length)} کسری قطعی ورق در MRP و ${toPersianDigits(activeQcHoldEntries.length)} قلم در قرنطینه کیفی (QC Hold) شناسایی شد.`,
+    quickPrompts: samplePrompts.slice(0, 3),
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -197,8 +293,11 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-sm lg:text-base">دستیار هوشمند کارخانه کوثر (KPIMS AI)</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                  {activePageContext.badge}
+                </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {settings.provider === 'LOCAL_NLP'
                     ? 'موتور داخلی آفلاین'
@@ -212,7 +311,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                تکمیل خودکار اسناد انبار، رسید ورق، حواله تولید و ناوبری با دستورات صوتی و متنی فارسی
+                دستیار هوشمند حساس به صفحه جاری (Context-Aware) با میانبر سراسری Ctrl + Space
               </p>
             </div>
           </div>
@@ -266,6 +365,111 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
           {/* TAB 1: COMMAND & VOICE */}
           {activeTab === 'COMMAND' && (
             <div className="space-y-4">
+              {/* CONTEXT-AWARE INTELLIGENCE PANEL (Upgrade 5) */}
+              <div className="p-3.5 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Compass className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-bold text-xs text-white">{activePageContext.title}</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                    Context-Aware Live Insight
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {activePageContext.subtitle}
+                </p>
+
+                {/* Live MRP Hard Shortages Cards (Especially highlighted on MRP/Planning & Inventory) */}
+                {hardShortageMaterials.length > 0 && (
+                  <div className="bg-slate-800/90 border border-rose-500/30 rounded-lg p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-rose-300 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                        <span>کسری‌های قطعی مواد اولیه در MRP (پس از کسر QC Hold):</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onExecuteAction({
+                            actionType: 'NAVIGATE',
+                            targetTab: 'planning',
+                            targetSubTab: 'mrp',
+                            message: 'هدایت به جدول نیازمندی‌های مواد (MRP)',
+                          });
+                          onClose();
+                        }}
+                        className="text-emerald-300 hover:underline font-semibold cursor-pointer"
+                      >
+                        مشاهده در MRP ←
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {hardShortageMaterials.slice(0, 4).map((m: any) => (
+                        <div
+                          key={m.materialCode}
+                          className="p-2 rounded bg-slate-900/90 border border-slate-700 flex items-center justify-between gap-2 text-[11px]"
+                        >
+                          <div className="truncate">
+                            <div className="font-bold text-slate-100 truncate">
+                              {m.materialName}
+                              {m.isVIP && (
+                                <span className="mr-1 px-1 py-0.2 rounded bg-amber-400/20 text-amber-300 text-[9px]">
+                                  📌 VIP
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              ATP: {formatNumber(m.netAvailable)} kg | کسری:{' '}
+                              <span className="text-rose-400 font-bold">
+                                {formatNumber(m.hardShortage)} kg
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onExecuteAction({
+                                actionType: 'OPEN_RECEIPT',
+                                message: `آماده‌سازی فرم رسید فوری برای جبران کسری ${m.materialName}`,
+                                prefillReceipt: {
+                                  partCode: m.materialCode,
+                                  partName: m.materialName,
+                                  quantity: m.hardShortage,
+                                  unit: 'کیلوگرم',
+                                  ownership: 'SAPCO_SUPPLIER_OWNED',
+                                },
+                              });
+                              onClose();
+                            }}
+                            className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold shrink-0 cursor-pointer"
+                          >
+                            رسید فوری
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Context Prompts for current page */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">پیشنهادهای صفحه فعلی:</span>
+                  {activePageContext.quickPrompts.map((qp, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setPrompt(qp);
+                        handleSubmitCommand(qp);
+                      }}
+                      className="px-2 py-1 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white text-[10px] border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      {qp}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {/* Input Box with Voice */}
               <div className="relative">
                 <textarea
