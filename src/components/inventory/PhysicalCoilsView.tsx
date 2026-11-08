@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PhysicalCoil, StockOwnership } from '../../types/inventory';
 import { formatNumber, formatWeightKg, toPersianDigits } from '../../utils/formatters';
+import { CoilSlittingGenealogyPanel } from './CoilSlittingGenealogyPanel';
 
 interface PhysicalCoilsViewProps {
   onRefresh?: () => Promise<void>;
@@ -461,6 +462,9 @@ export const PhysicalCoilsView: React.FC<PhysicalCoilsViewProps> = ({ currentUse
           </button>
         </div>
       </div>
+
+      {/* Visual Parent-to-Child Coil Slitting Genealogy Tree */}
+      <CoilSlittingGenealogyPanel coils={coils} />
 
       {/* Coils Table */}
       <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs">

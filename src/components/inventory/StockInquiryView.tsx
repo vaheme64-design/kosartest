@@ -16,6 +16,8 @@ import {
   ArrowUpRight,
   History,
   CheckCircle2,
+  AlertTriangle,
+  GitBranch,
 } from 'lucide-react';
 import {
   DetailedStockBalance,
@@ -31,6 +33,7 @@ import {
   formatDateTime,
   exportToCsv,
 } from '../../utils/formatters';
+import { CoilSlittingGenealogyPanel } from './CoilSlittingGenealogyPanel';
 
 export type StockGroupingKey =
   | 'NONE'
@@ -81,8 +84,9 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
   const [selectedLotFilter, setSelectedLotFilter] = useState('ALL');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
 
-  // View Mode: ANALYTICAL_TABLE vs PART_CARDEX (Master-Detail Part Stock + Cardex)
-  const [inquiryMode, setInquiryMode] = useState<'PART_CARDEX' | 'ANALYTICAL_TABLE'>('PART_CARDEX');
+  // View Mode: ANALYTICAL_TABLE vs PART_CARDEX vs COIL_SLITTING
+  const [inquiryMode, setInquiryMode] = useState<'PART_CARDEX' | 'ANALYTICAL_TABLE' | 'COIL_SLITTING'>('PART_CARDEX');
+  const [onlyBelowReorderPoint, setOnlyBelowReorderPoint] = useState(false);
   const [selectedCardexPartId, setSelectedCardexPartId] = useState<string>('');
   const [partSearchQuery, setPartSearchQuery] = useState<string>('');
   const [allDocuments, setAllDocuments] = useState<InventoryDocument[]>([]);
@@ -379,7 +383,20 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
     }
   };
 
-  // Master-Detail Part List with aggregated stock for PART_CARDEX mode
+  // Helper to get effective Reorder Point (نقطه سفارش) for any Part
+  const getPartReorderPoint = (part?: Part, unit?: string, category?: string): number => {
+    if (part && typeof part.minStock === 'number' && part.minStock > 0) {
+      return part.minStock;
+    }
+    const effectiveUnit = part?.unit || unit || 'PCS';
+    const effectiveCategory = part?.category || category || 'RAW_MATERIAL';
+    if (effectiveUnit === 'KG' || effectiveCategory === 'RAW_MATERIAL') {
+      return 3500; // Default 3,500 kg reorder threshold for coils/sheets
+    }
+    return 1000; // Default 1,000 pcs reorder threshold for components
+  };
+
+  // Master-Detail Part List with aggregated stock & Reorder Point status for PART_CARDEX mode
   const catalogPartsWithStock = useMemo(() => {
     const q = partSearchQuery.trim().toLowerCase();
     return parts
@@ -388,15 +405,22 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         const physicalTotal = pBalances.reduce((s, b) => s + b.physicalQty, 0);
         const availableTotal = pBalances.reduce((s, b) => s + b.availableQty, 0);
         const lotsCount = pBalances.length;
+        const reorderPoint = getPartReorderPoint(p);
+        const needsPurchase = availableTotal < reorderPoint;
+        const isCriticalShortage = availableTotal <= reorderPoint * 0.5;
         return {
           part: p,
           physicalTotal,
           availableTotal,
           lotsCount,
           balances: pBalances,
+          reorderPoint,
+          needsPurchase,
+          isCriticalShortage,
         };
       })
       .filter(item => {
+        if (onlyBelowReorderPoint && !item.needsPurchase) return false;
         if (!q) return true;
         return (
           item.part.name.toLowerCase().includes(q) ||
@@ -404,8 +428,11 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
           (item.part.materialGrade && item.part.materialGrade.toLowerCase().includes(q))
         );
       })
-      .sort((a, b) => b.physicalTotal - a.physicalTotal);
-  }, [parts, balances, partSearchQuery]);
+      .sort((a, b) => {
+        if (a.needsPurchase !== b.needsPurchase) return a.needsPurchase ? -1 : 1;
+        return b.physicalTotal - a.physicalTotal;
+      });
+  }, [parts, balances, partSearchQuery, onlyBelowReorderPoint]);
 
   const activeCardexPartSummary =
     catalogPartsWithStock.find(
@@ -556,39 +583,54 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
         </div>
       </div>
 
-      {/* Mode Switcher Bar: Part Stock + Cardex vs Analytical Table */}
+      {/* Mode Switcher Bar: Part Stock + Cardex vs Analytical Table vs Coil Slitting Genealogy */}
       <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap items-center gap-2 shadow-2xs">
         <button
           type="button"
           onClick={() => setInquiryMode('PART_CARDEX')}
-          className={`flex-1 min-w-[240px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 min-w-[210px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             inquiryMode === 'PART_CARDEX'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           <History className="w-4 h-4 text-amber-400" />
-          <span>۱. فهرست قطعات + موجودی و کاردکس اختصاصی هر کالا (پیشنهادی)</span>
+          <span>۱. فهرست قطعات + موجودی، نقطه سفارش و کاردکس</span>
         </button>
 
         <button
           type="button"
           onClick={() => setInquiryMode('ANALYTICAL_TABLE')}
-          className={`flex-1 min-w-[240px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 min-w-[210px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             inquiryMode === 'ANALYTICAL_TABLE'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-          <span>۲. جدول تحلیلی کل موجودی انبارها، کویل‌پک‌ها و قراردادها</span>
+          <span>۲. جدول تحلیلی کل موجودی انبارها و نقطه سفارش</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setInquiryMode('COIL_SLITTING')}
+          className={`flex-1 min-w-[210px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            inquiryMode === 'COIL_SLITTING'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <GitBranch className="w-4 h-4 text-indigo-400" />
+          <span>۳. شجره‌نامه برش کلاف (Parent ➔ Child Slitting)</span>
         </button>
       </div>
 
       {/* ==================================================================== */}
-      {/* MODE 1: MASTER-DETAIL PART LIST + STOCK BREAKDOWN + PART CARDEX      */}
+      {/* MODE 3: VISUAL COIL SLITTING GENEALOGY (شجره‌نامه برش کلاف)           */}
       {/* ==================================================================== */}
-      {inquiryMode === 'PART_CARDEX' ? (
+      {inquiryMode === 'COIL_SLITTING' ? (
+        <CoilSlittingGenealogyPanel />
+      ) : inquiryMode === 'PART_CARDEX' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Right Sidebar: Searchable List of Parts */}
           <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -609,6 +651,15 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                 />
               </div>
+              <label className="flex items-center gap-2 text-[11px] font-semibold text-rose-700 cursor-pointer pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={onlyBelowReorderPoint}
+                  onChange={e => setOnlyBelowReorderPoint(e.target.checked)}
+                  className="rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                />
+                <span>فقط اقلام زیر نقطه سفارش (نیاز به خرید)</span>
+              </label>
             </div>
 
             <div className="max-h-[640px] overflow-y-auto divide-y divide-slate-100">
@@ -639,13 +690,32 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                             ? 'نیمه‌ساخته'
                             : 'محصول نهایی'}
                         </span>
+                        {item.needsPurchase && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                              item.isCriticalShortage
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                            title={`موجودی آزاد (${formatNumber(item.availableTotal)}) کمتر از نقطه سفارش (${formatNumber(item.reorderPoint)}) است`}
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                            نیاز به خرید
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div className="text-left shrink-0">
                       <div
                         className={`text-xs font-mono font-bold ${
-                          item.availableTotal > 0 ? 'text-emerald-700' : 'text-slate-400'
+                          item.needsPurchase
+                            ? item.isCriticalShortage
+                              ? 'text-rose-600'
+                              : 'text-amber-700'
+                            : item.availableTotal > 0
+                            ? 'text-emerald-700'
+                            : 'text-slate-400'
                         }`}
                       >
                         {formatNumber(item.availableTotal)}{' '}
@@ -653,8 +723,8 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                           {item.part.unit === 'KG' ? 'kg' : 'عدد'}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {toPersianDigits(item.lotsCount)} ردیف/کویل
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                        حداقل: {formatNumber(item.reorderPoint)}
                       </div>
                     </div>
                   </button>
@@ -678,6 +748,23 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                         <h3 className="text-base font-bold text-slate-900">
                           {activeCardexPartSummary.part.name}
                         </h3>
+                        {activeCardexPartSummary.needsPurchase ? (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                              activeCardexPartSummary.isCriticalShortage
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            نیاز به خرید (زیر نقطه سفارش: {formatNumber(activeCardexPartSummary.reorderPoint)})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            موجودی ایمن (بالای نقطه سفارش: {formatNumber(activeCardexPartSummary.reorderPoint)})
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 mt-1">
                         واحد سنجش:{' '}
@@ -1333,7 +1420,37 @@ export const StockInquiryView: React.FC<StockInquiryViewProps> = ({
                           )}
                           {visibleCols.availableQty && (
                             <td className="py-3 px-3 font-bold text-emerald-700 font-mono tabular-nums">
-                              {formatNumber(item.availableQty)} <span className="text-[10px] font-normal text-emerald-600">{item.unit === 'KG' ? 'kg' : 'عدد'}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>
+                                  {formatNumber(item.availableQty)}{' '}
+                                  <span className="text-[10px] font-normal text-emerald-600">
+                                    {item.unit === 'KG' ? 'kg' : 'عدد'}
+                                  </span>
+                                </span>
+                                {(() => {
+                                  const matchedPart = parts.find(
+                                    p => p.id === item.partId || p.code === item.partCode
+                                  );
+                                  const reorderThreshold = getPartReorderPoint(matchedPart, item.unit);
+                                  if (item.availableQty < reorderThreshold) {
+                                    const isCrit = item.availableQty <= reorderThreshold * 0.5;
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold border ${
+                                          isCrit
+                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                                        }`}
+                                        title={`نقطه سفارش: ${formatNumber(reorderThreshold)} ${item.unit === 'KG' ? 'kg' : 'عدد'}`}
+                                      >
+                                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                        نیاز به خرید
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             </td>
                           )}
                           {visibleCols.reservedQty && (

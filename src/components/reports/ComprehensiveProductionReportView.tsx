@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { ScrapParetoChart } from './ScrapParetoChart';
 
 // -------------------------------------------------------------
 // Types & Domain Models
@@ -937,6 +938,11 @@ export const ComprehensiveProductionReportView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ==================================================================== */}
+      {/* SECTION 1.5: SCRAP & DOWNTIME PARETO CHART (IATF 16949 / 80-20)      */}
+      {/* ==================================================================== */}
+      <ScrapParetoChart />
 
       {/* ==================================================================== */}
       {/* SECTION 2: MACHINE DOWNTIME TIMELINE (نمودار زمانی توقفات ماشین‌آلات) */}

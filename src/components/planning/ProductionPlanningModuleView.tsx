@@ -34,6 +34,7 @@ import { ConsumablesForecastView } from './ConsumablesForecastView';
 import { DailyProductionScheduleView } from './DailyProductionScheduleView';
 import { ErpProductionWorkbenchView } from '../production/ErpProductionWorkbenchView';
 import { ProductionWorkflowDocumentationView } from './ProductionWorkflowDocumentationView';
+import { MachineCapacityTimelineView } from './MachineCapacityTimelineView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
@@ -43,6 +44,7 @@ export type PlanningSubTabKey =
   | 'workflow_doc'
   | 'dashboard'
   | 'daily_schedule'
+  | 'capacity_planning'
   | 'mrp'
   | 'consumables'
   | 'recommendations'
@@ -288,10 +290,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           {[
             { id: 'mrp', label: '۱. انفجار BOM و نیاز ورق (MRP)' },
-            { id: 'orders', label: `۲. سفارشات مشتریان (${toPersianDigits(customerOrders.length)})` },
-            { id: 'recommendations', label: `۳. پیشنهاد برنامه و پرس (${toPersianDigits(suggestions.length)})` },
-            { id: 'daily_schedule', label: '۴. تقویم روزانه سالن‌ها' },
-            { id: 'dashboard', label: '۵. موازنه تقاضا و ظرفیت' },
+            { id: 'capacity_planning', label: '۲. تقویم ظرفیت ماشین‌آلات (Capacity Planning)' },
+            { id: 'orders', label: `۳. سفارشات مشتریان (${toPersianDigits(customerOrders.length)})` },
+            { id: 'recommendations', label: `۴. پیشنهاد برنامه و پرس (${toPersianDigits(suggestions.length)})` },
+            { id: 'daily_schedule', label: '۵. تقویم روزانه سالن‌ها' },
+            { id: 'dashboard', label: '۶. موازنه تقاضا و ظرفیت' },
           ].map(item => (
             <button
               key={item.id}
@@ -345,6 +348,15 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
       {/* 1.0. Daily Production Schedule Sub-Tab (برنامه روزانه شرکت به تفکیک سالن) */}
       {activeSubTab === 'daily_schedule' && (
         <DailyProductionScheduleView />
+      )}
+
+      {/* 1.05. Machine Capacity Timeline Sub-Tab (تقویم ظرفیت ماشین‌آلات - Capacity Planning) */}
+      {activeSubTab === 'capacity_planning' && (
+        <MachineCapacityTimelineView
+          suggestions={suggestions}
+          parts={parts}
+          machines={machines}
+        />
       )}
 
       {/* 1.1. MRP & Material Requirements Forecast Sub-Tab */}

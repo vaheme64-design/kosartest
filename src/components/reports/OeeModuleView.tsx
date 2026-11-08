@@ -31,6 +31,7 @@ import {
 import { exportToCsv } from '../../utils/csvExport';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { ReportModuleSkeleton } from '../common/Skeleton';
+import { ScrapParetoChart } from './ScrapParetoChart';
 
 export interface OeeModuleViewProps {
   machines?: any[];
@@ -350,6 +351,9 @@ export const OeeModuleView: React.FC<OeeModuleViewProps> = () => {
           </div>
         </div>
       )}
+
+      {/* Scrap & Downtime Pareto Chart (IATF 16949 / 80-20 Root Cause Analysis alongside OEE) */}
+      <ScrapParetoChart />
 
       {/* Interactive Clickable Charts Section (نمودارهای تعاملی قابل کلیک برای مشاهده پنل کشویی ریز توقفات) */}
       {data && (

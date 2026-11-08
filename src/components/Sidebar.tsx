@@ -286,6 +286,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         icon: Cpu,
       },
       {
+        id: 'sub-plan-capacity',
+        tab: 'planning',
+        navParams: { planningSubTab: 'capacity_planning' },
+        label: 'تقویم ظرفیت ماشین‌آلات',
+        keywords: 'تقویم ظرفیت ماشین آلات گانت چارت تایم لاین تداخل زمانی پرس capacity planning',
+        icon: CalendarDays,
+      },
+      {
         id: 'sub-plan-orders',
         tab: 'planning',
         navParams: { planningSubTab: 'orders' },
