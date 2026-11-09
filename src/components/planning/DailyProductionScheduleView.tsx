@@ -15,6 +15,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { formatToJalali } from '../../utils/jalali';
+import { JalaliDatePicker } from '../common/JalaliDatePicker';
 
 interface DailyScheduleItem {
   id: string;
@@ -164,7 +166,7 @@ const INITIAL_SCHEDULE: DailyScheduleItem[] = [
 export const DailyProductionScheduleView: React.FC = () => {
   const [selectedHall, setSelectedHall] = useState<string>('ALL');
   const [selectedShift, setSelectedShift] = useState<string>('ALL');
-  const [scheduleDate, setScheduleDate] = useState<string>('۱۴۰۳/۰۸/۲۴');
+  const [scheduleDate, setScheduleDate] = useState<string>(() => formatToJalali(new Date()));
   const [items, setItems] = useState<DailyScheduleItem[]>(INITIAL_SCHEDULE);
 
   const filteredItems = items.filter(item => {
@@ -273,14 +275,13 @@ export const DailyProductionScheduleView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Date Display */}
+          {/* Quick Date Display via JalaliDatePicker */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-500">تاریخ برنامه:</span>
-            <input
-              type="text"
+            <span className="text-[11px] text-slate-500 shrink-0">تاریخ برنامه:</span>
+            <JalaliDatePicker
               value={scheduleDate}
-              onChange={e => setScheduleDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-mono font-bold text-slate-900 w-24 text-center focus:outline-none"
+              onChange={val => setScheduleDate(val)}
+              className="w-40"
             />
           </div>
         </div>

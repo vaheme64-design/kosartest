@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import { toPersianDigits } from '../utils/formatters';
+import { formatToJalali } from '../utils/jalali';
 
 export interface AuditTrailEntry {
   id: string;
@@ -195,11 +196,7 @@ export const EnterpriseUxProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [auditLogs]);
 
   const getNowPersianTimestamp = () => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    return toPersianDigits(`۱۴۰۴/۰۲/۲۱ - ${hh}:${mm}:${ss}`);
+    return formatToJalali(new Date(), { includeTime: true });
   };
 
   const recordAudit = useCallback(

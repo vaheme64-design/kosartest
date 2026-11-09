@@ -228,6 +228,23 @@ const formatHourLabel = (hr: number): string => {
   return toPersianDigits(`${hh}:${mm}`);
 };
 
+export const hourToTimeString = (hr: number): string => {
+  const whole = Math.floor(hr);
+  const mins = Math.round((hr - whole) * 60);
+  const hh = String(Math.min(23, Math.max(0, whole))).padStart(2, '0');
+  const mm = String(Math.min(59, Math.max(0, mins))).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
+
+export const timeStringToHour = (timeStr: string): number => {
+  if (!timeStr) return 7;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return 7;
+  const hh = parseInt(parts[0], 10) || 0;
+  const mm = parseInt(parts[1], 10) || 0;
+  return Number((hh + mm / 60).toFixed(2));
+};
+
 export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewProps> = ({
   suggestions,
 }) => {
@@ -341,6 +358,28 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
     () => activeBlocks.find(b => b.id === selectedBlockId) || activeBlocks[0] || null,
     [activeBlocks, selectedBlockId]
   );
+
+  // Live conflict detection for selected block on the same machine
+  const selectedBlockConflict = useMemo(() => {
+    if (!selectedBlock) return null;
+    return (
+      activeBlocks.find(
+        b =>
+          b.id !== selectedBlock.id &&
+          b.machineCode === selectedBlock.machineCode &&
+          Math.max(b.startHour, selectedBlock.startHour) < Math.min(b.endHour, selectedBlock.endHour)
+      ) || null
+    );
+  }, [selectedBlock, activeBlocks]);
+
+  const handleManualTimeChange = (blockId: string, newStartStr: string, newEndStr: string) => {
+    const start = timeStringToHour(newStartStr);
+    const end = timeStringToHour(newEndStr);
+    if (end <= start) return;
+    setBlocks(prev =>
+      prev.map(b => (b.id === blockId ? { ...b, startHour: start, endHour: end } : b))
+    );
+  };
 
   const handleAutoResolveConflict = (blockIdToShift: string, targetStartHour: number) => {
     const prevSnap = [...blocks];
@@ -968,35 +1007,116 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
             </div>
           </div>
 
-          {/* Interactive Time Shift Controls for Selected MO */}
-          <div className="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+          {/* Interactive Time Shift Controls for Selected MO (HH:mm Time Pickers & Conflict Detection) */}
+          <div className="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600" />
-                تنظیم دستی زمان‌بندی روی ماشین:
+                تنظیم دقیق زمان‌بندی (Time Picker HH:mm):
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">{selectedBlock.machineCode}</span>
+              <span className="text-[10px] text-slate-500 font-mono font-bold">{selectedBlock.machineCode}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  handleAutoResolveConflict(selectedBlock.id, Math.max(7, selectedBlock.startHour - 1))
-                }
-                className="flex-1 py-1.5 px-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-              >
-                ۱ ساعت جلوتر (-1h)
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleAutoResolveConflict(selectedBlock.id, Math.min(21, selectedBlock.startHour + 1))
-                }
-                className="flex-1 py-1.5 px-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-              >
-                ۱ ساعت عقب‌تر (+1h)
-              </button>
+
+            {/* Manual Start & End Time Inputs */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>ساعت شروع</span>
+                  <span className="text-[10px] text-indigo-600 font-mono font-bold">
+                    {formatHourLabel(selectedBlock.startHour)}
+                  </span>
+                </label>
+                <input
+                  type="time"
+                  step="300"
+                  value={hourToTimeString(selectedBlock.startHour)}
+                  onChange={e => {
+                    const startStr = e.target.value;
+                    const curDuration = selectedBlock.endHour - selectedBlock.startHour;
+                    const newStartHr = timeStringToHour(startStr);
+                    const newEndHr = Number((newStartHr + curDuration).toFixed(2));
+                    handleManualTimeChange(selectedBlock.id, startStr, hourToTimeString(newEndHr));
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 cursor-pointer text-center"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>ساعت پایان</span>
+                  <span className="text-[10px] text-indigo-600 font-mono font-bold">
+                    {formatHourLabel(selectedBlock.endHour)}
+                  </span>
+                </label>
+                <input
+                  type="time"
+                  step="300"
+                  value={hourToTimeString(selectedBlock.endHour)}
+                  onChange={e => {
+                    const endStr = e.target.value;
+                    handleManualTimeChange(selectedBlock.id, hourToTimeString(selectedBlock.startHour), endStr);
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 cursor-pointer text-center"
+                />
+              </div>
             </div>
+
+            {/* Duration Display */}
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-indigo-50/60 border border-indigo-100 text-xs">
+              <span className="text-[11px] text-indigo-800">طول مدت زمان‌بندی:</span>
+              <span className="font-mono font-bold text-indigo-950">
+                {toPersianDigits(Math.floor(selectedBlock.endHour - selectedBlock.startHour))} ساعت و{' '}
+                {toPersianDigits(Math.round(((selectedBlock.endHour - selectedBlock.startHour) % 1) * 60))} دقیقه
+              </span>
+            </div>
+
+            {/* Live Conflict Warning Banner */}
+            {selectedBlockConflict ? (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-1.5 animate-in fade-in">
+                <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>تداخل با دستور {selectedBlockConflict.moNumber}</span>
+                </div>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  تداخل در بازه {formatHourLabel(Math.max(selectedBlock.startHour, selectedBlockConflict.startHour))} تا{' '}
+                  {formatHourLabel(Math.min(selectedBlock.endHour, selectedBlockConflict.endHour))} روی{' '}
+                  {selectedBlock.machineName}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const smedHours = Number(((selectedBlock.setupMinutes || 30) / 60).toFixed(2));
+                    const duration = selectedBlock.endHour - selectedBlock.startHour;
+                    const nextStart = Number((selectedBlockConflict.endHour + smedHours).toFixed(2));
+                    const nextEnd = Number(Math.min(23.5, nextStart + duration).toFixed(2));
+                    handleManualTimeChange(
+                      selectedBlock.id,
+                      hourToTimeString(nextStart),
+                      hourToTimeString(nextEnd)
+                    );
+                    showUndoToast({
+                      title: `دستور ${selectedBlock.moNumber} به ساعت آزاد بعدی (${formatHourLabel(nextStart)}) منتقل شد`,
+                      onUndo: () => {
+                        handleManualTimeChange(
+                          selectedBlock.id,
+                          hourToTimeString(selectedBlock.startHour),
+                          hourToTimeString(selectedBlock.endHour)
+                        );
+                      },
+                    });
+                  }}
+                  className="w-full py-1 px-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                >
+                  تسطیح خودکار و انتقال به پس از {selectedBlockConflict.moNumber}
+                </button>
+              </div>
+            ) : (
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-[11px] font-medium">زمان‌بندی فاقد تداخل روی {selectedBlock.machineCode} است.</span>
+              </div>
+            )}
+
             {suggestions.length > 0 && (
               <div className="text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-200/80">
                 <span>پیشنهادهای MRP آماده زمان‌بندی:</span>

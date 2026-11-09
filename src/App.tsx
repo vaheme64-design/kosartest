@@ -793,6 +793,10 @@ function AppContent() {
           }}
           onGlobalRefresh={loadAllData}
           onNavigateToPlanning={() => setActiveTab('planning')}
+          onSubTabChange={subTab => {
+            setActiveInventorySubTab(subTab);
+            router.navigate({ inventorySubTab: subTab });
+          }}
         />
       )}
 
@@ -882,7 +886,10 @@ function AppContent() {
               machines={machines}
               dies={dies}
               initialSubTab={activePlanningSubTab}
-              onSubTabChange={setActivePlanningSubTab}
+              onSubTabChange={subTab => {
+                setActivePlanningSubTab(subTab);
+                router.navigate({ planningSubTab: subTab });
+              }}
               onGlobalRefresh={loadAllData}
             />
           )}
@@ -896,7 +903,10 @@ function AppContent() {
               halls={halls}
               parts={parts}
               initialSubTab={activeMachineSubTab}
-              onSubTabChange={setActiveMachineSubTab}
+              onSubTabChange={subTab => {
+                setActiveMachineSubTab(subTab);
+                router.navigate({ machineSubTab: subTab });
+              }}
               onSaveMachine={handleSaveMachine}
               onSaveDie={handleSaveDie}
               onDeleteDie={handleDeleteDie}

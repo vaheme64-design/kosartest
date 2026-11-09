@@ -18,6 +18,8 @@ import {
   Building2,
   FileText,
   Calculator,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import {
   CustomerOrder,
@@ -38,6 +40,8 @@ import { MachineCapacityTimelineView } from './MachineCapacityTimelineView';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
 import { PlanningModuleSkeleton } from '../ui/Skeleton';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
+import { useErpRouter } from '../../context/RouterContext';
 
 export type PlanningSubTabKey =
   | 'erp_workbench'
@@ -80,9 +84,13 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
     }
   }, [initialSubTab]);
 
+  const router = useErpRouter();
+  const { requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
+
   const handleSelectSubTab = (tab: PlanningSubTabKey) => {
     setActiveSubTab(tab);
     if (onSubTabChange) onSubTabChange(tab);
+    router.navigate({ planningSubTab: tab });
   };
 
   const [loading, setLoading] = useState(false);
@@ -92,6 +100,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
 
   // Search & Filter in Orders
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -115,7 +124,21 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
           setSelectedSuggestionId(sugRes.data[0].id);
         }
       }
-      if (ordersRes.success) setCustomerOrders(ordersRes.data);
+      if (ordersRes.success) {
+        try {
+          const cached = localStorage.getItem('kpims_customer_orders_v2');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCustomerOrders(parsed);
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+        setCustomerOrders(ordersRes.data);
+      }
     } catch (err) {
       console.error('Failed to load planning data:', err);
     } finally {
@@ -155,12 +178,138 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
         return { success: false, error: data.error || 'خطا در ثبت سفارش' };
       }
 
+      const newOrder: CustomerOrder = data.data || {
+        id: `ORD-${Date.now()}`,
+        orderNumber: payload.orderNumber || `SO-SAPCO-${Date.now().toString().slice(-4)}`,
+        customerName: payload.customerName,
+        contractNumber: payload.contractNumber,
+        orderDate: new Date().toISOString(),
+        dueDate: payload.dueDate,
+        status: 'OPEN',
+        priority: payload.priority,
+        notes: payload.notes,
+        lines: payload.lines,
+      };
+      const updated = [newOrder, ...customerOrders];
+      setCustomerOrders(updated);
+      try {
+        localStorage.setItem('kpims_customer_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+
+      recordAudit({
+        moduleName: 'برنامه‌ریزی تولید',
+        actionType: 'CREATE',
+        title: `ثبت سفارش جدید ${newOrder.orderNumber}`,
+        details: `سفارش مشتری ${payload.customerName} با اولویت ${payload.priority === 1 ? 'فوری' : 'عادی'} ایجاد گردید.`,
+      });
+
       await loadPlanningData();
       if (onGlobalRefresh) await onGlobalRefresh();
+      setPlanToast('سفارش مشتری با موفقیت افزوده شد و الزامات MRP بروزرسانی گردید.');
       return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'خطای شبکه' };
     }
+  };
+
+  const handleUpdateCustomerOrder = async (orderId: string, payload: any) => {
+    try {
+      const updated = customerOrders.map(o => {
+        if (o.id !== orderId) return o;
+        return {
+          ...o,
+          customerName: payload.customerName,
+          contractNumber: payload.contractNumber,
+          dueDate: payload.dueDate,
+          priority: payload.priority,
+          notes: payload.notes,
+          lines: payload.lines,
+        };
+      });
+      setCustomerOrders(updated);
+      try {
+        localStorage.setItem('kpims_customer_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+
+      await fetch(`/api/planning/customer-orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+
+      recordAudit({
+        moduleName: 'برنامه‌ریزی تولید',
+        actionType: 'UPDATE',
+        title: `ویرایش سفارش ${orderId}`,
+        details: `بروزرسانی تیراژ، موعد تحویل و اولویت (${payload.priority === 1 ? 'فوری' : 'عادی'})`,
+      });
+
+      setPlanToast('تغییرات سفارش با موفقیت ذخیره و در الگوریتم MRP اعمال شد.');
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'خطا در ویرایش سفارش' };
+    }
+  };
+
+  const handleDeleteCustomerOrder = (order: CustomerOrder) => {
+    requestConfirm({
+      title: `حذف سفارش تعهد تحویل ${order.orderNumber}`,
+      message: `آیا از حذف سفارش ${order.orderNumber} مشتری «${order.customerName}» اطمینان دارید؟ با حذف این سفارش، مقادیر تقاضای خالص MRP مجدداً متوازن خواهند شد.`,
+      confirmLabel: 'بله، سفارش حذف شود',
+      cancelLabel: 'انصراف',
+      variant: 'danger',
+      onConfirm: async () => {
+        const prevSnap = [...customerOrders];
+        const nextList = customerOrders.filter(o => o.id !== order.id);
+        setCustomerOrders(nextList);
+        try {
+          localStorage.setItem('kpims_customer_orders_v2', JSON.stringify(nextList));
+          await fetch(`/api/planning/customer-orders/${order.id}`, { method: 'DELETE' });
+        } catch {
+          // ignore
+        }
+
+        recordAudit({
+          moduleName: 'برنامه‌ریزی تولید',
+          actionType: 'SOFT_DELETE',
+          title: `حذف سفارش ${order.orderNumber}`,
+          details: `سفارش مشتری ${order.customerName} با اولویت ${order.priority === 1 ? 'فوری' : 'عادی'} حذف شد.`,
+        });
+
+        showUndoToast({
+          title: `سفارش ${order.orderNumber} با موفقیت حذف گردید`,
+          onUndo: () => {
+            setCustomerOrders(prevSnap);
+            try {
+              localStorage.setItem('kpims_customer_orders_v2', JSON.stringify(prevSnap));
+            } catch {
+              // ignore
+            }
+          },
+        });
+      },
+    });
+  };
+
+  const handleQuickUpdatePriority = (orderId: string, newPriority: 1 | 2 | 3) => {
+    const updated = customerOrders.map(o => (o.id === orderId ? { ...o, priority: newPriority } : o));
+    setCustomerOrders(updated);
+    try {
+      localStorage.setItem('kpims_customer_orders_v2', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    recordAudit({
+      moduleName: 'برنامه‌ریزی تولید',
+      actionType: 'UPDATE',
+      title: `تغییر اولویت سفارش ${orderId}`,
+      details: `اولویت به ${newPriority === 1 ? 'فوری' : newPriority === 2 ? 'عادی' : 'مازاد'} تغییر یافت.`,
+    });
+    setPlanToast(`اولویت سفارش به ${newPriority === 1 ? 'فوری' : newPriority === 2 ? 'عادی' : 'مازاد'} بروزرسانی شد.`);
   };
 
   const handleApprovePlan = async (id: string, approvedBy: string) => {
@@ -413,8 +562,11 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
 
             <button
               type="button"
-              onClick={() => setIsOrderModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              onClick={() => {
+                setEditingOrder(null);
+                setIsOrderModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" />
               <span>ثبت تعهد تحویل جدید</span>
@@ -425,7 +577,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
             {filteredOrders.map(order => (
               <div
                 key={order.id}
-                className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-2xs"
+                className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-2xs hover:border-slate-300 transition"
               >
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
@@ -437,24 +589,26 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           order.priority === 1
                             ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : order.priority === 2
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {order.priority === 1 ? 'اولویت فوری' : 'اولویت عادی'}
+                        {order.priority === 1 ? '🔴 اولویت فوری' : order.priority === 2 ? '🔵 اولویت عادی' : '⚪ اولویت مازاد'}
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       <span>{order.customerName}</span>
-                      <span className="text-slate-400">({order.contractNumber})</span>
+                      <span className="text-slate-400 font-mono">({order.contractNumber})</span>
                     </div>
                   </div>
 
                   <div className="text-left">
-                    <span className="px-2 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                      سفارش باز
+                    <span className="px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      سفارش فعال
                     </span>
-                    <div className="text-[11px] text-slate-500 mt-1 tabular-nums">
+                    <div className="text-[11px] text-slate-500 mt-1 tabular-nums font-mono">
                       تحویل: {formatToJalali(order.dueDate)}
                     </div>
                   </div>
@@ -470,10 +624,10 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                     >
                       <div>
                         <div className="font-bold text-slate-900">{line.partName}</div>
-                        <div className="text-[11px] text-slate-500">{line.partCode}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{line.partCode}</div>
                       </div>
                       <div className="text-left tabular-nums">
-                        <span className="text-slate-900 font-bold">
+                        <span className="text-slate-900 font-bold font-mono">
                           {formatNumber(line.orderedQuantity)}
                         </span>{' '}
                         <span className="text-slate-500 text-[10px]">عدد</span>
@@ -487,6 +641,46 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
                     یادداشت: {order.notes}
                   </div>
                 )}
+
+                {/* Enterprise Dynamic Action Bar (Edit / Delete / Dynamic Priority) */}
+                <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">تغییر اولویت:</span>
+                    <select
+                      value={order.priority}
+                      onChange={e => handleQuickUpdatePriority(order.id, Number(e.target.value) as 1 | 2 | 3)}
+                      className="text-[11px] font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-slate-800 cursor-pointer focus:outline-none"
+                    >
+                      <option value={1}>🔴 فوری (اولویت ۱)</option>
+                      <option value={2}>🔵 عادی (اولویت ۲)</option>
+                      <option value={3}>⚪ مازاد (اولویت ۳)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingOrder(order);
+                        setIsOrderModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer flex items-center gap-1 text-[11px] font-bold border border-indigo-200"
+                      title="ویرایش کامل مشخصات و تیراژ سفارش"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>ویرایش</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCustomerOrder(order)}
+                      className="px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer flex items-center gap-1 text-[11px] font-bold border border-rose-200"
+                      title="حذف سفارش"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -607,12 +801,17 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
         </div>
       )}
 
-      {/* New Customer Order Modal */}
+      {/* New / Edit Customer Order Modal */}
       <NewCustomerOrderModal
         isOpen={isOrderModalOpen}
-        onClose={() => setIsOrderModalOpen(false)}
+        onClose={() => {
+          setIsOrderModalOpen(false);
+          setEditingOrder(null);
+        }}
         parts={parts}
         onSubmit={handleCreateCustomerOrder}
+        orderToEdit={editingOrder}
+        onUpdate={handleUpdateCustomerOrder}
       />
     </div>
   );

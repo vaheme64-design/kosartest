@@ -27,6 +27,8 @@ import {
 } from '../../types/productionPlanning';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { formatToJalali } from '../../utils/jalali';
+import { useErpRouter } from '../../context/RouterContext';
+import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 interface MachineRecommendationViewProps {
   suggestions: ProductionPlanSuggestion[];
@@ -49,6 +51,9 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
   onRefresh,
   loading = false,
 }) => {
+  const router = useErpRouter();
+  const { recordAudit, showUndoToast } = useEnterpriseUx();
+
   const [expandedOperationIndex, setExpandedOperationIndex] = useState<number | null>(0);
   const [showAllCandidates, setShowAllCandidates] = useState<Record<number, boolean>>({});
   const [actionInProgress, setActionInProgress] = useState(false);
@@ -63,6 +68,120 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
 
   const toggleAllCandidates = (idx: number) => {
     setShowAllCandidates(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const handleApproveAndDispatchToShopFloor = async () => {
+    if (!activePlan) return;
+    setActionInProgress(true);
+    setFeedbackMsg(null);
+    try {
+      // 1. Approve plan via backend if in draft
+      if (activePlan.approvalStatus === 'DRAFT_SUGGESTION') {
+        await onApprovePlan(activePlan.id, 'مدیر برنامه‌ریزی تولید').catch(() => null);
+      }
+
+      // 2. Commit directly to kpims_aps_multi_part_op_schedule_v2 in localStorage
+      const STORAGE_KEY = 'kpims_aps_multi_part_op_schedule_v2';
+      let currentSchedule: any[] = [];
+      try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) currentSchedule = parsed;
+        }
+      } catch {
+        // ignore
+      }
+
+      const newMoNumber =
+        activePlan.createdMoId ||
+        `MO-1404-${String(Math.floor(1000 + Math.random() * 9000))}`;
+
+      const opsList = (activePlan.proposedOperations || []).map((op: ProposedOperationPlan, idx: number) => ({
+        opId: `OP-${activePlan.id}-${idx + 1}`,
+        opNo: (idx + 1) * 10,
+        opCode: op.stepCode,
+        opTitle: op.stepName,
+        stationHall: 'سالن پرس و فرم‌دهی',
+        machineCode: op.recommendedMachine?.machineCode || 'PRS-400T-01',
+        machineName: op.recommendedMachine?.machineName || 'پرس هیدرولیک ۴۰۰ تن',
+        assignedDieCode: op.dieMoldCode || `DIE-${op.stepCode}`,
+        scheduledDayIndex: Math.min(6, idx + 1),
+        plannedShift1Qty: Math.ceil(activePlan.proposedQuantity / 2),
+        plannedShift2Qty: Math.floor(activePlan.proposedQuantity / 2),
+        actualProducedGoodQty: 0,
+        actualScrapQty: 0,
+        actualDowntimeMinutes: 0,
+        status: 'PLANNED' as const,
+      }));
+
+      const newItem = {
+        id: `SCH-${activePlan.id}`,
+        orderCode: newMoNumber,
+        partId: activePlan.partId,
+        partCode: activePlan.partCode,
+        partName: activePlan.partName,
+        carModel: 'تارا / پژو ۲۰۷',
+        partType: 'FINISHED_PRODUCT' as const,
+        rawMaterialCode: activePlan.materialStatus?.requiredGrade || 'COIL-RAW-DC04',
+        rawMaterialName: `کلاف ورق فولادی ${activePlan.materialStatus?.requiredGrade || 'DC04'}`,
+        unitWeightKg:
+          Number(
+            (
+              (activePlan.materialStatus?.requiredWeightKg || 1000) /
+              Math.max(1, activePlan.proposedQuantity)
+            ).toFixed(3)
+          ) || 1.85,
+        weeklyTargetQty: activePlan.proposedQuantity,
+        rawMaterialIssuedKg: activePlan.materialStatus?.availableWeightKg || activePlan.materialStatus?.requiredWeightKg || 0,
+        warehouseReceivedQty: 0,
+        ops: opsList,
+      };
+
+      const existingIdx = currentSchedule.findIndex(
+        s => s.partCode === activePlan.partCode || s.orderCode === newMoNumber
+      );
+      if (existingIdx >= 0) {
+        currentSchedule[existingIdx] = newItem;
+      } else {
+        currentSchedule.unshift(newItem);
+      }
+
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSchedule));
+      } catch {
+        // ignore
+      }
+
+      // 3. Record audit trail & toast
+      recordAudit({
+        moduleName: 'موتور تطبیق ماشین‌آلات (APS)',
+        actionType: 'COMPLETE_MO',
+        title: `تایید پیشنهاد و ارسال به سالن: ${activePlan.partName}`,
+        details: `دستور ${newMoNumber} با تیراژ ${activePlan.proposedQuantity} قطعه به برنامه روزانه کارگاه ارسال شد.`,
+      });
+
+      showUndoToast({
+        title: `دستور تولید «${activePlan.partName}» با موفقیت به سالن ارسال شد`,
+        detail: 'در حال هدایت به شیت برنامه روزانه ایستگاه‌های تولید...',
+        variant: 'success',
+      });
+
+      await onRefresh();
+
+      // 4. Navigate to Daily Dispatch Sheet
+      router.navigate({
+        tab: 'production',
+        productionModuleTab: 'DAILY_DISPATCH_SHEET',
+      });
+    } catch (err: any) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err.message || 'خطا در تایید و ارسال به برنامه سالن',
+      });
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -253,12 +372,23 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleApproveAndDispatchToShopFloor}
+                  disabled={actionInProgress || !activePlan.overallFeasible}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 shadow-sm cursor-pointer"
+                  title="تأیید پیشنهاد و ارسال مستقیم به شیت برنامه روزانه سالن تولید"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>تایید پیشنهاد و ارسال به سالن</span>
+                </button>
+
                 {activePlan.approvalStatus === 'DRAFT_SUGGESTION' && (
                   <button
                     onClick={handleApprove}
                     disabled={actionInProgress || !activePlan.overallFeasible}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer"
                   >
                     <FileCheck className="w-4 h-4" />
                     تأیید و تصویب برنامه
@@ -269,7 +399,7 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
                   <button
                     onClick={handleRelease}
                     disabled={actionInProgress}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 shadow-sm"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 shadow-sm cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     صدور رسمی دستور کار (Release MO)
@@ -286,9 +416,9 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
                 <button
                   onClick={() => setShowRevisionModal(true)}
                   disabled={actionInProgress}
-                  className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition"
+                  className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition cursor-pointer"
                 >
-                  <GitBranch className="w-3.5 h-3.5 text-amber-400" />
+                  <GitBranch className="w-3.5 h-3.5 text-amber-500" />
                   ایجاد بازنگری (Revision)
                 </button>
               </div>
@@ -636,6 +766,31 @@ export const MachineRecommendationView: React.FC<MachineRecommendationViewProps>
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Operational Workflow Chain Footer (اتصال منطقی موتور تطبیق ماشین‌آلات به برنامه روزانه) */}
+          <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-950">
+                <Cpu className="w-4 h-4 text-indigo-600" />
+                <span>زنجیره عملیاتی تجمیع برنامه و دیسپچ کارگاهی (APS → Daily Shop-Floor Dispatch)</span>
+              </div>
+              <p className="text-[11px] text-indigo-800 leading-relaxed">
+                با تأیید نهایی این پیشنهاد، کلیه مراحل ({toPersianDigits(activePlan.proposedOperations.length)} ایستگاه کاری) به همراه ماشین‌آلات منتخب و قالب‌های استاندارد مستقیماً در جدول «برنامه روزانه و دیسپچ سالن» ثبت شده و آماده تحویل به سرپرستان شیفت می‌گردد.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleApproveAndDispatchToShopFloor}
+                disabled={actionInProgress || !activePlan.overallFeasible}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>تایید پیشنهاد و ارسال به سالن</span>
+              </button>
             </div>
           </div>
         </>

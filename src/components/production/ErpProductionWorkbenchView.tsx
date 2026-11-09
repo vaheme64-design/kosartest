@@ -49,6 +49,7 @@ import { ManufacturingOrderTimelineModal } from './ManufacturingOrderTimelineMod
 import { MaterialRequirementProjectionView } from './MaterialRequirementProjectionView';
 import { EmptyState } from '../common/EmptyState';
 import { MetricTooltip } from '../common/MetricTooltip';
+import { getDynamicWorkDays, getCurrentJalaliDate, getJalaliMonthDays } from '../../utils/jalali';
 
 export interface ScheduledOpStep {
   opId: string;
@@ -127,14 +128,7 @@ interface ErpProductionWorkbenchViewProps {
 
 const STORAGE_KEY_MULTI_OP_APS = 'kpims_aps_multi_part_op_schedule_v2';
 
-export const WORK_DAYS = [
-  { index: 1, name: 'شنبه (امروز)', shortName: 'شنبه', date: '۱۴۰۴/۰۲/۲۰' },
-  { index: 2, name: 'یکشنبه (فردا)', shortName: 'یکشنبه', date: '۱۴۰۴/۰۲/۲۱' },
-  { index: 3, name: 'دوشنبه', shortName: 'دوشنبه', date: '۱۴۰۴/۰۲/۲۲' },
-  { index: 4, name: 'سه‌شنبه', shortName: 'سه‌شنبه', date: '۱۴۰۴/۰۲/۲۳' },
-  { index: 5, name: 'چهارشنبه', shortName: 'چهارشنبه', date: '۱۴۰۴/۰۲/۲۴' },
-  { index: 6, name: 'پنج‌شنبه (جبرانی)', shortName: 'پنج‌شنبه', date: '۱۴۰۴/۰۲/۲۵' },
-];
+export const WORK_DAYS = getDynamicWorkDays();
 
 /**
  * فرمول محاسباتی استاندارد موجودی نیمه‌ساخته بین‌ایستگاهی (Enterprise Inter-OP WIP):
@@ -976,8 +970,15 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
 
   // Reporting Time Horizon State (Daily / Weekly / Monthly / Custom Range)
   const [reportHorizon, setReportHorizon] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'CUSTOM'>('DAILY');
-  const [customFromDate, setCustomFromDate] = useState<string>('۱۴۰۴/۰۲/۰۱');
-  const [customToDate, setCustomToDate] = useState<string>('۱۴۰۴/۰۲/۳۱');
+  const [customFromDate, setCustomFromDate] = useState<string>(() => {
+    const j = getCurrentJalaliDate();
+    return `${toPersianDigits(j.year)}/${toPersianDigits(String(j.month).padStart(2, '0'))}/۰۱`;
+  });
+  const [customToDate, setCustomToDate] = useState<string>(() => {
+    const j = getCurrentJalaliDate();
+    const lastDay = getJalaliMonthDays(j.year, j.month);
+    return `${toPersianDigits(j.year)}/${toPersianDigits(String(j.month).padStart(2, '0'))}/${toPersianDigits(lastDay)}`;
+  });
 
   // Toast Feedback Banner
   const [toastNotice, setToastNotice] = useState<{

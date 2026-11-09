@@ -80,6 +80,7 @@ interface InventoryModuleViewProps {
   onClearInitialAction?: () => void;
   onGlobalRefresh?: () => Promise<void>;
   onNavigateToPlanning?: () => void;
+  onSubTabChange?: (tab: InventorySubTab) => void;
 }
 
 export interface ReorderAlertItem {
@@ -103,8 +104,14 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
   onClearInitialAction,
   onGlobalRefresh,
   onNavigateToPlanning,
+  onSubTabChange,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<InventorySubTab>(initialSubTab || 'DASHBOARD');
+
+  const handleSelectSubTab = (tab: InventorySubTab) => {
+    setActiveSubTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
+  };
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showSecondaryTabs, setShowSecondaryTabs] = useState(false);
@@ -513,7 +520,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
               <span className="text-slate-500 font-medium">نمای بخش انبار:</span>
               <select
                 value={activeSubTab}
-                onChange={e => setActiveSubTab(e.target.value as InventorySubTab)}
+                onChange={e => handleSelectSubTab(e.target.value as InventorySubTab)}
                 className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
                 {[...primaryTabs, ...secondaryTabs].map(tab => (
@@ -532,7 +539,7 @@ export const InventoryModuleView: React.FC<InventoryModuleViewProps> = ({
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveSubTab(tab.id)}
+                    onClick={() => handleSelectSubTab(tab.id)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer border ${
                       isActive
                         ? 'bg-orange-50 text-orange-900 border-orange-200 font-bold'
