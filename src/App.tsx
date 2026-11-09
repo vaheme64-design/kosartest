@@ -21,6 +21,7 @@ import { OfflineIndicator } from './components/pwa/PWAInstallButton';
 import { AiActionPayload } from './types/ai';
 import { ErpLayoutTemplate, ErpColorTheme } from './types/theme';
 import { EnterpriseUxProvider } from './context/EnterpriseUxContext';
+import { ErpRouterProvider, useErpRouter } from './context/RouterContext';
 
 import {
   Part,
@@ -38,19 +39,38 @@ import {
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
-  const [activeInventorySubTab, setActiveInventorySubTab] = useState<InventorySubTab>('DASHBOARD');
+function AppContent() {
+  const router = useErpRouter();
+  const [activeTab, setActiveTab] = useState<TabKey>(router.route.tab);
+  const [activeInventorySubTab, setActiveInventorySubTab] = useState<InventorySubTab>(router.route.inventorySubTab);
   const [pendingInventoryModal, setPendingInventoryModal] = useState<
     'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER' | null
   >(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiReceiptDraft, setAiReceiptDraft] = useState<any>(null);
   const [aiIssueDraft, setAiIssueDraft] = useState<any>(null);
-  const [productionViewMode, setProductionViewMode] = useState<'ERP_WORKBENCH' | 'VOUCHERS'>('ERP_WORKBENCH');
-  const [activeProductionModuleTab, setActiveProductionModuleTab] = useState<ProductionWorkbenchSubTab>('MULTI_PART_SCHEDULER');
-  const [activePlanningSubTab, setActivePlanningSubTab] = useState<PlanningSubTabKey>('erp_workbench');
-  const [activeMachineSubTab, setActiveMachineSubTab] = useState<MachineSubTabKey>('machines');
+  const [productionViewMode, setProductionViewMode] = useState<'ERP_WORKBENCH' | 'VOUCHERS'>(
+    router.route.productionViewMode
+  );
+  const [activeProductionModuleTab, setActiveProductionModuleTab] = useState<ProductionWorkbenchSubTab>(
+    router.route.productionModuleTab
+  );
+  const [activePlanningSubTab, setActivePlanningSubTab] = useState<PlanningSubTabKey>(
+    router.route.planningSubTab
+  );
+  const [activeMachineSubTab, setActiveMachineSubTab] = useState<MachineSubTabKey>(
+    router.route.machineSubTab
+  );
+
+  // Synchronize state when URL changes (Browser Back / Forward buttons or deep links)
+  useEffect(() => {
+    setActiveTab(router.route.tab);
+    setActiveInventorySubTab(router.route.inventorySubTab);
+    setProductionViewMode(router.route.productionViewMode);
+    setActiveProductionModuleTab(router.route.productionModuleTab);
+    setActivePlanningSubTab(router.route.planningSubTab);
+    setActiveMachineSubTab(router.route.machineSubTab);
+  }, [router.route]);
 
   // Multi-Template & Color Theme Engine (Persisted in localStorage)
   const [layoutTemplate, setLayoutTemplate] = useState<ErpLayoutTemplate>(() => {
@@ -475,11 +495,25 @@ export default function App() {
     subTab?: InventorySubTab,
     actionModal?: 'RECEIPT' | 'ISSUE' | 'RETURN' | 'TRANSFER'
   ) => {
-    if (tab === 'vouchers') setActiveTab('production');
-    else if (tab === 'parts') setActiveTab('master_data');
-    else if (tab === 'audit') setActiveTab('reports');
-    else if (tab === 'users') setActiveTab('settings');
-    else setActiveTab(tab);
+    let resolvedTab: TabKey = 'dashboard';
+    if (tab === 'vouchers') {
+      resolvedTab = 'production';
+      setProductionViewMode('VOUCHERS');
+      router.navigate({ tab: 'production', productionViewMode: 'VOUCHERS', moId: null });
+    } else if (tab === 'parts') {
+      resolvedTab = 'master_data';
+      router.navigate({ tab: 'master_data', moId: null });
+    } else if (tab === 'audit') {
+      resolvedTab = 'reports';
+      router.navigate({ tab: 'reports', moId: null });
+    } else if (tab === 'users') {
+      resolvedTab = 'settings';
+      router.navigate({ tab: 'settings', moId: null });
+    } else {
+      resolvedTab = tab;
+      router.navigate({ tab, inventorySubTab: subTab, moId: null });
+    }
+    setActiveTab(resolvedTab);
 
     if (subTab) {
       setActiveInventorySubTab(subTab);
@@ -491,12 +525,24 @@ export default function App() {
 
   const handleSubModuleNavigate = (tab: TabKey, navParams?: SubModuleNavParams) => {
     setActiveTab(tab);
-    if (!navParams) return;
+    if (!navParams) {
+      router.navigate({ tab, moId: null });
+      return;
+    }
     if (navParams.inventorySubTab) setActiveInventorySubTab(navParams.inventorySubTab);
     if (navParams.productionViewMode) setProductionViewMode(navParams.productionViewMode);
     if (navParams.productionModuleTab) setActiveProductionModuleTab(navParams.productionModuleTab);
     if (navParams.planningSubTab) setActivePlanningSubTab(navParams.planningSubTab);
     if (navParams.machineSubTab) setActiveMachineSubTab(navParams.machineSubTab);
+    router.navigate({
+      tab,
+      inventorySubTab: navParams.inventorySubTab,
+      productionViewMode: navParams.productionViewMode,
+      productionModuleTab: navParams.productionModuleTab,
+      planningSubTab: navParams.planningSubTab,
+      machineSubTab: navParams.machineSubTab,
+      moId: null,
+    });
   };
 
   const handleExecuteAiAction = (action: AiActionPayload) => {
@@ -618,9 +664,13 @@ export default function App() {
       colorTheme={colorTheme}
       onTabChange={(tab, navParams) => {
         setActiveTab(tab);
-        if (!navParams) return;
+        if (!navParams) {
+          router.navigate({ tab, moId: null });
+          return;
+        }
         if (typeof navParams === 'string') {
           setActiveInventorySubTab(navParams as InventorySubTab);
+          router.navigate({ tab, inventorySubTab: navParams as InventorySubTab, moId: null });
           return;
         }
         if (navParams.inventorySubTab) setActiveInventorySubTab(navParams.inventorySubTab);
@@ -628,6 +678,15 @@ export default function App() {
         if (navParams.productionModuleTab) setActiveProductionModuleTab(navParams.productionModuleTab);
         if (navParams.planningSubTab) setActivePlanningSubTab(navParams.planningSubTab);
         if (navParams.machineSubTab) setActiveMachineSubTab(navParams.machineSubTab);
+        router.navigate({
+          tab,
+          inventorySubTab: navParams.inventorySubTab,
+          productionViewMode: navParams.productionViewMode,
+          productionModuleTab: navParams.productionModuleTab,
+          planningSubTab: navParams.planningSubTab,
+          machineSubTab: navParams.machineSubTab,
+          moId: null,
+        });
       }}
       onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
       onOpenAiAssistant={() => setIsAiModalOpen(true)}
@@ -658,6 +717,15 @@ export default function App() {
           onNavigateSubModule={handleSubModuleNavigate}
           onOpenNewVoucher={handleOpenVoucherWithType}
           onSubmitVoucher={handleSubmitVoucher}
+          initialOrderId={router.route.moId}
+          initialDrawerTab={router.route.drawerTab}
+          onOrderDrawerChange={(orderId, tab) => {
+            if (orderId) {
+              router.openMoDrawer(orderId, tab);
+            } else {
+              router.closeMoDrawer();
+            }
+          }}
         />
       )}
 
@@ -764,7 +832,18 @@ export default function App() {
                   routings={routings}
                   machines={machines}
                   initialModuleTab={activeProductionModuleTab}
-                  onModuleTabChange={setActiveProductionModuleTab}
+                  onModuleTabChange={tab => {
+                    setActiveProductionModuleTab(tab);
+                    router.navigate({ productionModuleTab: tab });
+                  }}
+                  initialMoId={router.route.moId}
+                  onMoSelect={moId => {
+                    if (moId) {
+                      router.openMoDrawer(moId);
+                    } else {
+                      router.closeMoDrawer();
+                    }
+                  }}
                   onRefreshData={loadAllData}
                 />
               ) : (
@@ -857,8 +936,7 @@ export default function App() {
   );
 
   return (
-    <EnterpriseUxProvider>
-      <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
       {isSidebarFullHeight ? (
         /* Layout A (Image 1 / ERPNext Workspace): Dark Right Sidebar spans full height, White Top Bar sits above main workspace */
         <div className="flex-1 flex flex-col md:flex-row min-h-screen">
@@ -919,8 +997,17 @@ export default function App() {
         summary={summary}
         onExecuteAction={handleExecuteAiAction}
       />
-      </div>
-    </EnterpriseUxProvider>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErpRouterProvider>
+      <EnterpriseUxProvider>
+        <AppContent />
+      </EnterpriseUxProvider>
+    </ErpRouterProvider>
   );
 }
 

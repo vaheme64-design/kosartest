@@ -53,6 +53,8 @@ import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 import { OrderDetailsDrawer, DrawerTabKey } from './OrderDetailsDrawer';
 import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 import { FormulaTooltip } from '../common/FormulaTooltip';
+import { EmptyState } from '../common/EmptyState';
+import { MetricTooltip } from '../common/MetricTooltip';
 import { loadVipPartsMap, saveVipPartsMap, isPartVip } from '../../utils/qcHoldStore';
 
 export interface HighwayOperationStep {
@@ -427,6 +429,9 @@ interface FactoryHighwayWorkbenchProps {
   onNavigateSubModule?: (tab: TabKey, navParams?: SubModuleNavParams) => void;
   onOpenNewVoucher?: (type: string, partId?: string) => void;
   onSubmitVoucher?: (payload: any) => Promise<{ success: boolean; message?: string }>;
+  initialOrderId?: string | null;
+  initialDrawerTab?: DrawerTabKey | null;
+  onOrderDrawerChange?: (orderId: string | null, tab?: DrawerTabKey) => void;
 }
 
 export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = ({
@@ -440,6 +445,9 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   onNavigateToTab,
   onNavigateSubModule,
   onSubmitVoucher,
+  initialOrderId = null,
+  initialDrawerTab = null,
+  onOrderDrawerChange,
 }) => {
   const { requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
   const [scenarios, setScenarios] = useState<HighwayPartScenario[]>(() => {
@@ -534,13 +542,23 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   const [showWarehouseTools, setShowWarehouseTools] = useState(false);
 
   // Master-Detail Slide-Over Drawer State (SAP Fiori / Dynamics 365 Style)
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(initialOrderId || null);
   const [expandedViewMode, setExpandedViewMode] = useState<'OPS' | 'BOM'>('OPS');
-  const [drawerTab, setDrawerTab] = useState<DrawerTabKey>('TRACEABILITY');
+  const [drawerTab, setDrawerTab] = useState<DrawerTabKey>(initialDrawerTab || 'TRACEABILITY');
+
+  useEffect(() => {
+    if (initialOrderId !== undefined) {
+      setExpandedOrderId(initialOrderId);
+    }
+    if (initialDrawerTab) {
+      setDrawerTab(initialDrawerTab);
+    }
+  }, [initialOrderId, initialDrawerTab]);
 
   const handleOpenOrderDrawer = (orderId: string, tab: DrawerTabKey = 'TRACEABILITY') => {
     setExpandedOrderId(orderId);
     setDrawerTab(tab);
+    if (onOrderDrawerChange) onOrderDrawerChange(orderId, tab);
   };
 
   // Live Order & Command Tracking Modal (`پیگیری دستور`)
@@ -2560,22 +2578,54 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                     className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
                   />
                 </th>
-                <th className="py-3.5 px-5 font-semibold">شماره MO</th>
-                <th className="py-3.5 px-5 font-semibold">نام قطعه</th>
+                <th className="py-3.5 px-5 font-semibold">
+                  <span className="inline-flex items-center">
+                    <span>شماره MO</span>
+                    <MetricTooltip metric="MO" />
+                  </span>
+                </th>
+                <th className="py-3.5 px-5 font-semibold">
+                  <span className="inline-flex items-center">
+                    <span>نام قطعه</span>
+                    <MetricTooltip metric="BOM" />
+                  </span>
+                </th>
                 <th className="py-3.5 px-5 font-semibold">تیراژ</th>
-                <th className="py-3.5 px-5 font-semibold">وضعیت / پیشرفت</th>
+                <th className="py-3.5 px-5 font-semibold">
+                  <span className="inline-flex items-center">
+                    <span>وضعیت / پیشرفت</span>
+                    <MetricTooltip metric="FTT" />
+                  </span>
+                </th>
                 <th className="py-3.5 px-5 font-semibold text-left w-24">اکشن سریع</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    {scheduleTabFilter === 'PINNED'
-                      ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است.'
-                      : scheduleTabFilter === 'COMPLETED'
-                      ? 'هیچ دستور کاری هنوز به اتمام نرسیده است.'
-                      : 'هیچ دستور کاری مطابق با عبارت جستجو یافت نشد.'}
+                  <td colSpan={6} className="py-8 px-4 text-center">
+                    <EmptyState
+                      variant={scheduleTabFilter === 'ALL' && !searchQuery ? 'NO_DATA' : 'FILTER_NO_MATCH'}
+                      title={
+                        scheduleTabFilter === 'PINNED'
+                          ? 'هیچ قطعه‌ای هنوز نشانه‌گذاری نشده است'
+                          : scheduleTabFilter === 'COMPLETED'
+                          ? 'هیچ دستور کاری در این بخش تکمیل نشده است'
+                          : searchQuery
+                          ? `دستور کاری با جستجوی «${searchQuery}» یافت نشد`
+                          : 'هیچ دستور تولید فعالی در این فیلتر وجود ندارد'
+                      }
+                      actionLabel={scheduleTabFilter !== 'ALL' || searchQuery ? 'نمایش همه دستورات' : 'ثبت دستور تولید جدید (MO)'}
+                      onAction={() => {
+                        if (scheduleTabFilter !== 'ALL' || searchQuery) {
+                          setScheduleTabFilter('ALL');
+                          setSearchQuery('');
+                        } else {
+                          handleOpenCreateNewOrder();
+                        }
+                      }}
+                      compact
+                    />
                   </td>
                 </tr>
               ) : (
@@ -2797,7 +2847,10 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         order={scenarios.find(s => s.id === expandedOrderId) || null}
         isOpen={Boolean(expandedOrderId)}
         initialTab={drawerTab}
-        onClose={() => setExpandedOrderId(null)}
+        onClose={() => {
+          setExpandedOrderId(null);
+          if (onOrderDrawerChange) onOrderDrawerChange(null);
+        }}
         onCompleteProduction={handleCompleteProduction}
         onDispatchFinishedGoods={handleDispatchFinishedGoods}
         onToggleLineStop={handleToggleLineStop}

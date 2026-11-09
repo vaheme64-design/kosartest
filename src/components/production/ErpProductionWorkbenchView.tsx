@@ -36,12 +36,19 @@ import {
   FileText,
   Users,
   Cpu,
+  Pause,
+  FastForward,
+  Info,
 } from 'lucide-react';
 import { Part, Routing, DetailedStockBalance, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits, exportToCsv } from '../../utils/formatters';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { ComprehensiveProductionReportView } from '../reports/ComprehensiveProductionReportView';
 import { ProductionWorkflowDocumentationView } from '../planning/ProductionWorkflowDocumentationView';
+import { ManufacturingOrderTimelineModal } from './ManufacturingOrderTimelineModal';
+import { MaterialRequirementProjectionView } from './MaterialRequirementProjectionView';
+import { EmptyState } from '../common/EmptyState';
+import { MetricTooltip } from '../common/MetricTooltip';
 
 export interface ScheduledOpStep {
   opId: string;
@@ -64,7 +71,19 @@ export interface ScheduledOpStep {
   wipBufferAfterOp: number; // Output sitting after this OP waiting for next OP
   isFinalOp: boolean;
   warehouseReceiptDocNumber?: string; // Populated when final OP is received into warehouse
-  status: 'PLANNED' | 'IN_PROGRESS' | 'ROLLED_FORWARD' | 'COMPLETED';
+  status: 'PLANNED' | 'IN_PROGRESS' | 'ROLLED_FORWARD' | 'COMPLETED' | 'ON_HOLD';
+  holdReasonCode?: string;
+  holdReasonText?: string;
+  holdTimestamp?: string;
+  rollForwardHistory?: Array<{
+    fromShift: string;
+    toShift: string;
+    fromDay: number;
+    toDay: number;
+    quantity: number;
+    reason: string;
+    timestamp: string;
+  }>;
 }
 
 export interface MultiPartScheduleItem {
@@ -90,6 +109,7 @@ export type ProductionWorkbenchSubTab =
   | 'DAILY_DISPATCH_SHEET'
   | 'LIVE_WIP_OP_TRACKER'
   | 'KPI_OEE_REPORTS'
+  | 'MATERIAL_REQUIREMENT_PROJECTION'
   | 'TREE_TIMELINE_REPORT'
   | 'SAP_PP_WORKFLOW';
 
@@ -101,6 +121,8 @@ interface ErpProductionWorkbenchViewProps {
   initialModuleTab?: ProductionWorkbenchSubTab;
   onModuleTabChange?: (tab: ProductionWorkbenchSubTab) => void;
   onRefreshData?: () => void;
+  initialMoId?: string | null;
+  onMoSelect?: (moId: string | null) => void;
 }
 
 const STORAGE_KEY_MULTI_OP_APS = 'kpims_aps_multi_part_op_schedule_v2';
@@ -113,6 +135,20 @@ export const WORK_DAYS = [
   { index: 5, name: 'چهارشنبه', shortName: 'چهارشنبه', date: '۱۴۰۴/۰۲/۲۴' },
   { index: 6, name: 'پنج‌شنبه (جبرانی)', shortName: 'پنج‌شنبه', date: '۱۴۰۴/۰۲/۲۵' },
 ];
+
+/**
+ * فرمول محاسباتی استاندارد موجودی نیمه‌ساخته بین‌ایستگاهی (Enterprise Inter-OP WIP):
+ * موجودی ورودی پای کار هر ایستگاه = (تولید سالم OP قبلی - مصرف‌شده/تولیدشده در OP فعلی)
+ * برای OP10: کل تیراژ باقیمانده سفارش جهت تغذیه به خط برش/بلنک‌زنی
+ */
+export function calculateOpInputWip(item: MultiPartScheduleItem, opIdx: number): number {
+  if (opIdx === 0) {
+    return Math.max(0, item.weeklyTargetQty - item.ops[0].completedGoodQty);
+  }
+  const prevOp = item.ops[opIdx - 1];
+  const currentOp = item.ops[opIdx];
+  return Math.max(0, (prevOp?.completedGoodQty || 0) - (currentOp?.completedGoodQty || 0));
+}
 
 // Generate a realistic 20-part multi-operation factory schedule where each part has 3 to 5 OPs staggered across days
 function buildInitial20PartsSchedule(): MultiPartScheduleItem[] {
@@ -531,6 +567,8 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   initialModuleTab = 'MULTI_PART_SCHEDULER',
   onModuleTabChange,
   onRefreshData,
+  initialMoId = null,
+  onMoSelect,
 }) => {
   // Major Operational Sub-Modules
   const [activeModuleTab, setActiveModuleTab] = useState<ProductionWorkbenchSubTab>(initialModuleTab);
@@ -575,6 +613,8 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     opStep: ScheduledOpStep;
   } | null>(null);
   const [logGoodInput, setLogGoodInput] = useState<string>('');
+  const [logShiftGoodInput, setLogShiftGoodInput] = useState<string>('0');
+  const [logInputMode, setLogInputMode] = useState<'SHIFT_PRODUCTION' | 'CUMULATIVE_TOTAL'>('SHIFT_PRODUCTION');
   const [logScrapInput, setLogScrapInput] = useState<string>('0');
   const [rollForwardToDay, setRollForwardToDay] = useState<number>(2);
   const [isPostingReceipt, setIsPostingReceipt] = useState<boolean>(false);
@@ -609,6 +649,190 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     }>;
   } | null>(null);
   const [drillDownSearch, setDrillDownSearch] = useState<string>('');
+
+  // Manufacturing Order Visual Timeline Modal
+  const [activeTimelineOrder, setActiveTimelineOrder] = useState<MultiPartScheduleItem | null>(null);
+  const [isTimelineModalOpen, setIsTimelineModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (initialMoId) {
+      const match = scheduleItems.find(s => s.orderCode === initialMoId || s.id === initialMoId);
+      if (match) {
+        setActiveTimelineOrder(match);
+        setIsTimelineModalOpen(true);
+      }
+    }
+  }, [initialMoId, scheduleItems]);
+
+  // Modal for Roll-Forward remaining quota to next shift/day
+  const [rollForwardModalContext, setRollForwardModalContext] = useState<{
+    partItem: MultiPartScheduleItem;
+    op: ScheduledOpStep;
+    remainingQty: number;
+  } | null>(null);
+  const [rfTargetDay, setRfTargetDay] = useState<number>(2);
+  const [rfTargetShift, setRfTargetShift] = useState<'شیفت صبح' | 'شیفت عصر' | 'شیفت شب'>('شیفت عصر');
+  const [rfQuantity, setRfQuantity] = useState<number>(0);
+  const [rfReason, setRfReason] = useState<string>('پایان ساعت کار شیفت و تکمیل نشدن تیراژ');
+  const [rfNotes, setRfNotes] = useState<string>('');
+
+  const handleOpenRollForwardModal = (partItem: MultiPartScheduleItem, op: ScheduledOpStep) => {
+    const remaining = Math.max(0, op.effectiveTargetQty - op.completedGoodQty);
+    setRollForwardModalContext({ partItem, op, remainingQty: remaining });
+    setRfQuantity(remaining);
+    const nextDay = op.scheduledDayIndex < 6 ? op.scheduledDayIndex + 1 : 1;
+    setRfTargetDay(nextDay);
+    setRfTargetShift(op.shiftName === 'شیفت صبح' ? 'شیفت عصر' : 'شیفت صبح');
+    setRfReason('پایان ساعت کار شیفت و تکمیل نشدن تیراژ');
+    setRfNotes('');
+  };
+
+  const handleExecuteRollForward = () => {
+    if (!rollForwardModalContext) return;
+    const { partItem, op, remainingQty } = rollForwardModalContext;
+    const qtyToRoll = Math.min(remainingQty, Math.max(1, rfQuantity));
+
+    const nextSchedule = scheduleItems.map(item => {
+      if (item.id !== partItem.id) return item;
+      return {
+        ...item,
+        ops: item.ops.map(o => {
+          if (o.opId !== op.opId) return o;
+          const hist = {
+            fromShift: o.shiftName,
+            toShift: rfTargetShift,
+            fromDay: o.scheduledDayIndex,
+            toDay: rfTargetDay,
+            quantity: qtyToRoll,
+            reason: `${rfReason} ${rfNotes ? `(${rfNotes})` : ''}`,
+            timestamp: new Date().toISOString(),
+          };
+          return {
+            ...o,
+            carriedOverQty: (o.carriedOverQty || 0) + qtyToRoll,
+            scheduledDayIndex: rfTargetDay,
+            shiftName: rfTargetShift,
+            status: 'ROLLED_FORWARD' as const,
+            rollForwardHistory: [...(o.rollForwardHistory || []), hist],
+          };
+        }),
+      };
+    });
+
+    saveSchedule(nextSchedule);
+    setRollForwardModalContext(null);
+    setToastNotice({
+      type: 'success',
+      title: `مانده تیراژ (${formatNumber(qtyToRoll)} عدد) با موفقیت به شیفت بعد منتقل شد`,
+      detail: `انتقال به روز ${WORK_DAYS.find(d => d.index === rfTargetDay)?.name} (${rfTargetShift}) در برنامه تولید ثبت گردید.`,
+    });
+  };
+
+  // Modal for Mandatory Pause / Hold of a Work Order Operation
+  const [holdModalContext, setHoldModalContext] = useState<{
+    partItem: MultiPartScheduleItem;
+    op: ScheduledOpStep;
+  } | null>(null);
+  const [holdReasonCode, setHoldReasonCode] = useState<string>('DOWNTIME_TOOLING');
+  const [holdDescription, setHoldDescription] = useState<string>('');
+  const [holdEstimatedMinutes, setHoldEstimatedMinutes] = useState<number>(30);
+
+  const HOLD_REASONS = [
+    { code: 'DOWNTIME_TOOLING', label: 'خرابی قالب، سنبه، ماتریس یا سایش تیغه (نیاز به قالب‌سازی)', category: 'UNPLANNED_BREAKDOWN' },
+    { code: 'DOWNTIME_PRESS', label: 'نقص فنی مکانیکی، نشتی روغن هیدرولیک یا افت فشار باد پرس', category: 'UNPLANNED_BREAKDOWN' },
+    { code: 'MATERIAL_SHORTAGE', label: 'کسری رول ورق، عدم تطابق ابعاد نوار یا اتمام مهره جوشی', category: 'MATERIAL_SHORTAGE' },
+    { code: 'QC_DEFECT_STOP', label: 'توقف کیفی توسط بازرس خط (پلیسه بیش از حد / عدم انطباق ابعادی)', category: 'MINOR_STOP' },
+    { code: 'WAITING_INSPECTION', label: 'توقف در انتظار تایید قطعه اول توسط آزمایشگاه (ISIR / First Piece)', category: 'SETUP_CHANGE' },
+    { code: 'PLANNED_SMED', label: 'توقف برنامه‌ریزی‌شده تعویض قالب و ستاپ فیکسچر (SMED)', category: 'SETUP_CHANGE' },
+    { code: 'POWER_FACILITY', label: 'قطعی برق سراسری، افت فشار باد مرکزی کمپرسور یا عیب چیلر', category: 'UNPLANNED_BREAKDOWN' },
+  ];
+
+  const handleOpenHoldModal = (partItem: MultiPartScheduleItem, op: ScheduledOpStep) => {
+    setHoldModalContext({ partItem, op });
+    setHoldReasonCode('DOWNTIME_TOOLING');
+    setHoldDescription('');
+    setHoldEstimatedMinutes(30);
+  };
+
+  const handleConfirmHold = () => {
+    if (!holdModalContext) return;
+    const { partItem, op } = holdModalContext;
+    const reasonObj = HOLD_REASONS.find(r => r.code === holdReasonCode);
+    const reasonLabel = reasonObj?.label || holdReasonCode;
+
+    // 1. Update schedule step status to ON_HOLD
+    const nextSchedule = scheduleItems.map(item => {
+      if (item.id !== partItem.id) return item;
+      return {
+        ...item,
+        ops: item.ops.map(o => {
+          if (o.opId !== op.opId) return o;
+          return {
+            ...o,
+            status: 'ON_HOLD' as const,
+            holdReasonCode,
+            holdReasonText: `${reasonLabel}${holdDescription ? ` - ${holdDescription}` : ''}`,
+            holdTimestamp: new Date().toISOString(),
+          };
+        }),
+      };
+    });
+
+    saveSchedule(nextSchedule);
+
+    // 2. Automatically log a real downtime event into kpims_dynamic_machine_downtimes_v2
+    try {
+      const rawDt = localStorage.getItem('kpims_dynamic_machine_downtimes_v2');
+      const curDt = rawDt ? JSON.parse(rawDt) : [];
+      const now = new Date();
+      const newDtEntry = {
+        id: `DT-${Date.now()}`,
+        machineCode: op.machineCode,
+        category: (reasonObj?.category || 'UNPLANNED_BREAKDOWN') as any,
+        durationMinutes: holdEstimatedMinutes || 30,
+        startHour: `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`,
+        reason: `${op.opCode} (${partItem.partName}): ${reasonLabel}${holdDescription ? ` | ${holdDescription}` : ''}`,
+        correctiveAction: 'دستور کار فریز گردید تا عیب فنی رفع شود.',
+        loggedAt: now.toISOString(),
+      };
+      localStorage.setItem('kpims_dynamic_machine_downtimes_v2', JSON.stringify([newDtEntry, ...curDt]));
+    } catch {
+      // ignore
+    }
+
+    setHoldModalContext(null);
+    setToastNotice({
+      type: 'warning',
+      title: `دستور کار مرحله ${op.opCode} روی «${op.machineName}» متوقف موقت (Hold) شد`,
+      detail: `علت ثبت‌شده: «${reasonLabel}». زمان توقف در شاخص OEE و گزارش توقفات ثبت گردید.`,
+    });
+  };
+
+  const handleResumeOrder = (partItem: MultiPartScheduleItem, op: ScheduledOpStep) => {
+    if (!confirm(`آیا علت توقف روی دستگاه «${op.machineName}» برطرف شده و خط آماده راه‌اندازی و ادامه ضربه است؟`)) {
+      return;
+    }
+    const nextSchedule = scheduleItems.map(item => {
+      if (item.id !== partItem.id) return item;
+      return {
+        ...item,
+        ops: item.ops.map(o => {
+          if (o.opId !== op.opId) return o;
+          return {
+            ...o,
+            status: 'IN_PROGRESS' as const,
+            holdTimestamp: undefined,
+          };
+        }),
+      };
+    });
+    saveSchedule(nextSchedule);
+    setToastNotice({
+      type: 'success',
+      title: `تولید روی دستگاه «${op.machineName}» مجدداً راه‌اندازی شد`,
+      detail: `وضعیت دستور کار مرحله ${op.opCode} به «در جریان» بازگردانده شد.`,
+    });
+  };
 
   // Unified raw operational records across all parts and operations for live drill-down
   const allRawRecords = useMemo(() => {
@@ -927,13 +1151,13 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     }
 
     setActiveLogContext({ partItem: item, opStep: op });
-    // State Sync Correction: Sync with table row columns:
-    // In Daily Shift Plan table row:
-    // - «تیراژ هدف مرحله» = op.effectiveTargetQty
-    // - «تولید سالم» = op.completedGoodQty
-    // - «مانده» = Math.max(0, op.effectiveTargetQty - op.completedGoodQty)
-    // Synchronize logGoodInput directly with op.completedGoodQty so the modal matches the table's "تولید سالم" column exactly!
+    const currentRem = Math.max(0, op.effectiveTargetQty - op.completedGoodQty);
+    // Explicit sync with table:
+    // - «تولید سالم در جدول»: op.completedGoodQty
+    // - «مانده در جدول»: currentRem
     setLogGoodInput(String(op.completedGoodQty || 0));
+    setLogShiftGoodInput(String(currentRem)); // Default shift production to complete remaining target
+    setLogInputMode('SHIFT_PRODUCTION');
     setLogScrapInput(String(op.scrapQty || 0));
     setRollForwardToDay(Math.min(6, op.scheduledDayIndex + 1));
   };
@@ -945,7 +1169,10 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     setIsPostingReceipt(true);
 
     const { partItem, opStep } = activeLogContext;
-    const goodQty = Math.max(0, Number(logGoodInput) || 0);
+    const shiftQty = Math.max(0, Number(logShiftGoodInput) || 0);
+    const goodQty = logInputMode === 'SHIFT_PRODUCTION'
+      ? Math.max(0, opStep.completedGoodQty + shiftQty)
+      : Math.max(0, Number(logGoodInput) || 0);
     const scrapQty = Math.max(0, Number(logScrapInput) || 0);
     const remainingQty = Math.max(0, opStep.effectiveTargetQty - goodQty);
 
@@ -1496,8 +1723,9 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
             { id: 'DAILY_DISPATCH_SHEET' as const, title: '۲. برنامه روزانه و چاپ شیفت', icon: Printer },
             { id: 'LIVE_WIP_OP_TRACKER' as const, title: '۳. موجودی بین ایستگاهی (WIP)', icon: ArrowRightLeft },
             { id: 'KPI_OEE_REPORTS' as const, title: '۴. شاخص‌های OEE و راندمان', icon: Gauge },
-            { id: 'TREE_TIMELINE_REPORT' as const, title: '۵. نمودار درختی و توقفات', icon: Activity },
-            { id: 'SAP_PP_WORKFLOW' as const, title: '۶. راهنمای گردش کار', icon: GitBranch },
+            { id: 'MATERIAL_REQUIREMENT_PROJECTION' as const, title: '۵. پیش‌بینی کسری ورق و مواد (MRP)', icon: Boxes },
+            { id: 'TREE_TIMELINE_REPORT' as const, title: '۶. نمودار درختی و توقفات', icon: Activity },
+            { id: 'SAP_PP_WORKFLOW' as const, title: '۷. راهنمای گردش کار', icon: GitBranch },
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeModuleTab === tab.id;
@@ -1649,23 +1877,66 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 border-b border-slate-200 text-slate-700">
                 <tr>
-                  <th className="py-3 px-3 w-56">مشخصات قطعه و دستور کار</th>
-                  <th className="py-3 px-3 w-28">تیراژ و ورق</th>
+                  <th className="py-3 px-3 w-56">
+                    <span className="inline-flex items-center">
+                      <span>مشخصات قطعه و دستور کار</span>
+                      <MetricTooltip metric="MO" />
+                    </span>
+                  </th>
+                  <th className="py-3 px-3 w-28">
+                    <span className="inline-flex items-center">
+                      <span>تیراژ و ورق</span>
+                      <MetricTooltip metric="ATP" />
+                    </span>
+                  </th>
                   <th className="py-3 px-3">
-                    توالی مراحل عملیات (OP10 تا مرحله آخر) — انتخاب روز هر مرحله و وضعیت موجودی بین‌مرحله‌ای
+                    <span className="inline-flex items-center">
+                      <span>توالی مراحل عملیات (OP10 تا مرحله آخر) — انتخاب روز هر مرحله و وضعیت بافر WIP</span>
+                      <MetricTooltip metric="WIP" />
+                    </span>
                   </th>
                   <th className="py-3 px-3 w-36 text-center">عملیات انبار و خط</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {paginatedParts.map(item => (
+                {paginatedParts.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 px-4 text-center">
+                      <EmptyState
+                        variant={searchQuery || selectedCarFilter !== 'ALL' || selectedHallFilter !== 'ALL' ? 'FILTER_NO_MATCH' : 'NO_DATA'}
+                        title={searchQuery ? `قطعه‌ای با عبارت «${searchQuery}» یافت نشد` : 'هیچ برنامه‌ای در ماتریس زمان‌بندی وجود ندارد'}
+                        actionLabel={searchQuery || selectedCarFilter !== 'ALL' || selectedHallFilter !== 'ALL' ? 'پاک‌کردن فیلترها' : 'افزودن قطعه جدید به ماتریس'}
+                        onAction={() => {
+                          if (searchQuery || selectedCarFilter !== 'ALL' || selectedHallFilter !== 'ALL') {
+                            setSearchQuery('');
+                            setSelectedCarFilter('ALL');
+                            setSelectedHallFilter('ALL');
+                          } else {
+                            setIsAddPartModalOpen(true);
+                          }
+                        }}
+                        compact
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedParts.map(item => (
                   <tr key={item.id} className="hover:bg-slate-50/70 align-top">
                     {/* Part Info */}
                     <td className="py-3.5 px-3 space-y-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono font-bold text-[11px] bg-slate-900 text-white px-2 py-0.5 rounded">
-                          {item.orderCode}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTimelineOrder(item);
+                            setIsTimelineModalOpen(true);
+                          }}
+                          className="font-mono font-bold text-[11px] bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 px-2 py-0.5 rounded cursor-pointer transition flex items-center gap-1 border border-slate-700 shadow-2xs"
+                          title="مشاهده شناسنامه و تایم‌لاین دستور ساخت (MO Timeline)"
+                        >
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>{item.orderCode}</span>
+                        </button>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
                           {item.carModel}
                         </span>
@@ -1783,21 +2054,60 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                                   </strong>
                                 </div>
 
-                                {/* Computed WIP Buffer before this OP (فرمول محاسباتی موجودی بین‌ایستگاهی) */}
-                                <div className="px-2 py-1 bg-indigo-50/90 border border-indigo-200 rounded-lg text-[10px] text-indigo-950 flex items-center justify-between">
-                                  <span className="flex items-center gap-1 font-sans text-indigo-800">
-                                    <Layers className="w-3 h-3 text-indigo-600 inline" />
-                                    <span>بافر ورودی / قبل از OP:</span>
-                                  </span>
-                                  <strong className="font-mono font-bold text-indigo-900">
-                                    {formatNumber(
-                                      oIdx === 0
-                                        ? Math.max(0, item.weeklyTargetQty - op.completedGoodQty)
-                                        : Math.max(0, item.ops[oIdx - 1].completedGoodQty - op.completedGoodQty)
-                                    )}{' '}
-                                    عدد
-                                  </strong>
-                                </div>
+                                {/* Computed WIP Buffer before this OP (فرمول محاسباتی: تولید سالم OP قبلی - مصرف‌شده در OP فعلی) */}
+                                {(() => {
+                                  const inputWip = calculateOpInputWip(item, oIdx);
+                                  const isWipSufficient = inputWip >= op.effectiveTargetQty;
+                                  const isWipEmpty = inputWip === 0;
+
+                                  return (
+                                    <div
+                                      className={`px-2 py-1.5 rounded-lg border text-[10px] space-y-1 ${
+                                        isWipEmpty
+                                          ? 'bg-rose-50/80 border-rose-200 text-rose-950'
+                                          : isWipSufficient
+                                          ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                                          : 'bg-indigo-50/90 border-indigo-200 text-indigo-950'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1 font-sans font-bold">
+                                          <Layers
+                                            className={`w-3 h-3 ${
+                                              isWipEmpty
+                                                ? 'text-rose-600'
+                                                : isWipSufficient
+                                                ? 'text-emerald-600'
+                                                : 'text-indigo-600'
+                                            }`}
+                                          />
+                                          <span>بافر ورودی / قبل از تولید:</span>
+                                        </span>
+                                        <strong className="font-mono font-bold">
+                                          {formatNumber(inputWip)} عدد
+                                        </strong>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[9px] pt-0.5 border-t border-slate-200/50">
+                                        <span className="text-slate-500">
+                                          {oIdx === 0
+                                            ? 'مانده کل سفارش'
+                                            : `خروجی ${prevOp?.opCode}: ${formatNumber(prevOp?.completedGoodQty || 0)}`}
+                                        </span>
+                                        <span
+                                          className={`px-1 rounded font-bold ${
+                                            isWipEmpty
+                                              ? 'bg-rose-200 text-rose-800'
+                                              : isWipSufficient
+                                              ? 'bg-emerald-200 text-emerald-800'
+                                              : 'bg-amber-200 text-amber-900'
+                                          }`}
+                                        >
+                                          {isWipEmpty ? 'فاقد بافر' : isWipSufficient ? 'کافی' : 'تغذیه جزئی'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
 
                                 <div className="flex items-center justify-between font-mono">
                                   <span className="font-sans text-slate-500">
@@ -1847,29 +2157,43 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                           </strong>
                         </div>
                       )}
-                      <div className="pt-1.5 border-t border-slate-200/80 grid grid-cols-2 gap-1.5">
+                      <div className="pt-1.5 border-t border-slate-200/80 space-y-1.5">
                         <button
                           type="button"
-                          onClick={() => handleOpenEditScheduleItem(item)}
-                          className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                          title="ویرایش برنامه، تیراژ و شماره دستور ساخت (استاندارد ERPNext / Odoo)"
+                          onClick={() => {
+                            setActiveTimelineOrder(item);
+                            setIsTimelineModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                          title="مشاهده تایم‌لاین کامل و گردش کار دستور ساخت"
                         >
-                          <Edit3 className="w-3 h-3 text-blue-600" />
-                          <span>ویرایش</span>
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          <span>تایم‌لاین و شناسنامه MO</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteScheduleItem(item.id, item.partName)}
-                          className="flex items-center justify-center gap-1 py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                          title="حذف برنامه تولید این قطعه"
-                        >
-                          <Trash2 className="w-3 h-3 text-rose-600" />
-                          <span>حذف</span>
-                        </button>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditScheduleItem(item)}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                            title="ویرایش برنامه، تیراژ و شماره دستور ساخت (استاندارد ERPNext / Odoo)"
+                          >
+                            <Edit3 className="w-3 h-3 text-blue-600" />
+                            <span>ویرایش</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteScheduleItem(item.id, item.partName)}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                            title="حذف برنامه تولید این قطعه"
+                          >
+                            <Trash2 className="w-3 h-3 text-rose-600" />
+                            <span>حذف</span>
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -2009,90 +2333,208 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="py-3 px-3">#</th>
-                  <th className="py-3 px-3">دستور کار</th>
-                  <th className="py-3 px-3">قطعه و پروژه</th>
+                  <th className="py-3 px-3">
+                    <span className="inline-flex items-center">
+                      <span>دستور کار</span>
+                      <MetricTooltip metric="MO" />
+                    </span>
+                  </th>
+                  <th className="py-3 px-3">
+                    <span className="inline-flex items-center">
+                      <span>قطعه و پروژه</span>
+                      <MetricTooltip metric="BOM" />
+                    </span>
+                  </th>
                   <th className="py-3 px-3">مرحله (OP)</th>
                   <th className="py-3 px-3">سالن و دستگاه / پرس</th>
-                  <th className="py-3 px-3">کد قالب</th>
+                  <th className="py-3 px-3">
+                    <span className="inline-flex items-center">
+                      <span>کد قالب</span>
+                      <MetricTooltip metric="SMED" />
+                    </span>
+                  </th>
                   <th className="py-3 px-3">شیفت</th>
-                  <th className="py-3 px-3">تغذیه ورودی</th>
+                  <th className="py-3 px-3">
+                    <span className="inline-flex items-center">
+                      <span>تغذیه ورودی</span>
+                      <MetricTooltip metric="WIP" />
+                    </span>
+                  </th>
                   <th className="py-3 px-3 font-bold text-slate-900">هدف امروز (با انتقالی)</th>
                   <th className="py-3 px-3 text-emerald-700">تولید سالم</th>
                   <th className="py-3 px-3 text-amber-800">مانده مرحله</th>
-                  <th className="py-3 px-3">ثبت گزارش</th>
+                  <th className="py-3 px-3 text-center">وضعیت خط</th>
+                  <th className="py-3 px-3 text-left">عملیات و اکشن‌ها</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {dailyScheduledOperations.map((entry, idx) => {
-                  const rem = Math.max(0, entry.op.effectiveTargetQty - entry.op.completedGoodQty);
-                  return (
-                    <tr key={entry.op.opId} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-mono text-slate-400">
-                        {toPersianDigits(idx + 1)}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                        {entry.partItem.orderCode}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-bold text-slate-900">{entry.partItem.partName}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {entry.partItem.partCode} • {entry.partItem.carModel}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span className="font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] ml-1.5">
-                          {entry.op.opCode}
-                        </span>
-                        <span className="font-bold text-slate-800">{entry.op.opTitle}</span>
-                        {entry.op.isFinalOp && (
-                          <span className="mr-1.5 text-[10px] bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
-                            مرحله آخر (رسید انبار)
+                {dailyScheduledOperations.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="py-8 px-4 text-center">
+                      <EmptyState
+                        variant="NO_SCHEDULE"
+                        title={`هیچ برنامه فعالی برای ${WORK_DAYS.find(d => d.index === selectedDayFilter)?.name} (${selectedShiftFilter === 'ALL' ? 'همه شیفت‌ها' : selectedShiftFilter}) یافت نشد`}
+                        actionLabel="بازگشت به ماتریس برنامه‌ریزی"
+                        onAction={() => handleSelectModuleTab('MULTI_PART_SCHEDULER')}
+                        secondaryActionLabel="نمایش همه شیفت‌ها و روزها"
+                        onSecondaryAction={() => {
+                          setSelectedShiftFilter('ALL');
+                          setSelectedDayFilter(1);
+                          setSearchQuery('');
+                        }}
+                        compact
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  dailyScheduledOperations.map((entry, idx) => {
+                    const rem = Math.max(0, entry.op.effectiveTargetQty - entry.op.completedGoodQty);
+                    const isHold = entry.op.status === 'ON_HOLD';
+                    const isRolled = entry.op.status === 'ROLLED_FORWARD';
+
+                    return (
+                      <tr key={entry.op.opId} className={`hover:bg-slate-50 ${isHold ? 'bg-amber-50/40' : ''}`}>
+                        <td className="py-2.5 px-3 font-mono text-slate-400">
+                          {toPersianDigits(idx + 1)}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTimelineOrder(entry.partItem);
+                              setIsTimelineModalOpen(true);
+                              if (onMoSelect) onMoSelect(entry.partItem.orderCode);
+                            }}
+                            className="hover:underline hover:text-amber-600 cursor-pointer flex items-center gap-1 text-slate-900 transition"
+                            title="مشاهده شناسنامه و تایم‌لاین دستور ساخت"
+                          >
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            <span>{entry.partItem.orderCode}</span>
+                          </button>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-bold text-slate-900">{entry.partItem.partName}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {entry.partItem.partCode} • {entry.partItem.carModel}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] ml-1.5">
+                            {entry.op.opCode}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-semibold text-slate-900">{entry.op.machineName}</div>
-                        <div className="text-[10px] text-slate-500">
-                          {entry.op.stationHall} • <span className="font-mono">{entry.op.machineCode}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-slate-700">{entry.op.dieCode}</td>
-                      <td className="py-2.5 px-3">{entry.op.shiftName}</td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
-                        {entry.prevOpCode}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-950 text-sm">
-                        {formatNumber(entry.op.effectiveTargetQty)}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
-                        {formatNumber(entry.op.completedGoodQty)}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-amber-800">
-                        {formatNumber(rem)}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        {(() => {
-                          const opIdx = entry.partItem.ops.findIndex(o => o.opId === entry.op.opId);
-                          const prevOp = opIdx > 0 ? entry.partItem.ops[opIdx - 1] : null;
-                          const isLocked = prevOp !== null && prevOp.completedGoodQty === 0;
-                          return (
+                          <span className="font-bold text-slate-800">{entry.op.opTitle}</span>
+                          {entry.op.isFinalOp && (
+                            <span className="mr-1.5 text-[10px] bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
+                              مرحله آخر (رسید انبار)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-slate-900">{entry.op.machineName}</div>
+                          <div className="text-[10px] text-slate-500">
+                            {entry.op.stationHall} • <span className="font-mono">{entry.op.machineCode}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-slate-700">{entry.op.dieCode}</td>
+                        <td className="py-2.5 px-3">{entry.op.shiftName}</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                          {entry.prevOpCode}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-950 text-sm">
+                          {formatNumber(entry.op.effectiveTargetQty)}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                          {formatNumber(entry.op.completedGoodQty)}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-amber-800">
+                          {formatNumber(rem)}
+                        </td>
+                        {/* Status Column */}
+                        <td className="py-2.5 px-3 text-center">
+                          {isHold ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold border border-amber-300 animate-pulse" title={entry.op.holdReasonText}>
+                              <Pause className="w-2.5 h-2.5 text-amber-700" />
+                              <span>متوقف موقت</span>
+                            </span>
+                          ) : isRolled ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 text-[10px] font-bold border border-blue-200">
+                              <FastForward className="w-2.5 h-2.5 text-blue-700" />
+                              <span>انتقال به بعد</span>
+                            </span>
+                          ) : rem === 0 ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-bold">
+                              تکمیل شیفت
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-medium">
+                              در جریان
+                            </span>
+                          )}
+                        </td>
+                        {/* Actions Column */}
+                        <td className="py-2.5 px-3">
+                          {isHold ? (
                             <button
                               type="button"
-                              onClick={() => handleOpenOpExecutionModal(entry.partItem, entry.op)}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition ${
-                                isLocked
-                                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300'
-                                  : 'bg-slate-900 hover:bg-slate-800 text-white'
-                              }`}
+                              onClick={() => handleResumeOrder(entry.partItem, entry.op)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition shadow-2xs"
+                              title="رفع علت توقف و ادامه کار دستگاه"
                             >
-                              {isLocked ? `🔒 قفل (${prevOp?.opCode})` : 'ثبت کارکرد'}
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>ادامه کار</span>
                             </button>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  );
-                })}
+                          ) : (
+                            (() => {
+                              const opIdx = entry.partItem.ops.findIndex(o => o.opId === entry.op.opId);
+                              const prevOp = opIdx > 0 ? entry.partItem.ops[opIdx - 1] : null;
+                              const isLocked = prevOp !== null && prevOp.completedGoodQty === 0;
+
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {/* 1. ثبت کارکرد */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenOpExecutionModal(entry.partItem, entry.op)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition ${
+                                      isLocked
+                                        ? 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300'
+                                        : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                    }`}
+                                  >
+                                    {isLocked ? `🔒 قفل (${prevOp?.opCode})` : 'ثبت کارکرد'}
+                                  </button>
+
+                                  {/* 2. توقف موقت (Pause / Hold) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenHoldModal(entry.partItem, entry.op)}
+                                    className="p-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer transition"
+                                    title="توقف موقت کار (Pause/Hold) با ثبت الزامی علت خرابی یا ستاپ"
+                                  >
+                                    <Pause className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* 3. انتقال مانده به شیفت بعد (Roll-Forward) */}
+                                  {rem > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRollForwardModal(entry.partItem, entry.op)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-bold cursor-pointer transition"
+                                      title="انتقال مانده تیراژ به شیفت بعد (Roll-Forward)"
+                                    >
+                                      <FastForward className="w-3 h-3 text-blue-600" />
+                                      <span>انتقال مانده</span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -2126,7 +2568,19 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2.5 text-xs">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono font-bold bg-slate-900 text-white px-2.5 py-0.5 rounded">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTimelineOrder(item);
+                        setIsTimelineModalOpen(true);
+                      }}
+                      className="font-mono font-bold bg-slate-900 hover:bg-slate-800 text-amber-300 px-2 py-0.5 rounded cursor-pointer transition flex items-center gap-1 border border-slate-700"
+                      title="مشاهده تایم‌لاین این دستور کار"
+                    >
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      <span>{item.orderCode}</span>
+                    </button>
+                    <span className="font-mono font-bold bg-slate-200 text-slate-800 px-2.5 py-0.5 rounded text-[11px]">
                       {item.partCode}
                     </span>
                     <strong className="text-slate-900 text-sm">{item.partName}</strong>
@@ -3089,24 +3543,70 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                           </button>
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold">
-                          <span
-                            className={`px-2 py-0.5 rounded ${
-                              attainment >= 80
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-800 border border-amber-200'
-                            }`}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `تحقق برنامه دستور ساخت ${item.orderCode} (${item.partName})`,
+                                metricLabel: `تحقق ${item.orderCode}`,
+                                metricValue: `${toPersianDigits(attainment)}٪`,
+                                description: `مقایسه تیراژ تحویل به انبار (${formatNumber(item.warehouseReceivedQty)}) با تیراژ هدف (${formatNumber(item.weeklyTargetQty)}) در مرحله نهایی`,
+                                filterBadge: 'تحقق برنامه',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode && r.isFinalOp),
+                              })
+                            }
+                            className="hover:underline cursor-pointer"
+                            title="مشاهده ریز رکوردهای تحقق برنامه"
                           >
-                            {toPersianDigits(attainment)}٪
-                          </span>
+                            <span
+                              className={`px-2 py-0.5 rounded ${
+                                attainment >= 80
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {toPersianDigits(attainment)}٪
+                            </span>
+                          </button>
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                          {toPersianDigits(kpiSummary.oeePct)}٪
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `ریز رکوردهای OEE و عملیات ماشین‌آلات قطعه ${item.partName} (${item.orderCode})`,
+                                metricLabel: `OEE خط ${item.orderCode}`,
+                                metricValue: `${toPersianDigits(kpiSummary.oeePct)}٪`,
+                                description: `مراحل فرآیند، ماشین‌های فعال (${item.ops.map(o => o.machineCode).join('، ')}) و نرخ‌های تولید این دستور کار`,
+                                filterBadge: 'OEE خط',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode),
+                              })
+                            }
+                            className="hover:text-amber-700 hover:underline cursor-pointer"
+                            title="مشاهده ریز رکوردهای OEE ماشین‌آلات"
+                          >
+                            {toPersianDigits(kpiSummary.oeePct)}٪
+                          </button>
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="text-[11px] bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded font-semibold">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDrillDownContext({
+                                title: `سوابق PM، نت پیشگیرانه و کارایی اپراتورها برای مراحل ${item.orderCode}`,
+                                metricLabel: `کارایی و PM ${item.partCode}`,
+                                metricValue: `PM: ${toPersianDigits(kpiSummary.pmCompliancePct)}٪`,
+                                description: `چک‌لیست‌های نگهداری پیشگیرانه قالب‌ها و راندمان نفر-ساعت کارکرد خط تولید`,
+                                filterBadge: 'PM و کارایی',
+                                records: allRawRecords.filter(r => r.orderCode === item.orderCode),
+                              })
+                            }
+                            className="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded font-semibold transition cursor-pointer"
+                            title="مشاهده سوابق نت پیشگیرانه و کارایی پرسنل"
+                          >
                             PM: {toPersianDigits(kpiSummary.pmCompliancePct)}٪ | کارایی:{' '}
                             {toPersianDigits(kpiSummary.laborEfficiencyPct)}٪
-                          </span>
+                          </button>
                         </td>
                       </tr>
                     );
@@ -3119,14 +3619,27 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       )}
 
       {/* ==================================================================== */}
-      {/* TAB 5: TREE-STRUCTURED OEE & MACHINE DOWNTIME TIMELINE & ADHERENCE   */}
+      {/* TAB 5: MATERIAL REQUIREMENT PROJECTION & COIL SHORTAGE FORECAST      */}
+      {/* ==================================================================== */}
+      {activeModuleTab === 'MATERIAL_REQUIREMENT_PROJECTION' && (
+        <MaterialRequirementProjectionView
+          scheduleItems={scheduleItems}
+          onOpenOrderTimeline={order => {
+            setActiveTimelineOrder(order);
+            setIsTimelineModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 6: TREE-STRUCTURED OEE & MACHINE DOWNTIME TIMELINE & ADHERENCE   */}
       {/* ==================================================================== */}
       {activeModuleTab === 'TREE_TIMELINE_REPORT' && (
         <ComprehensiveProductionReportView />
       )}
 
       {/* ==================================================================== */}
-      {/* TAB 6: SAP PP-ALIGNED TECHNICAL WORKFLOW SPECIFICATION & DIAGRAM     */}
+      {/* TAB 7: SAP PP-ALIGNED TECHNICAL WORKFLOW SPECIFICATION & DIAGRAM     */}
       {/* ==================================================================== */}
       {activeModuleTab === 'SAP_PP_WORKFLOW' && (
         <ProductionWorkflowDocumentationView />
@@ -3396,48 +3909,54 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               const opStep = activeLogContext.opStep;
               const opIdx = partItem.ops.findIndex(o => o.opId === opStep.opId);
               const prevOp = opIdx > 0 ? partItem.ops[opIdx - 1] : null;
-              const availableWip = prevOp
-                ? Math.max(0, prevOp.completedGoodQty - opStep.completedGoodQty)
-                : opStep.effectiveTargetQty;
+              const availableWip = calculateOpInputWip(partItem, opIdx);
               const currentRemInTable = Math.max(0, opStep.effectiveTargetQty - opStep.completedGoodQty);
-              const currentInputVal = Number(logGoodInput) || 0;
-              const newRemaining = Math.max(0, opStep.effectiveTargetQty - currentInputVal);
+
+              const shiftQtyNum = Number(logShiftGoodInput) || 0;
+              const computedTotalGood = logInputMode === 'SHIFT_PRODUCTION'
+                ? opStep.completedGoodQty + shiftQtyNum
+                : Number(logGoodInput) || 0;
+              const newRemaining = Math.max(0, opStep.effectiveTargetQty - computedTotalGood);
 
               return (
                 <div className="space-y-3.5">
-                  {/* Table Synchronized Status Banner - دقیقاً سینک با ستون‌های جدول سطر جاری */}
+                  {/* Table Synchronized Status Banner - دقیقاً سینک با ۳ ستون اصلی سطر جدول برنامه روزانه */}
                   <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-center">
                     <div>
-                      <span className="text-slate-500 block text-[10px]">تیراژ هدف مرحله</span>
+                      <span className="text-slate-500 block text-[10px]">۱. هدف کل مرحله (جدول)</span>
                       <strong className="font-mono text-slate-900 font-bold text-xs">
                         {formatNumber(opStep.effectiveTargetQty)} عدد
                       </strong>
                     </div>
                     <div>
-                      <span className="text-emerald-700 block text-[10px] font-bold">تولید سالم ثبت‌شده</span>
+                      <span className="text-emerald-700 block text-[10px] font-bold">۲. تولید سالم در جدول</span>
                       <strong className="font-mono text-emerald-800 font-bold text-xs">
                         {formatNumber(opStep.completedGoodQty)} عدد
                       </strong>
                     </div>
                     <div>
-                      <span className="text-amber-800 block text-[10px] font-bold">مانده جاری (جدول)</span>
+                      <span className="text-amber-800 block text-[10px] font-bold">۳. مانده مرحله در جدول</span>
                       <strong className="font-mono text-amber-900 font-bold text-xs">
                         {formatNumber(currentRemInTable)} عدد
                       </strong>
                     </div>
                   </div>
 
-                  {prevOp && (
-                    <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] text-indigo-950 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-indigo-600 inline" />
-                        <span>بافر ورودی آماده از مرحله قبل ({prevOp.opCode}):</span>
-                      </span>
-                      <strong className="font-mono font-bold text-indigo-800">
-                        {formatNumber(availableWip)} عدد (تولید سالم {prevOp.opCode}: {formatNumber(prevOp.completedGoodQty)})
-                      </strong>
-                    </div>
-                  )}
+                  {/* Computed Input WIP Buffer */}
+                  <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] text-indigo-950 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Layers className="w-3.5 h-3.5 text-indigo-600 inline" />
+                      <span>بافر ورودی آماده (تولید سالم مرحله قبل - مصرف این OP):</span>
+                    </span>
+                    <strong className="font-mono font-bold text-indigo-800">
+                      {formatNumber(availableWip)} عدد
+                      {prevOp && (
+                        <span className="text-[10px] text-slate-500 font-normal mr-1">
+                          (از خروجی {prevOp.opCode})
+                        </span>
+                      )}
+                    </strong>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                     <div>
@@ -3454,55 +3973,105 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                     </div>
                   </div>
 
+                  {/* Input Mode Selector Toggle */}
+                  <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setLogInputMode('SHIFT_PRODUCTION')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        logInputMode === 'SHIFT_PRODUCTION'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      ثبت تولید این شیفت (تولید سالم امروز)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogInputMode('CUMULATIVE_TOTAL')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        logInputMode === 'CUMULATIVE_TOTAL'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      ویرایش مستقیم مجموع کل تولید سالم
+                    </button>
+                  </div>
+
                   <form onSubmit={handleConfirmOpExecution} className="space-y-3.5">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="block font-bold text-slate-700">
-                          مجموع تولید سالم نهایی این مرحله (همگام با ستون جدول) *
-                        </label>
-                        <div className="flex gap-1">
+                    {logInputMode === 'SHIFT_PRODUCTION' ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block font-bold text-slate-700">
+                            تعداد تولید سالم جدید در این شیفت کاری *
+                          </label>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setLogShiftGoodInput(String(currentRemInTable))}
+                              className="px-2 py-0.5 rounded text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer font-sans font-bold"
+                              title="تکمیل کل مانده سهمیه"
+                            >
+                              تکمیل کل مانده ({formatNumber(currentRemInTable)})
+                            </button>
+                            {availableWip > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setLogShiftGoodInput(String(Math.min(currentRemInTable, availableWip)))}
+                                className="px-2 py-0.5 rounded text-[10px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 cursor-pointer font-sans font-bold"
+                                title="تولید به اندازه کل بافر ورودی موجود"
+                              >
+                                مصرف بافر ({formatNumber(Math.min(currentRemInTable, availableWip))})
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          required
+                          value={logShiftGoodInput}
+                          onChange={e => setLogShiftGoodInput(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-emerald-800 focus:outline-none focus:bg-white"
+                        />
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-0.5">
+                          <span>
+                            تولید سالم قبلی: <strong>{formatNumber(opStep.completedGoodQty)}</strong>
+                          </span>
+                          <span className="text-emerald-700 font-bold">
+                            مجموع پس از ثبت: {formatNumber(computedTotalGood)} عدد
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block font-bold text-slate-700">
+                            مجموع نهایی تولید سالم این مرحله (سینک با ستون تولید سالم جدول) *
+                          </label>
                           <button
                             type="button"
                             onClick={() => setLogGoodInput(String(opStep.effectiveTargetQty))}
-                            className="px-2 py-0.5 rounded text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer font-sans"
-                            title="ثبت کل تیراژ هدف"
+                            className="px-2 py-0.5 rounded text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer font-sans font-bold"
                           >
-                            تکمیل سهمیه ({formatNumber(opStep.effectiveTargetQty)})
+                            رسیدن به هدف ۱۰۰٪ ({formatNumber(opStep.effectiveTargetQty)})
                           </button>
-                          {availableWip > 0 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setLogGoodInput(
-                                  String(
-                                    Math.min(
-                                      opStep.effectiveTargetQty,
-                                      opStep.completedGoodQty + availableWip
-                                    )
-                                  )
-                                )
-                              }
-                              className="px-2 py-0.5 rounded text-[10px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 cursor-pointer font-sans"
-                              title="افزودن کل بافر ورودی موجود"
-                            >
-                              ثبت بافر ({formatNumber(availableWip)})
-                            </button>
-                          )}
                         </div>
+                        <input
+                          type="number"
+                          min={0}
+                          required
+                          value={logGoodInput}
+                          onChange={e => setLogGoodInput(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-emerald-800 focus:outline-none focus:bg-white"
+                        />
                       </div>
-                      <input
-                        type="number"
-                        min={0}
-                        required
-                        value={logGoodInput}
-                        onChange={e => setLogGoodInput(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-sm text-emerald-800 focus:outline-none focus:bg-white"
-                      />
-                    </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">تعداد ضایعات مرحله</label>
+                        <label className="block font-bold text-slate-700 mb-1">تعداد ضایعات این شیفت</label>
                         <input
                           type="number"
                           min={0}
@@ -3512,7 +4081,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                         />
                       </div>
                       <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-center">
-                        <span className="text-slate-500 block text-[10px]">مانده جدید پس از ثبت:</span>
+                        <span className="text-slate-500 block text-[10px]">مانده مرحله در جدول پس از ثبت:</span>
                         <strong className="font-mono text-sm font-bold text-amber-900">
                           {formatNumber(newRemaining)} عدد
                         </strong>
@@ -3807,6 +4376,290 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
           </div>
         </div>
       )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: MANDATORY HOLD / PAUSE WORK ORDER OPERATION                   */}
+      {/* ==================================================================== */}
+      {holdModalContext && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 text-right text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                  <Pause className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    توقف موقت کارگاه و فریز دستور کار (Hold)
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {holdModalContext.op.opCode} • {holdModalContext.partItem.partName}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHoldModalContext(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1">
+              <div className="flex items-center justify-between font-bold text-slate-900">
+                <span>دستگاه متوقف‌شونده:</span>
+                <span className="font-mono text-amber-900">{holdModalContext.op.machineName}</span>
+              </div>
+              <div className="text-[11px] text-amber-800">
+                ثبت توقف موقت بلافاصله وضعیت این مرحله را فریز کرده و زمان توقف را به صورت لحظه‌ای در موتور محاسبه OEE تجهیز ثبت می‌نماید.
+              </div>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                handleConfirmHold();
+              }}
+              className="space-y-3.5"
+            >
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  کد و علت توقف خط (الزامی) *
+                </label>
+                <select
+                  value={holdReasonCode}
+                  onChange={e => setHoldReasonCode(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  {HOLD_REASONS.map(r => (
+                    <option key={r.code} value={r.code}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  تخمین مدت توقف (دقیقه) *
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={480}
+                  required
+                  value={holdEstimatedMinutes}
+                  onChange={e => setHoldEstimatedMinutes(Number(e.target.value) || 0)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-xs text-rose-700 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  توضیحات تکمیلی و شرح ریشه عیب (اختیاری)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="مثلاً: شکستگی پین سنبه در سوراخ سوم، نیاز به تعویض قطعه یدکی قالب..."
+                  value={holdDescription}
+                  onChange={e => setHoldDescription(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setHoldModalContext(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <Pause className="w-3.5 h-3.5" />
+                  <span>تایید و فریز خط (Hold)</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: ROLL-FORWARD REMAINING QUOTA TO NEXT SHIFT / DAY              */}
+      {/* ==================================================================== */}
+      {rollForwardModalContext && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 text-right text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                  <FastForward className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    انتقال مانده تیراژ به شیفت / روز آینده (Roll-Forward)
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {rollForwardModalContext.op.opCode} • {rollForwardModalContext.partItem.orderCode}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRollForwardModalContext(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5">
+              <div className="font-bold text-slate-900">{rollForwardModalContext.partItem.partName}</div>
+              <div className="grid grid-cols-3 gap-2 text-center pt-1 font-mono">
+                <div className="bg-white/80 p-1.5 rounded-lg border border-blue-100">
+                  <span className="text-[9px] text-slate-500 block">هدف شیفت جاری</span>
+                  <strong className="text-slate-900 text-xs">
+                    {formatNumber(rollForwardModalContext.op.effectiveTargetQty)}
+                  </strong>
+                </div>
+                <div className="bg-white/80 p-1.5 rounded-lg border border-emerald-100">
+                  <span className="text-[9px] text-slate-500 block">تولید سالم</span>
+                  <strong className="text-emerald-700 text-xs">
+                    {formatNumber(rollForwardModalContext.op.completedGoodQty)}
+                  </strong>
+                </div>
+                <div className="bg-white/80 p-1.5 rounded-lg border border-amber-100">
+                  <span className="text-[9px] text-slate-500 block">مانده قابل انتقال</span>
+                  <strong className="text-amber-700 text-xs">
+                    {formatNumber(rollForwardModalContext.remainingQty)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                handleExecuteRollForward();
+              }}
+              className="space-y-3.5"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    روز کاری مقصد *
+                  </label>
+                  <select
+                    value={rfTargetDay}
+                    onChange={e => setRfTargetDay(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-xs text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                  >
+                    {WORK_DAYS.map(d => (
+                      <option key={d.index} value={d.index}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    شیفت کاری مقصد *
+                  </label>
+                  <select
+                    value={rfTargetShift}
+                    onChange={e => setRfTargetShift(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-xs text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                  >
+                    <option value="شیفت صبح">شیفت صبح (۰۷:۰۰ - ۱۵:۰۰)</option>
+                    <option value="شیفت عصر">شیفت عصر (۱۵:۰۰ - ۲۳:۰۰)</option>
+                    <option value="شیفت شب">شیفت شب (۲۳:۰۰ - ۰۷:۰۰)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  تیراژ انتقالی به برنامه شیفت بعد (عدد) *
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={rollForwardModalContext.remainingQty}
+                  required
+                  value={rfQuantity}
+                  onChange={e => setRfQuantity(Number(e.target.value) || 0)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-xs text-blue-700 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  علت انتقال به شیفت بعد *
+                </label>
+                <select
+                  value={rfReason}
+                  onChange={e => setRfReason(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
+                >
+                  <option value="پایان ساعت کار شیفت و تکمیل نشدن تیراژ">پایان ساعت کار شیفت و تکمیل نشدن تیراژ</option>
+                  <option value="توقف موقت پرس / عیب سنبه یا قالب">توقف موقت پرس / عیب سنبه یا قالب</option>
+                  <option value="کسری رول ورق یا نوار برشی پای خط">کسری رول ورق یا نوار برشی پای خط</option>
+                  <option value="تغییر اولویت خط به سفارش اضطراری دیگر ساپکو">تغییر اولویت خط به سفارش اضطراری دیگر ساپکو</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  یادداشت شیفت و توضیحات سرپرست
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثلاً: هماهنگ با سرپرست شیفت عصر جهت تکمیل سقف پالت..."
+                  value={rfNotes}
+                  onChange={e => setRfNotes(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:bg-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRollForwardModalContext(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <FastForward className="w-3.5 h-3.5" />
+                  <span>ثبت انتقال و تراز برنامه</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Visual Timeline Component for Tracking MO Status History & Lifecycle */}
+      <ManufacturingOrderTimelineModal
+        isOpen={isTimelineModalOpen}
+        onClose={() => setIsTimelineModalOpen(false)}
+        order={activeTimelineOrder}
+        allOrders={scheduleItems}
+        onSelectOrder={setActiveTimelineOrder}
+        onOpenLogModal={(partItem, opStep) => {
+          setIsTimelineModalOpen(false);
+          handleOpenOpExecutionModal(partItem, opStep);
+        }}
+      />
     </div>
   );
 };

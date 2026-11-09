@@ -42,6 +42,9 @@ interface DashboardViewProps {
   onNavigateSubModule?: (tab: TabKey, navParams?: SubModuleNavParams) => void;
   onOpenNewVoucher: (type: string, partId?: string) => void;
   onSubmitVoucher?: (payload: any) => Promise<{ success: boolean; message?: string }>;
+  initialOrderId?: string | null;
+  initialDrawerTab?: any;
+  onOrderDrawerChange?: (orderId: string | null, tab?: any) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -56,6 +59,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateSubModule,
   onOpenNewVoucher,
   onSubmitVoucher,
+  initialOrderId,
+  initialDrawerTab,
+  onOrderDrawerChange,
 }) => {
   return (
     <FactoryHighwayWorkbench
@@ -70,6 +76,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       onNavigateSubModule={onNavigateSubModule}
       onOpenNewVoucher={onOpenNewVoucher}
       onSubmitVoucher={onSubmitVoucher}
+      initialOrderId={initialOrderId}
+      initialDrawerTab={initialDrawerTab}
+      onOrderDrawerChange={onOrderDrawerChange}
     />
   );
 };
