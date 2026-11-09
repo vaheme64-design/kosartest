@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   CalendarClock,
   AlertTriangle,
@@ -10,17 +10,22 @@ import {
   Filter,
   Edit3,
   Trash2,
-  Plus,
+  Sliders,
+  X,
+  Calendar,
+  Clock,
 } from 'lucide-react';
 import { ProductionPlanSuggestion } from '../../types/productionPlanning';
 import { Part, Machine } from '../../types/inventory';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
+import { getDynamicWorkDays } from '../../utils/jalali';
 import { useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
 interface MachineCapacityTimelineViewProps {
   suggestions: ProductionPlanSuggestion[];
   parts: Part[];
   machines: Machine[];
+  initialMachineCode?: string | null;
 }
 
 export interface ScheduledMoBlock {
@@ -37,6 +42,7 @@ export interface ScheduledMoBlock {
   quantity: number;
   startHour: number;
   endHour: number;
+  dayIndex?: number; // 0 = Today, 1 = Tomorrow, etc.
   status: 'IN_PROGRESS' | 'SCHEDULED' | 'SETUP' | 'COMPLETED';
   contractNumber: string;
   dieCode: string;
@@ -59,6 +65,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 2500,
     startHour: 7.5,
     endHour: 13.5,
+    dayIndex: 0,
     status: 'IN_PROGRESS',
     contractNumber: 'CNT-SAPCO-1404-108',
     dieCode: 'DIE-206-DRW-02',
@@ -78,6 +85,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 1200,
     startHour: 11.5,
     endHour: 16.5,
+    dayIndex: 0,
     status: 'SCHEDULED',
     contractNumber: 'CNT-SAPCO-1404-112',
     dieCode: 'DIE-TR-CRS-01',
@@ -97,6 +105,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 1800,
     startHour: 7.0,
     endHour: 14.0,
+    dayIndex: 0,
     status: 'IN_PROGRESS',
     contractNumber: 'CNT-IKCO-1404-204',
     dieCode: 'DIE-DNA-BPL-01',
@@ -116,6 +125,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 950,
     startHour: 14.5,
     endHour: 20.5,
+    dayIndex: 0,
     status: 'SCHEDULED',
     contractNumber: 'CNT-IKCO-1404-219',
     dieCode: 'DIE-207-FND-01',
@@ -135,6 +145,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 4000,
     startHour: 8.0,
     endHour: 13.0,
+    dayIndex: 0,
     status: 'COMPLETED',
     contractNumber: 'CNT-SAPCO-1404-115',
     dieCode: 'DIE-ECU-PNC-03',
@@ -154,6 +165,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 3200,
     startHour: 12.0,
     endHour: 17.5,
+    dayIndex: 0,
     status: 'SCHEDULED',
     contractNumber: 'CNT-SAPCO-1404-119',
     dieCode: 'DIE-SRN-SET-02',
@@ -173,6 +185,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 2500,
     startHour: 7.0,
     endHour: 10.5,
+    dayIndex: 0,
     status: 'COMPLETED',
     contractNumber: 'CNT-SAPCO-1404-108',
     dieCode: 'BLNK-206-01',
@@ -192,6 +205,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 1200,
     startHour: 11.0,
     endHour: 15.0,
+    dayIndex: 0,
     status: 'IN_PROGRESS',
     contractNumber: 'CNT-SAPCO-1404-112',
     dieCode: 'BLNK-TR-04',
@@ -211,6 +225,7 @@ const INITIAL_CAPACITY_BLOCKS: ScheduledMoBlock[] = [
     quantity: 2500,
     startHour: 14.0,
     endHour: 21.0,
+    dayIndex: 0,
     status: 'SCHEDULED',
     contractNumber: 'CNT-SAPCO-1404-108',
     dieCode: 'JIG-206-WLD-01',
@@ -247,8 +262,10 @@ export const timeStringToHour = (timeStr: string): number => {
 
 export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewProps> = ({
   suggestions,
+  initialMachineCode,
 }) => {
   const { openQuickEditDrawer, requestConfirm, showUndoToast, recordAudit } = useEnterpriseUx();
+  const workDays = useMemo(() => getDynamicWorkDays(), []);
 
   const [blocks, setBlocks] = useState<ScheduledMoBlock[]>(() => {
     try {
@@ -269,8 +286,37 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
   }, [blocks]);
 
   const [selectedHall, setSelectedHall] = useState<string>('ALL');
+  const [selectedMachineFilter, setSelectedMachineFilter] = useState<string>('ALL');
   const [onlyConflicts, setOnlyConflicts] = useState<boolean>(false);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>('CAP-02');
+  const [highlightedMachineCode, setHighlightedMachineCode] = useState<string | null>(null);
+
+  // Manual Leveling Modal state for side-by-side conflict resolution
+  const [manualLevelingConflict, setManualLevelingConflict] = useState<{
+    machineCode: string;
+    machineName: string;
+    blockAId: string;
+    blockBId: string;
+  } | null>(null);
+
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const inspectorRef = useRef<HTMLDivElement | null>(null);
+
+  // Focus machine if initialMachineCode is passed from Dashboard / Utilization
+  useEffect(() => {
+    if (initialMachineCode) {
+      setSelectedHall('ALL');
+      setOnlyConflicts(false);
+      setHighlightedMachineCode(initialMachineCode);
+      const matchingBlock = blocks.find(b => !b.isDeleted && b.machineCode.includes(initialMachineCode.slice(0, 7)));
+      if (matchingBlock) {
+        setSelectedBlockId(matchingBlock.id);
+        setTimeout(() => {
+          rowRefs.current[matchingBlock.machineCode]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    }
+  }, [initialMachineCode, blocks]);
 
   const activeBlocks = useMemo(() => blocks.filter(b => !b.isDeleted), [blocks]);
 
@@ -296,6 +342,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
     activeBlocks.forEach(b => {
       if (selectedHall !== 'ALL' && b.hall !== selectedHall) return;
+      if (selectedMachineFilter !== 'ALL' && b.machineCode !== selectedMachineFilter) return;
       const existing = map.get(b.machineCode) || {
         machineCode: b.machineCode,
         machineName: b.machineName,
@@ -336,12 +383,35 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
     const allRows = Array.from(map.values());
     return onlyConflicts ? allRows.filter(r => r.conflicts.length > 0) : allRows;
-  }, [activeBlocks, selectedHall, onlyConflicts]);
+  }, [activeBlocks, selectedHall, selectedMachineFilter, onlyConflicts]);
 
-  const totalConflictsCount = useMemo(
-    () => machineRows.reduce((sum, r) => sum + r.conflicts.length, 0),
-    [machineRows]
-  );
+  const allConflictsList = useMemo(() => {
+    const list: Array<{
+      machineCode: string;
+      machineName: string;
+      blockA: ScheduledMoBlock;
+      blockB: ScheduledMoBlock;
+      overlapHours: number;
+      dayLabel: string;
+    }> = [];
+    machineRows.forEach(r => {
+      r.conflicts.forEach(c => {
+        const dIdx = c.blockB.dayIndex ?? 0;
+        const dayObj = workDays[dIdx] || workDays[0];
+        list.push({
+          machineCode: r.machineCode,
+          machineName: r.machineName,
+          blockA: c.blockA,
+          blockB: c.blockB,
+          overlapHours: c.overlapHours,
+          dayLabel: dayObj ? `${dayObj.name} (${dayObj.date})` : 'امروز',
+        });
+      });
+    });
+    return list;
+  }, [machineRows, workDays]);
+
+  const totalConflictsCount = allConflictsList.length;
 
   const conflictingBlockIds = useMemo(() => {
     const ids = new Set<string>();
@@ -381,27 +451,30 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
     );
   };
 
-  const handleAutoResolveConflict = (blockIdToShift: string, targetStartHour: number) => {
-    const prevSnap = [...blocks];
-    setBlocks(prev =>
-      prev.map(b => {
-        if (b.id !== blockIdToShift) return b;
-        const duration = b.endHour - b.startHour;
-        const nextStart = Number(Math.min(22 - duration, targetStartHour).toFixed(2));
-        const nextEnd = Number(Math.min(23, nextStart + duration).toFixed(2));
-        return {
-          ...b,
-          startHour: nextStart,
-          endHour: nextEnd,
-        };
-      })
-    );
-    showUndoToast({
-      title: 'بازه زمانی دستور تولید روی گانت جابجا شد',
-      detail: 'برای بازگردانی به ساعت قبلی روی لغو (Undo) کلیک کنید.',
-      variant: 'success',
-      onUndo: () => setBlocks(prevSnap),
-    });
+  // Focus and jump to a specific machine conflict row
+  const handleFocusConflictOnTimeline = (
+    machineCode: string,
+    blockA: ScheduledMoBlock,
+    blockB: ScheduledMoBlock,
+    openManualModal = false
+  ) => {
+    setSelectedHall('ALL');
+    setSelectedMachineFilter('ALL');
+    setHighlightedMachineCode(machineCode);
+    setSelectedBlockId(blockB.id);
+
+    setTimeout(() => {
+      rowRefs.current[machineCode]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+
+    if (openManualModal) {
+      setManualLevelingConflict({
+        machineCode,
+        machineName: blockA.machineName,
+        blockAId: blockA.id,
+        blockBId: blockB.id,
+      });
+    }
   };
 
   // Per-machine 1-click Auto-Resolve (تسطیح خودکار تداخل ماشین با احتساب زمان تعویض قالب SMED)
@@ -602,6 +675,20 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
     setBlocks(INITIAL_CAPACITY_BLOCKS);
   };
 
+  // Active blocks inside the Manual Leveling Modal
+  const manualModalBlockA = manualLevelingConflict
+    ? activeBlocks.find(b => b.id === manualLevelingConflict.blockAId) || null
+    : null;
+  const manualModalBlockB = manualLevelingConflict
+    ? activeBlocks.find(b => b.id === manualLevelingConflict.blockBId) || null
+    : null;
+  const manualModalOverlapHours = useMemo(() => {
+    if (!manualModalBlockA || !manualModalBlockB) return 0;
+    const start = Math.max(manualModalBlockA.startHour, manualModalBlockB.startHour);
+    const end = Math.min(manualModalBlockA.endHour, manualModalBlockB.endHour);
+    return end > start ? Number((end - start).toFixed(2)) : 0;
+  }, [manualModalBlockA, manualModalBlockB]);
+
   return (
     <div className="space-y-4 text-right" dir="rtl">
       {/* Header Banner */}
@@ -616,7 +703,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                 تقویم ظرفیت ماشین‌آلات و گانت چارت دستورات تولید (Finite Capacity Planning)
               </h2>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                استاندارد SAP PP-CRP / گانت تعاملی
+                تسطیح خودکار و دستی (Auto & Manual Leveling)
               </span>
               {totalConflictsCount > 0 ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
@@ -631,21 +718,36 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              نمای بصری تخصیص هر دستور تولید (MO) روی پرس‌ها با قابلیت ویرایش کشویی (آیکون مداد)، تاییدیه هوشمند و بازگشت عملیات (Undo).
+              نمای بصری تخصیص دستورات تولید روی پرس‌ها به همراه <strong>تسطیح خودکار (با احتساب SMED)</strong> و <strong>تسطیح دستی دقیق (انتخابگر ساعت HH:mm)</strong>.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {totalConflictsCount > 0 ? (
-            <button
-              type="button"
-              onClick={handleResolveAllConflicts}
-              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>تسطیح خودکار تداخل‌ها (Auto-Leveling)</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const first = allConflictsList[0];
+                  if (first) {
+                    handleFocusConflictOnTimeline(first.machineCode, first.blockA, first.blockB, true);
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>تسطیح دستی تداخل‌ها (Manual Leveling)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResolveAllConflicts}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>تسطیح خودکار همه (Auto-Leveling)</span>
+              </button>
+            </>
           ) : (
             <button
               type="button"
@@ -657,6 +759,74 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
           )}
         </div>
       </div>
+
+      {/* Interactive Conflict Navigator Strip: Click to jump directly to the conflicting machine/day */}
+      {allConflictsList.length > 0 && (
+        <div className="bg-rose-50/90 border border-rose-300 rounded-2xl p-4 space-y-3 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-black text-rose-950">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>
+                فهرست تداخل‌های شناسایی‌شده در تقویم کاری (روی هر تداخل کلیک کنید تا مستقیم روی همان ماشین و ساعت برود):
+              </span>
+            </div>
+            <span className="text-[11px] text-rose-700 font-bold">
+              امکان انتخاب بین «تسطیح دستی (ساعت دلخواه)» و «تسطیح خودکار (پایان دستور اول + SMED)»
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {allConflictsList.map((conf, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleFocusConflictOnTimeline(conf.machineCode, conf.blockA, conf.blockB, false)}
+                className="bg-white border border-rose-200 hover:border-rose-400 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition shadow-2xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono text-[10px] font-bold">
+                      {conf.machineCode}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900">{conf.machineName}</span>
+                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {conf.dayLabel}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600">
+                    تداخل <strong>{toPersianDigits(conf.overlapHours)} ساعت</strong> بین{' '}
+                    <span className="font-mono font-bold text-slate-800">{conf.blockA.moNumber}</span> (تا{' '}
+                    {formatHourLabel(conf.blockA.endHour)}) و{' '}
+                    <span className="font-mono font-bold text-rose-700">{conf.blockB.moNumber}</span> (از{' '}
+                    {formatHourLabel(conf.blockB.startHour)})
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleFocusConflictOnTimeline(conf.machineCode, conf.blockA, conf.blockB, true)
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Sliders className="w-3 h-3" />
+                    <span>تسطیح دستی</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoResolveMachineConflict(conf)}
+                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>تسطیح خودکار</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI Strip & Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -786,11 +956,19 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
             <div className="divide-y divide-slate-200">
               {machineRows.map(row => {
                 const hasConflict = row.conflicts.length > 0;
+                const isHighlighted = highlightedMachineCode === row.machineCode;
                 return (
                   <div
                     key={row.machineCode}
-                    className={`grid grid-cols-12 transition-colors ${
-                      hasConflict ? 'bg-rose-50/20' : 'hover:bg-slate-50/60'
+                    ref={el => {
+                      rowRefs.current[row.machineCode] = el;
+                    }}
+                    className={`grid grid-cols-12 transition-all ${
+                      isHighlighted
+                        ? 'bg-amber-50/70 ring-2 ring-inset ring-amber-400'
+                        : hasConflict
+                        ? 'bg-rose-50/20'
+                        : 'hover:bg-slate-50/60'
                     }`}
                   >
                     {/* Right Column: Machine Info */}
@@ -830,7 +1008,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                       </div>
 
                       {hasConflict && (
-                        <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[10px] space-y-1.5">
+                        <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[10px] space-y-2">
                           <div className="flex items-center justify-between font-bold">
                             <span className="flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
@@ -840,14 +1018,31 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                               SMED: +{toPersianDigits(row.conflicts[0].blockB.setupMinutes || 30)}m
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAutoResolveMachineConflict(row.conflicts[0])}
-                            className="w-full py-1.5 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            <span>تسطیح خودکار (Auto-Resolve)</span>
-                          </button>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleFocusConflictOnTimeline(
+                                  row.machineCode,
+                                  row.conflicts[0].blockA,
+                                  row.conflicts[0].blockB,
+                                  true
+                                )
+                              }
+                              className="py-1.5 px-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer"
+                            >
+                              <Sliders className="w-3 h-3" />
+                              <span>تسطیح دستی</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAutoResolveMachineConflict(row.conflicts[0])}
+                              className="py-1.5 px-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>تسطیح خودکار</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -895,7 +1090,10 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => setSelectedBlockId(item.id)}
+                              onClick={() => {
+                                setSelectedBlockId(item.id);
+                                setHighlightedMachineCode(row.machineCode);
+                              }}
                               style={{
                                 right: `${rightPercent}%`,
                                 width: `${widthPercent}%`,
@@ -935,7 +1133,10 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
       {/* Selected MO Operation Inspector, Pencil Drawer Edit & Conflict Resolution Panel */}
       {selectedBlock && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        <div
+          ref={inspectorRef}
+          className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs grid grid-cols-1 lg:grid-cols-12 gap-4 items-center"
+        >
           <div className="lg:col-span-8 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1012,7 +1213,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600" />
-                تنظیم دقیق زمان‌بندی (Time Picker HH:mm):
+                تسطیح دستی زمان‌بندی (Time Picker HH:mm):
               </span>
               <span className="text-[10px] text-slate-500 font-mono font-bold">{selectedBlock.machineCode}</span>
             </div>
@@ -1072,7 +1273,7 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
 
             {/* Live Conflict Warning Banner */}
             {selectedBlockConflict ? (
-              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-1.5 animate-in fade-in">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-2 animate-in fade-in">
                 <div className="flex items-center gap-1.5 font-bold text-rose-800">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                   <span>تداخل با دستور {selectedBlockConflict.moNumber}</span>
@@ -1082,33 +1283,55 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                   {formatHourLabel(Math.min(selectedBlock.endHour, selectedBlockConflict.endHour))} روی{' '}
                   {selectedBlock.machineName}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const smedHours = Number(((selectedBlock.setupMinutes || 30) / 60).toFixed(2));
-                    const duration = selectedBlock.endHour - selectedBlock.startHour;
-                    const nextStart = Number((selectedBlockConflict.endHour + smedHours).toFixed(2));
-                    const nextEnd = Number(Math.min(23.5, nextStart + duration).toFixed(2));
-                    handleManualTimeChange(
-                      selectedBlock.id,
-                      hourToTimeString(nextStart),
-                      hourToTimeString(nextEnd)
-                    );
-                    showUndoToast({
-                      title: `دستور ${selectedBlock.moNumber} به ساعت آزاد بعدی (${formatHourLabel(nextStart)}) منتقل شد`,
-                      onUndo: () => {
-                        handleManualTimeChange(
-                          selectedBlock.id,
-                          hourToTimeString(selectedBlock.startHour),
-                          hourToTimeString(selectedBlock.endHour)
-                        );
-                      },
-                    });
-                  }}
-                  className="w-full py-1 px-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
-                >
-                  تسطیح خودکار و انتقال به پس از {selectedBlockConflict.moNumber}
-                </button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setManualLevelingConflict({
+                        machineCode: selectedBlock.machineCode,
+                        machineName: selectedBlock.machineName,
+                        blockAId:
+                          selectedBlock.startHour <= selectedBlockConflict.startHour
+                            ? selectedBlock.id
+                            : selectedBlockConflict.id,
+                        blockBId:
+                          selectedBlock.startHour <= selectedBlockConflict.startHour
+                            ? selectedBlockConflict.id
+                            : selectedBlock.id,
+                      })
+                    }
+                    className="py-1.5 px-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                  >
+                    پنل تسطیح دستی
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const smedHours = Number(((selectedBlock.setupMinutes || 30) / 60).toFixed(2));
+                      const duration = selectedBlock.endHour - selectedBlock.startHour;
+                      const nextStart = Number((selectedBlockConflict.endHour + smedHours).toFixed(2));
+                      const nextEnd = Number(Math.min(23.5, nextStart + duration).toFixed(2));
+                      handleManualTimeChange(
+                        selectedBlock.id,
+                        hourToTimeString(nextStart),
+                        hourToTimeString(nextEnd)
+                      );
+                      showUndoToast({
+                        title: `دستور ${selectedBlock.moNumber} به ساعت آزاد بعدی (${formatHourLabel(nextStart)}) منتقل شد`,
+                        onUndo: () => {
+                          handleManualTimeChange(
+                            selectedBlock.id,
+                            hourToTimeString(selectedBlock.startHour),
+                            hourToTimeString(selectedBlock.endHour)
+                          );
+                        },
+                      });
+                    }}
+                    className="py-1.5 px-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shadow-xs"
+                  >
+                    تسطیح خودکار
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-1.5">
@@ -1123,6 +1346,227 @@ export const MachineCapacityTimelineView: React.FC<MachineCapacityTimelineViewPr
                 <span className="font-mono font-bold text-slate-800">{toPersianDigits(suggestions.length)} دستور</span>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Side-by-Side Manual Leveling Modal (تسطیح دستی تداخل زمانی روی ماشین) */}
+      {manualLevelingConflict && manualModalBlockA && manualModalBlockB && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setManualLevelingConflict(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4"
+            dir="rtl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-600 border border-amber-300">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    میز تسطیح دستی تداخل زمانی (Manual Capacity Leveling)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    دستگاه: <strong>{manualLevelingConflict.machineName}</strong> ({manualLevelingConflict.machineCode}) • تنظیم دستی ساعت شروع و پایان هر دو دستور تولید
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualLevelingConflict(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Overlap Status Indicator */}
+            <div
+              className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
+                manualModalOverlapHours > 0
+                  ? 'bg-rose-50 border-rose-300 text-rose-900'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              }`}
+            >
+              <div className="flex items-center gap-2 font-bold">
+                {manualModalOverlapHours > 0 ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      در حال حاضر {toPersianDigits(manualModalOverlapHours)} ساعت همپوشانی زمانی بین دو دستور وجود دارد.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      تداخل زمانی به طور کامل برطرف شد! (همپوشانی: ۰ ساعت)
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="font-mono text-[11px] font-bold">
+                زمان تعویض قالب دوم (SMED): {toPersianDigits(manualModalBlockB.setupMinutes || 30)} دقیقه
+              </span>
+            </div>
+
+            {/* Side-by-Side Order Time Editors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Block A Card */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-xs font-bold">
+                    ۱. {manualModalBlockA.moNumber}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-600">
+                    {manualModalBlockA.operationCode} • {formatNumber(manualModalBlockA.quantity)} عدد
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-slate-900">{manualModalBlockA.partName}</div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-600 font-bold mb-1">
+                      ساعت شروع ({formatHourLabel(manualModalBlockA.startHour)})
+                    </label>
+                    <input
+                      type="time"
+                      step="300"
+                      value={hourToTimeString(manualModalBlockA.startHour)}
+                      onChange={e =>
+                        handleManualTimeChange(
+                          manualModalBlockA.id,
+                          e.target.value,
+                          hourToTimeString(manualModalBlockA.endHour)
+                        )
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-600 font-bold mb-1">
+                      ساعت پایان ({formatHourLabel(manualModalBlockA.endHour)})
+                    </label>
+                    <input
+                      type="time"
+                      step="300"
+                      value={hourToTimeString(manualModalBlockA.endHour)}
+                      onChange={e =>
+                        handleManualTimeChange(
+                          manualModalBlockA.id,
+                          hourToTimeString(manualModalBlockA.startHour),
+                          e.target.value
+                        )
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Block B Card */}
+              <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                  <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-mono text-xs font-bold">
+                    ۲. {manualModalBlockB.moNumber}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-600">
+                    {manualModalBlockB.operationCode} • {formatNumber(manualModalBlockB.quantity)} عدد
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-slate-900">{manualModalBlockB.partName}</div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-600 font-bold mb-1">
+                      ساعت شروع ({formatHourLabel(manualModalBlockB.startHour)})
+                    </label>
+                    <input
+                      type="time"
+                      step="300"
+                      value={hourToTimeString(manualModalBlockB.startHour)}
+                      onChange={e => {
+                        const newStart = timeStringToHour(e.target.value);
+                        const dur = manualModalBlockB.endHour - manualModalBlockB.startHour;
+                        handleManualTimeChange(
+                          manualModalBlockB.id,
+                          e.target.value,
+                          hourToTimeString(Math.min(23, newStart + dur))
+                        );
+                      }}
+                      className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-600 font-bold mb-1">
+                      ساعت پایان ({formatHourLabel(manualModalBlockB.endHour)})
+                    </label>
+                    <input
+                      type="time"
+                      step="300"
+                      value={hourToTimeString(manualModalBlockB.endHour)}
+                      onChange={e =>
+                        handleManualTimeChange(
+                          manualModalBlockB.id,
+                          hourToTimeString(manualModalBlockB.startHour),
+                          e.target.value
+                        )
+                      }
+                      className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Preset Shifts for Manual Convenience */}
+                <div className="pt-1 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const smedHr = Number(((manualModalBlockB.setupMinutes || 30) / 60).toFixed(2));
+                      const dur = manualModalBlockB.endHour - manualModalBlockB.startHour;
+                      const start = Number((manualModalBlockA.endHour + smedHr).toFixed(2));
+                      const end = Number(Math.min(23, start + dur).toFixed(2));
+                      handleManualTimeChange(
+                        manualModalBlockB.id,
+                        hourToTimeString(start),
+                        hourToTimeString(end)
+                      );
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold cursor-pointer"
+                  >
+                    چسباندن به پایان دستور اول + {toPersianDigits(manualModalBlockB.setupMinutes || 30)}m ستاپ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const dur = manualModalBlockB.endHour - manualModalBlockB.startHour;
+                      handleManualTimeChange(
+                        manualModalBlockB.id,
+                        '15:00',
+                        hourToTimeString(Math.min(23, 15 + dur))
+                      );
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold cursor-pointer"
+                  >
+                    انتقال به ابتدای شیفت عصر (۱۵:۰۰)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setManualLevelingConflict(null)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
+              >
+                تایید و بستن میز تسطیح دستی
+              </button>
+            </div>
           </div>
         </div>
       )}

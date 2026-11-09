@@ -99,6 +99,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
   const [suggestions, setSuggestions] = useState<ProductionPlanSuggestion[]>([]);
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
+  const [focusedMachineCode, setFocusedMachineCode] = useState<string | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
 
@@ -487,9 +488,14 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
           metrics={metrics}
           netRequirements={netRequirements}
           machines={machines}
+          suggestions={suggestions}
           onRegenerate={handleRegenerate}
           onOpenNewOrderModal={() => setIsOrderModalOpen(true)}
           onNavigateToRecommendations={navigateToRecommendationsForPart}
+          onNavigateToCapacityGantt={(machineCode?: string) => {
+            if (machineCode) setFocusedMachineCode(machineCode);
+            handleSelectSubTab('capacity_planning');
+          }}
           loading={loading}
         />
       )}
@@ -505,6 +511,7 @@ export const ProductionPlanningModuleView: React.FC<ProductionPlanningModuleView
           suggestions={suggestions}
           parts={parts}
           machines={machines}
+          initialMachineCode={focusedMachineCode}
         />
       )}
 

@@ -145,7 +145,7 @@ export function calculateOpInputWip(item: MultiPartScheduleItem, opIdx: number):
 }
 
 // Generate a realistic 20-part multi-operation factory schedule where each part has 3 to 5 OPs staggered across days
-function buildInitial20PartsSchedule(): MultiPartScheduleItem[] {
+export function buildInitial20PartsSchedule(): MultiPartScheduleItem[] {
   const templates: Array<{
     code: string;
     name: string;

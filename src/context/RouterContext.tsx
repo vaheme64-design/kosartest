@@ -247,6 +247,12 @@ export const ErpRouterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const next: RouteState = {
         ...prev,
         ...params,
+        productionViewMode:
+          params.productionViewMode !== undefined
+            ? params.productionViewMode
+            : params.productionModuleTab
+            ? 'ERP_WORKBENCH'
+            : prev.productionViewMode,
         // If tab changed and no subTab was explicitly provided, reset drawer & subTab defaults
         moId: params.moId !== undefined ? params.moId : params.tab && params.tab !== prev.tab ? null : prev.moId,
         drawerTab: params.drawerTab !== undefined ? params.drawerTab : params.moId ? 'TRACEABILITY' : prev.drawerTab,

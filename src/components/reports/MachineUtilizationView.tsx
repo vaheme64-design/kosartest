@@ -343,27 +343,37 @@ export const MachineUtilizationView: React.FC<MachineUtilizationViewProps> = () 
               const planPct = Math.round((m.plannedDowntimeHours / total) * 100);
               const unplanPct = Math.round((m.unplannedDowntimeHours / total) * 100);
               const idlePct = Math.max(0, 100 - runPct - planPct - unplanPct);
+              const isOverloaded = m.grossUtilizationPercent >= 80 || m.utilizationStatus === 'BOTTLENECK_OVERLOAD';
 
               return (
                 <div
                   key={m.machineId}
                   onClick={() => setSelectedMachine(m)}
-                  className="bg-slate-50 border border-slate-200 hover:border-slate-200 rounded-xl p-3.5 space-y-2 cursor-pointer transition"
+                  className={`border rounded-xl p-3.5 space-y-2.5 cursor-pointer transition ${
+                    isOverloaded
+                      ? 'bg-amber-50/40 border-amber-300 hover:border-amber-400'
+                      : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
+                  }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono font-bold border border-amber-500/20">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 font-mono font-bold border border-amber-500/20">
                         {m.machineCode}
                       </span>
                       <span className="font-bold text-slate-900">{m.machineName}</span>
-                      <span className="text-[11px] text-slate-400">({m.activePartName})</span>
+                      <span className="text-[11px] text-slate-500">({m.activePartName})</span>
+                      {isOverloaded && (
+                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-bold">
+                          گلوگاه اشغال ظرفیت ({toPersianDigits(m.grossUtilizationPercent)}٪)
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums">
-                      <span className="text-emerald-400 font-bold">کارکرد: {toPersianDigits(m.netOperatingHours)}h</span>
-                      <span className="text-cyan-400">قالب/PM: {toPersianDigits(m.plannedDowntimeHours)}h</span>
-                      <span className="text-rose-400">خرابی: {toPersianDigits(m.unplannedDowntimeHours)}h</span>
-                      <span className="text-slate-400">آزاد: {toPersianDigits(m.idleNoOrderHours)}h</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-900 font-black">
+                    <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums flex-wrap">
+                      <span className="text-emerald-700 font-bold">کارکرد: {toPersianDigits(m.netOperatingHours)}h</span>
+                      <span className="text-cyan-700">قالب/PM: {toPersianDigits(m.plannedDowntimeHours)}h</span>
+                      <span className="text-rose-600">خرابی: {toPersianDigits(m.unplannedDowntimeHours)}h</span>
+                      <span className="text-slate-500">آزاد: {toPersianDigits(m.idleNoOrderHours)}h</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-900 font-black">
                         بهره: {toPersianDigits(m.grossUtilizationPercent)}٪
                       </span>
                     </div>
@@ -392,6 +402,52 @@ export const MachineUtilizationView: React.FC<MachineUtilizationViewProps> = () 
                       title={`ظرفیت آزاد: ${m.idleNoOrderHours} ساعت`}
                     />
                   </div>
+
+                  {/* Direct Auto & Manual Leveling Actions on Overloaded / Bottleneck Machines */}
+                  {isOverloaded && (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      className="pt-2 border-t border-amber-200/80 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                    >
+                      <span className="text-amber-900 font-medium">
+                        این دستگاه بیش از ۸۰٪ اشغال است. برای رفع گلوگاه یا تداخل در گانت چارت اقدام کنید:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.hash = `#/planning?subTab=capacity_planning`;
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition cursor-pointer"
+                        >
+                          تسطیح دستی در گانت چارت
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextMachines = data.machines.map(item =>
+                              item.machineId === m.machineId
+                                ? {
+                                    ...item,
+                                    netOperatingHours: Number(Math.max(8, item.netOperatingHours - 2.0).toFixed(1)),
+                                    idleNoOrderHours: Number((item.idleNoOrderHours + 2.0).toFixed(1)),
+                                    grossUtilizationPercent: Math.max(68, item.grossUtilizationPercent - 14),
+                                    utilizationStatus: 'OPTIMAL' as const,
+                                  }
+                                : item
+                            );
+                            setData({ ...data, machines: nextMachines });
+                            setNotice(
+                              `تسطیح خودکار بار کاری روی دستگاه «${m.machineName} (${m.machineCode})» انجام شد و ۲ ساعت بار مازاد به پرس هم‌خانواده منتقل گردید.`
+                            );
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] transition cursor-pointer"
+                        >
+                          تسطیح خودکار بار (Auto-Level)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
