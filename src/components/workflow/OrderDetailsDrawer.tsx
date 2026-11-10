@@ -32,7 +32,7 @@ import {
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { AuditTrailTabContent, useEnterpriseUx } from '../../context/EnterpriseUxContext';
 
-export type DrawerTabKey = 'TRACEABILITY' | 'ROUTING' | 'ACTIONS' | 'AUDIT_TRAIL';
+export type DrawerTabKey = 'TRACEABILITY' | 'ROUTING' | 'ACTIONS' | 'AUDIT_TRAIL' | 'WIP_INSPECTION';
 
 interface OrderDetailsDrawerProps {
   order: HighwayPartScenario | null;
@@ -52,6 +52,7 @@ interface OrderDetailsDrawerProps {
   onDeleteOrder: (order: HighwayPartScenario) => void;
   onTogglePin: (orderId: string) => void;
   onNavigateToSapco?: () => void;
+  onOpenWipInspection?: (order: HighwayPartScenario) => void;
 }
 
 export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
@@ -72,6 +73,7 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
   onDeleteOrder,
   onTogglePin,
   onNavigateToSapco,
+  onOpenWipInspection,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>(initialTab);
   const { openQuickEditDrawer } = useEnterpriseUx();
@@ -212,8 +214,8 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
             </div>
           </div>
 
-          {/* Segmented 4-Tab Navigation (Includes Enterprise Audit Trail) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-slate-200/75 rounded-xl text-xs">
+          {/* Segmented 5-Tab Navigation (Includes WIP & Sub-Components and Enterprise Audit Trail) */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-slate-200/75 rounded-xl text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('TRACEABILITY')}
@@ -224,7 +226,7 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
               }`}
             >
               <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="truncate">رهگیری (Traceability)</span>
+              <span className="truncate">رهگیری</span>
             </button>
 
             <button
@@ -237,7 +239,20 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
               }`}
             >
               <GitBranch className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="truncate">مسیر تولید ({toPersianDigits(order.operations.length)} OP)</span>
+              <span className="truncate">مسیر ({toPersianDigits(order.operations.length)} OP)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('WIP_INSPECTION')}
+              className={`py-2 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'WIP_INSPECTION'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Boxes className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <span className="truncate">موجودی بین‌مراحل (WIP)</span>
             </button>
 
             <button
@@ -250,7 +265,7 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
               }`}
             >
               <Sliders className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span className="truncate">عملیات و کنترل خط</span>
+              <span className="truncate">عملیات خط</span>
             </button>
 
             <button
@@ -263,7 +278,7 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
               }`}
             >
               <History className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-              <span className="truncate">تاریخچه تغییرات (Audit)</span>
+              <span className="truncate">ممیزی (Audit)</span>
             </button>
           </div>
         </div>
@@ -855,6 +870,99 @@ export const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* -------------------------------------------------------------- */}
+          {/* TAB 5: WIP & SUB-COMPONENTS INSPECTION                         */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'WIP_INSPECTION' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                <div>
+                  <h4 className="font-bold text-sm flex items-center gap-2">
+                    <Boxes className="w-4 h-4 text-purple-300" />
+                    <span>موجودی بین‌مراحل (WIP) و موازنه قطعات پیش‌ساخته / نیمه‌ساخته</span>
+                  </h4>
+                  <p className="text-xs text-purple-200 mt-0.5">
+                    بررسی تفکیکی موجودی انبار نیمه‌ساخته، بافر بین‌ایستگاهی پای پرس و اتصالات
+                  </p>
+                </div>
+                {onOpenWipInspection && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenWipInspection(order)}
+                    className="px-3.5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+                  >
+                    <span>فرم جامع ارزیابی بین‌مراحل 🔍</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Sub-Components Matrix Card */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-xs">
+                <div className="font-bold text-slate-900 text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>قطعات پیش‌ساخته تشکیل‌دهنده طبق ساختار محصول (BOM):</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    تیراژ دستور کار: {formatNumber(order.orderQty)} عدد
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 text-xs">
+                        ۱. صفحه براکت اصلی (WIP-ECU-MAIN-BRK)
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        ورق DC01A ضخامت 2mm · ۱۵ مهره جوشی M6
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono">
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">نیاز بچ</span>
+                        <span className="font-bold text-slate-900">{formatNumber(order.orderQty)}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">موجودی کل</span>
+                        <span className="font-bold text-indigo-700">{formatNumber(1200 + 1500)}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">وضعیت</span>
+                        <span className="font-bold text-emerald-700">تکمیل 🟢</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 text-xs">
+                        ۲. مکمل براکت ضدسرقت (WIP-ECU-COMP-BRK)
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        ورق DC01A ضخامت 2mm · ۲ پیچ جوشی M6x20
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono">
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">نیاز بچ</span>
+                        <span className="font-bold text-slate-900">{formatNumber(order.orderQty)}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">موجودی کل</span>
+                        <span className="font-bold text-indigo-700">{formatNumber(900 + 800)}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded border border-slate-100">
+                        <span className="text-slate-400 block text-[10px]">وضعیت</span>
+                        <span className="font-bold text-emerald-700">تکمیل 🟢</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -56,6 +56,8 @@ import { FormulaTooltip } from '../common/FormulaTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { MetricTooltip } from '../common/MetricTooltip';
 import { loadVipPartsMap, saveVipPartsMap, isPartVip } from '../../utils/qcHoldStore';
+import { PreMoWipInspectionModal } from './PreMoWipInspectionModal';
+import { SubComponentWipPreflightCard } from './SubComponentWipPreflightCard';
 
 export interface HighwayOperationStep {
   stepCode: string;
@@ -120,6 +122,7 @@ export interface HighwayPartScenario {
   }>;
   operations: HighwayOperationStep[];
   commandLogs?: IssuedCommandLog[];
+  notes?: string;
 }
 
 export type KpiViewMode = 'OEE' | 'OUTPUT_VS_TARGET' | 'INVENTORY_TURNOVER' | 'CUSTOM';
@@ -576,6 +579,8 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
   const [editingOrder, setEditingOrder] = useState<HighwayPartScenario | null>(null);
   const [isNewOrderMode, setIsNewOrderMode] = useState(false);
   const [allowManualSheetOverride, setAllowManualSheetOverride] = useState(false);
+  // Modal for Pre-Flight Inter-Stage WIP & Sub-Component Inspection
+  const [inspectingOrderForWip, setInspectingOrderForWip] = useState<HighwayPartScenario | null>(null);
 
   // Modal for Editing / Adding a specific Operation Step
   const [editingOpContext, setEditingOpContext] = useState<{
@@ -1729,6 +1734,134 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
     setIsNewOrderMode(false);
   };
 
+  // 1-Click Sub-MO Issuance directly from WIP Pre-Flight Check without page navigation
+  const handleCreateSubMoScenario = (subMoData: {
+    parentMoId: string;
+    parentOrderCode: string;
+    componentPartId: string;
+    componentPartCode: string;
+    componentPartName: string;
+    requiredQty: number;
+    subRoutingId?: string;
+  }) => {
+    const targetPart = produciblePartsCatalog.find(
+      p => p.id === subMoData.componentPartId || p.code === subMoData.componentPartCode
+    );
+
+    const cleanCode = subMoData.componentPartCode.replace(/[^A-Za-z0-9]/g, '').slice(-8);
+    const subOrderCode = `SUB-MO-1404-${cleanCode}-${Math.floor(100 + Math.random() * 900)}`;
+
+    let newSubScenario: HighwayPartScenario;
+    if (targetPart) {
+      newSubScenario = buildOrderDataFromMasterPart(targetPart, subOrderCode);
+    } else {
+      const baseRouting = routings.find(
+        r => r.id === subMoData.subRoutingId || r.partCode === subMoData.componentPartCode
+      );
+      newSubScenario = {
+        id: `SCN-SUB-${Date.now()}`,
+        orderCode: subOrderCode,
+        productionBatchCode: `BCH-SUB-${Math.floor(1000 + Math.random() * 9000)}`,
+        partId: subMoData.componentPartId,
+        partCode: subMoData.componentPartCode,
+        partName: subMoData.componentPartName,
+        carModel: 'پژو ۲۰۶',
+        customerName: 'خط مونتاژ و جوش داخلی',
+        orderQty: subMoData.requiredQty,
+        unitWeightKg: 0.75,
+        scrapAllowancePct: 3.0,
+        rawMaterialCode: 'RM-COIL-DC01A-2.0-1140',
+        rawMaterialName: 'رول ورق روغنی DC01A ضخامت 2mm ابعاد ۲×۱۱۴۰',
+        coilNumber: 'MOB-2025-DC01-409',
+        heatNumber: 'HT-99412-MOB',
+        sapcoBatchNumber: 'BCH-SAP-1404-101',
+        warehouseAvailableKg: 18500,
+        materialIssuedVoucherNo: `ISS-SUB-${Math.floor(100 + Math.random() * 900)}`,
+        bomSubComponents: [],
+        operations: baseRouting?.operations?.map((op, idx) => ({
+          stepCode: op.stepCode,
+          stepName: op.stepName,
+          processType: op.processType,
+          hall: 'سالن پرس و برش',
+          machineName: op.machineName || 'پرس ضربه‌ای ۲۵۰ تن',
+          dieName: `DIE-${op.stepCode}`,
+          cycleTimeSec: op.standardCycleTimeSec || 10,
+          completedGood: 0,
+          scrapQty: 0,
+          isFinal: idx === (baseRouting.operations?.length || 1) - 1,
+        })) || [
+          {
+            stepCode: 'OP10',
+            stepName: 'نواربری و برش شیت اولیه',
+            processType: 'SHEARING',
+            hall: 'سالن برشکاری',
+            machineName: 'خط نواربر رول',
+            dieName: 'BLD-SHR-01',
+            cycleTimeSec: 6,
+            completedGood: 0,
+            scrapQty: 0,
+            isFinal: false,
+          },
+          {
+            stepCode: 'OP20',
+            stepName: 'بلنکینگ فرم اصلی',
+            processType: 'BLANKING',
+            hall: 'سالن پرس‌های سنگین',
+            machineName: 'پرس ۲۵۰ تن',
+            dieName: 'DIE-BLK-01',
+            cycleTimeSec: 8,
+            completedGood: 0,
+            scrapQty: 0,
+            isFinal: false,
+          },
+          {
+            stepCode: 'OP50',
+            stepName: 'پرس‌جوش مقاومتی و تحویل به پای خط مونتاژ',
+            processType: 'SPOT_WELD',
+            hall: 'سالن جوشکاری و پرس‌جوش',
+            machineName: 'دستگاه پرس‌جوش ۷۵kVA',
+            dieName: 'JIG-WELD-01',
+            cycleTimeSec: 15,
+            completedGood: 0,
+            scrapQty: 0,
+            isFinal: true,
+          },
+        ],
+      };
+    }
+
+    newSubScenario.orderQty = subMoData.requiredQty;
+    newSubScenario.notes = `دستور ساخت قطعه پیش‌ساخته فرعی (Sub-MO) متصل به دستور مونتاژ اصلی ${subMoData.parentOrderCode}`;
+
+    const creationLog: IssuedCommandLog = {
+      id: `CMD-${Date.now()}`,
+      docNumber: newSubScenario.orderCode,
+      type: 'MO_CREATED',
+      title: `صدور خودکار دستور ساخت قطعه پیش‌ساخته (Sub-MO) متصل به ${subMoData.parentOrderCode}`,
+      timestamp: 'امروز - برنامه روزانه',
+      qtyOrWeight: `${formatNumber(newSubScenario.orderQty)} عدد`,
+      targetStation: 'سالن برش و پرس',
+    };
+    newSubScenario.commandLogs = [creationLog];
+
+    saveScenarios([newSubScenario, ...scenarios]);
+
+    recordAudit({
+      entityId: newSubScenario.id,
+      entityCode: newSubScenario.orderCode,
+      moduleName: 'پیشخوان تولید (Sub-MO)',
+      actionType: 'CREATE',
+      title: `صدور خودکار دستور ساخت قطعه پیش‌ساخته ${newSubScenario.orderCode} (${subMoData.componentPartName})`,
+      details: `تیراژ ${formatNumber(newSubScenario.orderQty)} عدد متصل به دستور مونتاژ ${subMoData.parentOrderCode}`,
+    });
+
+    showUndoToast({
+      title: `دستور ساخت فرعی ${newSubScenario.orderCode} صادر شد`,
+      detail: `قطعه نیمه‌ساخته «${subMoData.componentPartName}» با تیراژ ${formatNumber(newSubScenario.orderQty)} به خط اضافه شد.`,
+      variant: 'success',
+    });
+  };
+
   // Soft Delete Work Order (Protected by Defensive UX ConfirmDialog + Gmail-style Undo)
   const handleDeleteOrder = (order: HighwayPartScenario) => {
     requestConfirm({
@@ -2779,6 +2912,15 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => setInspectingOrderForWip(order)}
+                            title="ارزیابی موجودی بین‌مراحل (WIP) و قطعات پیش‌ساخته"
+                            className="p-2 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          >
+                            <Boxes className="w-3.5 h-3.5" />
+                          </button>
+
                           {isCompleted ? (
                             <button
                               type="button"
@@ -2903,6 +3045,7 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
         onDeleteOrder={handleDeleteOrder}
         onTogglePin={handleTogglePinOrder}
         onNavigateToSapco={() => onNavigateToTab?.('sapco')}
+        onOpenWipInspection={order => setInspectingOrderForWip(order)}
       />
 
       {/* ==================================================================== */}
@@ -3147,6 +3290,22 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                 </div>
               </div>
 
+              {/* STEP 1.5: Pre-Flight Inter-Stage WIP & Sub-Components Stock Check */}
+              <SubComponentWipPreflightCard
+                order={editingOrder}
+                onOpenFullInspectionModal={() => setInspectingOrderForWip(editingOrder)}
+                onQuickIssueSubMo={(partCode, partName, requiredQty) => {
+                  handleCreateSubMoScenario({
+                    parentMoId: editingOrder.id,
+                    parentOrderCode: editingOrder.orderCode,
+                    componentPartId: partCode,
+                    componentPartCode: partCode,
+                    componentPartName: partName,
+                    requiredQty,
+                  });
+                }}
+              />
+
               {/* STEP 2: BOM Raw Material Sheet + SAPCO Coil & Heat Number Link */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -3267,20 +3426,31 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setEditingOrder(null)}
-                  className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  onClick={() => setInspectingOrderForWip(editingOrder)}
+                  className="px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-semibold flex items-center gap-1.5 cursor-pointer text-xs transition-colors"
                 >
-                  انصراف
+                  <Boxes className="w-4 h-4 text-indigo-600" />
+                  <span>ارزیابی موجودی بین‌مراحل (WIP) 🔍</span>
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer"
-                >
-                  {isNewOrderMode ? 'صدور دستور تولید و ابلاغ به خط' : 'ذخیره تغییرات دستور تولید'}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingOrder(null)}
+                    className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer"
+                  >
+                    {isNewOrderMode ? 'صدور دستور تولید و ابلاغ به خط' : 'ذخیره تغییرات دستور تولید'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -3792,6 +3962,26 @@ export const FactoryHighwayWorkbench: React.FC<FactoryHighwayWorkbenchProps> = (
           </div>
         );
       })()}
+
+      {/* ==================================================================== */}
+      {/* MODAL 4: PRE-FLIGHT WIP & SUB-COMPONENT INSPECTION MODAL             */}
+      {/* ==================================================================== */}
+      {inspectingOrderForWip && (
+        <PreMoWipInspectionModal
+          isOpen={true}
+          onClose={() => setInspectingOrderForWip(null)}
+          order={inspectingOrderForWip}
+          onConfirmIssueOrder={() => {
+            if (isNewOrderMode && editingOrder) {
+              handleSaveWorkOrder({ preventDefault: () => {} } as any);
+            }
+            setInspectingOrderForWip(null);
+          }}
+          onIssueSubMo={subMoData => {
+            handleCreateSubMoScenario(subMoData);
+          }}
+        />
+      )}
     </div>
   );
 };
