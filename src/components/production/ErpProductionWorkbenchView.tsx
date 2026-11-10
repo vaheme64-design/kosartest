@@ -50,6 +50,9 @@ import { MaterialRequirementProjectionView } from './MaterialRequirementProjecti
 import { EmptyState } from '../common/EmptyState';
 import { MetricTooltip } from '../common/MetricTooltip';
 import { getDynamicWorkDays, getCurrentJalaliDate, getJalaliMonthDays } from '../../utils/jalali';
+import { useErpRouter } from '../../context/RouterContext';
+import { PreMoWipInspectionModal } from '../workflow/PreMoWipInspectionModal';
+import { HighwayPartScenario } from '../workflow/FactoryHighwayWorkbench';
 
 export interface ScheduledOpStep {
   opId: string;
@@ -565,16 +568,31 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   onMoSelect,
 }) => {
   // Major Operational Sub-Modules
-  const [activeModuleTab, setActiveModuleTab] = useState<ProductionWorkbenchSubTab>(initialModuleTab);
+  const router = useErpRouter();
+  const [activeModuleTab, setActiveModuleTab] = useState<ProductionWorkbenchSubTab>(() => {
+    if (router.route.tab === 'production' && router.route.productionModuleTab) {
+      return router.route.productionModuleTab;
+    }
+    return initialModuleTab;
+  });
 
   useEffect(() => {
-    if (initialModuleTab) {
+    if (router.route.tab === 'production' && router.route.productionModuleTab) {
+      if (router.route.productionModuleTab !== activeModuleTab) {
+        setActiveModuleTab(router.route.productionModuleTab);
+      }
+    }
+  }, [router.route.tab, router.route.productionModuleTab]);
+
+  useEffect(() => {
+    if (initialModuleTab && !router.route.productionModuleTab) {
       setActiveModuleTab(initialModuleTab);
     }
   }, [initialModuleTab]);
 
   const handleSelectModuleTab = (tab: ProductionWorkbenchSubTab) => {
     setActiveModuleTab(tab);
+    router.setProductionSubTab(tab);
     if (onModuleTabChange) onModuleTabChange(tab);
   };
 
@@ -896,6 +914,72 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   const [newPartOp3Day, setNewPartOp3Day] = useState<number>(2);
   const [newPartOp4Day, setNewPartOp4Day] = useState<number>(2);
   const [customStepDays, setCustomStepDays] = useState<Record<number, number>>({});
+
+  // Pre-flight WIP inspection modal state for Multi-OP schedule (Tree View)
+  const [inspectingPreflightOrder, setInspectingPreflightOrder] = useState<HighwayPartScenario | null>(null);
+  const [pendingNewItem, setPendingNewItem] = useState<MultiPartScheduleItem | null>(null);
+
+  // Sync create-mo and wip-check modal state with URL router
+  useEffect(() => {
+    if (router.route.modal === 'create-mo') {
+      setIsAddPartModalOpen(true);
+      if (router.route.modalPartId) {
+        setNewPartCode(router.route.modalPartId);
+      }
+    } else if (router.route.modal === 'wip-check') {
+      if (!inspectingPreflightOrder) {
+        const targetMo =
+          scheduleItems.find(
+            s =>
+              s.orderCode === router.route.modalOrderId ||
+              s.partCode === router.route.modalPartId ||
+              s.partId === router.route.modalPartId
+          ) || scheduleItems[0];
+        if (targetMo) {
+          const scenario: HighwayPartScenario = {
+            id: targetMo.id,
+            orderCode: targetMo.orderCode,
+            productionBatchCode: `BCH-${targetMo.orderCode.replace('MO-', '')}`,
+            partId: targetMo.partId,
+            partCode: targetMo.partCode,
+            partName: targetMo.partName,
+            carModel: targetMo.carModel,
+            customerName: 'ساپکو',
+            orderQty: targetMo.weeklyTargetQty,
+            unitWeightKg: targetMo.unitWeightKg,
+            scrapAllowancePct: 2,
+            rawMaterialCode: targetMo.rawMaterialCode,
+            rawMaterialName: targetMo.rawMaterialName,
+            warehouseAvailableKg: 1200,
+            bomSubComponents: [
+              { name: 'صفحه براکت اصلی ضدسرقت', qtyPerParent: 1, unit: 'عدد', stage: 'پرس‌کاری و فرم‌دهی' },
+              { name: 'مکمل تقویتی براکت (گوشواره)', qtyPerParent: 1, unit: 'عدد', stage: 'پانچ و خم' },
+            ],
+            operations: targetMo.ops.map(o => ({
+              stepCode: o.opCode,
+              stepName: o.opTitle,
+              hall: o.stationHall,
+              machineName: o.machineName,
+              dieName: o.dieCode,
+              cycleTimeSec: o.standardRatePerHour > 0 ? Math.round(3600 / o.standardRatePerHour) : 25,
+              completedGood: o.completedGoodQty,
+              scrapQty: o.scrapQty,
+              isFinal: o.isFinalOp,
+            })),
+            notes: 'ارزیابی موازنه WIP و قطعات پیش‌ساخته قبل از صدور نهایی دستور کار',
+          };
+          setInspectingPreflightOrder(scenario);
+        }
+      }
+    } else {
+      if (isAddPartModalOpen && router.route.modal === null) {
+        setIsAddPartModalOpen(false);
+      }
+      if (inspectingPreflightOrder && router.route.modal === null) {
+        setInspectingPreflightOrder(null);
+      }
+    }
+  }, [router.route.modal, router.route.modalOrderId, router.route.modalPartId, scheduleItems]);
 
   // Dynamic lookup of user's defined routing for the currently selected part
   const selectedPartRouting = useMemo(() => {
@@ -1474,8 +1558,62 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       ops,
     };
 
+    const isMultiLevelAssembly =
+      code.includes('ECU') ||
+      code.includes('ASY') ||
+      name.includes('مجموعه') ||
+      name.includes('براکت') ||
+      Boolean(
+        matchingRouting?.operations?.some(
+          o => o.processType === 'ASSEMBLY' || o.processType === 'SPOT_WELD' || o.processType === 'CO2_WELD'
+        )
+      );
+
+    if (isMultiLevelAssembly) {
+      // Intercept before final issue: open PreMoWipInspectionModal for hierarchical BOM & inter-stage WIP pre-flight check!
+      const preflightScenario: HighwayPartScenario = {
+        id: newItem.id,
+        orderCode: newItem.orderCode,
+        productionBatchCode: `BCH-${newItem.orderCode.replace('MO-', '')}`,
+        partId: newItem.partId,
+        partCode: newItem.partCode,
+        partName: newItem.partName,
+        carModel: newItem.carModel,
+        customerName: 'ساپکو',
+        orderQty: newPartTargetQty,
+        unitWeightKg: newItem.unitWeightKg,
+        scrapAllowancePct: 2,
+        rawMaterialCode: newItem.rawMaterialCode,
+        rawMaterialName: newItem.rawMaterialName,
+        warehouseAvailableKg: 1200,
+        bomSubComponents: [
+          { name: 'صفحه براکت اصلی ضدسرقت', qtyPerParent: 1, unit: 'عدد', stage: 'پرس‌کاری و فرم‌دهی' },
+          { name: 'مکمل تقویتی براکت (گوشواره)', qtyPerParent: 1, unit: 'عدد', stage: 'پانچ و خم' },
+        ],
+        operations: ops.map(o => ({
+          stepCode: o.opCode,
+          stepName: o.opTitle,
+          hall: o.stationHall,
+          machineName: o.machineName,
+          dieName: o.dieCode,
+          cycleTimeSec: o.standardRatePerHour > 0 ? Math.round(3600 / o.standardRatePerHour) : 25,
+          completedGood: o.completedGoodQty,
+          scrapQty: o.scrapQty,
+          isFinal: o.isFinalOp,
+        })),
+        notes: 'ارزیابی موازنه WIP و قطعات پیش‌ساخته قبل از صدور نهایی دستور کار',
+      };
+
+      setPendingNewItem(newItem);
+      setInspectingPreflightOrder(preflightScenario);
+      setIsAddPartModalOpen(false);
+      router.openWipCheckModal(newItem.orderCode, newItem.partId);
+      return;
+    }
+
     saveSchedule([newItem, ...scheduleItems]);
     setIsAddPartModalOpen(false);
+    router.closeModal();
     setToastNotice({
       type: 'success',
       title: `قطعه «${name}» با ${ops.length} مرحله عملیاتی ${
@@ -1483,6 +1621,124 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       } زمان‌بندی شد`,
       detail: `کد دستور کار: ${newItem.orderCode} | تیراژ هدف: ${formatNumber(newPartTargetQty)} عدد`,
     });
+  };
+
+  // Fast action: Issue Sub-MO directly from Tree View when shortage is detected
+  const handleIssueSubMo = (subMoData: {
+    parentMoId: string;
+    parentOrderCode: string;
+    componentPartId: string;
+    componentPartCode: string;
+    componentPartName: string;
+    requiredQty: number;
+    subRoutingId?: string;
+  }) => {
+    const subMoCode = `SUB-MO-1404-${Math.floor(4000 + Math.random() * 5000)}`;
+    const subItem: MultiPartScheduleItem = {
+      id: `MPS-SUB-${Date.now()}`,
+      orderCode: subMoCode,
+      partId: subMoData.componentPartId || `PRT-SUB-${Date.now()}`,
+      partCode: subMoData.componentPartCode,
+      partName: subMoData.componentPartName,
+      carModel: inspectingPreflightOrder?.carModel || 'پژو ۲۰۶',
+      partType: 'SUB_ASSEMBLY',
+      rawMaterialCode: 'RM-COIL-DC01A-1.5-320',
+      rawMaterialName: 'نوار ورق DC01A ضخامت 1.5 عرض 320',
+      unitWeightKg: 0.65,
+      weeklyTargetQty: subMoData.requiredQty,
+      rawMaterialIssuedKg: Math.round(subMoData.requiredQty * 0.7),
+      warehouseReceivedQty: 0,
+      ops: [
+        {
+          opId: `OP-SUB-${Date.now()}-10`,
+          opNo: 10,
+          opCode: 'OP10',
+          opTitle: `برش و تغذیه نوار ورق (${subMoData.componentPartName})`,
+          stationHall: 'سالن برش',
+          machineCode: 'SHR-SLT-01',
+          machineName: 'خط نواربری ورق',
+          dieCode: 'SLT-BLD-01',
+          standardRatePerHour: 600,
+          scheduledDayIndex: 1,
+          shiftName: 'شیفت صبح',
+          basePlannedQty: subMoData.requiredQty,
+          carriedOverQty: 0,
+          effectiveTargetQty: subMoData.requiredQty,
+          completedGoodQty: 0,
+          scrapQty: 0,
+          wipBufferBeforeOp: subMoData.requiredQty,
+          wipBufferAfterOp: 0,
+          isFinalOp: false,
+          status: 'PLANNED',
+        },
+        {
+          opId: `OP-SUB-${Date.now()}-20`,
+          opNo: 20,
+          opCode: 'OP20',
+          opTitle: `بلنک‌زنی و فرم‌دهی قطعه فرعی (${subMoData.componentPartName})`,
+          stationHall: 'سالن پرس',
+          machineCode: 'PRS-160T-02',
+          machineName: 'پرس ۱۶۰ تن ضربه‌ای',
+          dieCode: 'DIE-SUB-01',
+          standardRatePerHour: 400,
+          scheduledDayIndex: 1,
+          shiftName: 'شیفت عصر',
+          basePlannedQty: subMoData.requiredQty,
+          carriedOverQty: 0,
+          effectiveTargetQty: subMoData.requiredQty,
+          completedGoodQty: 0,
+          scrapQty: 0,
+          wipBufferBeforeOp: 0,
+          wipBufferAfterOp: 0,
+          isFinalOp: false,
+          status: 'PLANNED',
+        },
+        {
+          opId: `OP-SUB-${Date.now()}-30`,
+          opNo: 30,
+          opCode: 'OP30',
+          opTitle: 'پانچ نهایی و آماده‌سازی برای مونتاژ',
+          stationHall: 'سالن پرس',
+          machineCode: 'PRS-100T-01',
+          machineName: 'پرس ۱۰۰ تن ضربه‌ای',
+          dieCode: 'DIE-SUB-02',
+          standardRatePerHour: 450,
+          scheduledDayIndex: 2,
+          shiftName: 'شیفت صبح',
+          basePlannedQty: subMoData.requiredQty,
+          carriedOverQty: 0,
+          effectiveTargetQty: subMoData.requiredQty,
+          completedGoodQty: 0,
+          scrapQty: 0,
+          wipBufferBeforeOp: 0,
+          wipBufferAfterOp: 0,
+          isFinalOp: true,
+          status: 'PLANNED',
+        },
+      ],
+    };
+
+    saveSchedule([subItem, ...scheduleItems]);
+    setToastNotice({
+      type: 'success',
+      title: `دستور کار فرعی ${subMoCode} صادر شد`,
+      detail: `تولید قطعه پیش‌ساخته «${subMoData.componentPartName}» به تیراژ ${formatNumber(subMoData.requiredQty)} عدد در سالن پرس زمان‌بندی گردید.`,
+    });
+  };
+
+  // Final confirmation to commit main scheduled MO after pre-flight checks
+  const handleConfirmIssueOrder = () => {
+    if (pendingNewItem) {
+      saveSchedule([pendingNewItem, ...scheduleItems]);
+      setToastNotice({
+        type: 'success',
+        title: `دستور کار اصلی ${pendingNewItem.orderCode} با موفقیت صادر شد`,
+        detail: `قطعه «${pendingNewItem.partName}» با تیراژ ${formatNumber(pendingNewItem.weeklyTargetQty)} عدد در ماتریس تولید ثبت شد.`,
+      });
+      setPendingNewItem(null);
+    }
+    setInspectingPreflightOrder(null);
+    router.closeModal();
   };
 
   // Helper to print isolated HTML content cleanly inside an iframe without window.open
@@ -1708,7 +1964,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
             </button>
             <button
               type="button"
-              onClick={() => setIsAddPartModalOpen(true)}
+              onClick={() => router.openCreateMoModal()}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -4152,7 +4408,10 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               </h4>
               <button
                 type="button"
-                onClick={() => setIsAddPartModalOpen(false)}
+                onClick={() => {
+                  setIsAddPartModalOpen(false);
+                  router.closeModal();
+                }}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 ✕
@@ -4276,21 +4535,40 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsAddPartModalOpen(false)}
+                  onClick={() => {
+                    setIsAddPartModalOpen(false);
+                    router.closeModal();
+                  }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer flex items-center gap-1.5"
                 >
-                  افزودن به ماتریس زمان‌بندی
+                  <span>افزودن و ارزیابی پیش‌نیازها</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: PRE-FLIGHT INTER-STAGE WIP & SUB-ASSEMBLY BOM INSPECTION     */}
+      {/* ==================================================================== */}
+      {inspectingPreflightOrder && (
+        <PreMoWipInspectionModal
+          isOpen={true}
+          onClose={() => {
+            setInspectingPreflightOrder(null);
+            router.closeModal();
+          }}
+          order={inspectingPreflightOrder}
+          onConfirmIssueOrder={handleConfirmIssueOrder}
+          onIssueSubMo={handleIssueSubMo}
+        />
       )}
 
       {/* ==================================================================== */}

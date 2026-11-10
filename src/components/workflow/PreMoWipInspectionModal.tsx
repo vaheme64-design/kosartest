@@ -7,25 +7,21 @@ import {
   CheckCircle2,
   AlertTriangle,
   Zap,
-  ArrowLeft,
-  ArrowRight,
   ShieldCheck,
-  RefreshCw,
-  PlusCircle,
-  FileCheck2,
-  Factory,
-  Flame,
-  Info,
-  Check,
   Package,
   Wrench,
   ChevronDown,
   ChevronUp,
+  Flame,
+  Info,
+  Check,
+  PlusCircle,
+  FileText,
+  Calendar,
 } from 'lucide-react';
 import { HighwayPartScenario } from './FactoryHighwayWorkbench';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 import { INITIAL_ADVANCED_BOMS, getAllBoms } from '../../server/bomAndParallelEngine';
-import { INITIAL_PARTS } from '../../server/sampleData';
 
 export interface PreMoWipInspectionModalProps {
   isOpen: boolean;
@@ -43,7 +39,6 @@ export interface PreMoWipInspectionModalProps {
   }) => void;
 }
 
-// Stage-by-stage WIP detail interface
 export interface InterStageWipStep {
   stepCode: string;
   stepName: string;
@@ -93,28 +88,27 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
   onConfirmIssueOrder,
   onIssueSubMo,
 }) => {
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
-  const [issuedSubMos, setIssuedSubMos] = useState<Record<string, string>>({});
-  const [allocatedStocks, setAllocatedStocks] = useState<Record<string, number>>({});
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'INTER_STAGE' | 'RAW_MATERIALS'>('OVERVIEW');
-  const [expandedStageKey, setExpandedStageKey] = useState<string | null>('ALL');
+  const [issuedSubMos, setIssuedSubMos] = useState<Record<string, { code: string; qty: number }>>({});
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
+    'CMP-ECU-MAIN': true,
+    'CMP-ECU-COMP': true,
+  });
+  const [viewMode, setViewMode] = useState<'TREE_VIEW' | 'STATIONS_DETAIL'>('TREE_VIEW');
 
   // Match BOM for current part
   const matchedBom = useMemo(() => {
     const allBoms = getAllBoms();
-    // First try exact part ID or code match
     const found = allBoms.find(
       b =>
         b.assemblyPartId === order.partId ||
         b.assemblyPartCode === order.partCode ||
         order.partName.includes('ECU') ||
         order.partName.includes('ضدسرقت') ||
-        order.partId.includes('ECU')
+        order.partId?.includes('ECU')
     );
     if (found) return found;
 
-    // Check by name keywords
-    if (order.partName.includes('تارا') || order.partCode.includes('TARA')) {
+    if (order.partName.includes('تارا') || order.partCode?.includes('TARA')) {
       return allBoms.find(b => b.assemblyPartCode.includes('TARA')) || allBoms[1];
     }
     if (order.partName.includes('۲۰۶') || order.partName.includes('قفل')) {
@@ -127,9 +121,9 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
   const subComponents = useMemo<SubComponentInspectionRow[]>(() => {
     const orderQty = Math.max(1, order.orderQty);
     const isEcuBracket =
-      order.partCode.includes('ECU') ||
-      order.partName.includes('ECU') ||
-      order.partName.includes('ضدسرقت');
+      order.partCode?.includes('ECU') ||
+      order.partName?.includes('ECU') ||
+      order.partName?.includes('ضدسرقت');
 
     if (isEcuBracket) {
       // 1. صفحه براکت اصلی ضدسرقت
@@ -148,7 +142,7 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
         },
         {
           stepCode: 'OP15_SHEAR',
-          stepName: 'برش با قیچی گیوتین و ابعاددهی شیت اولیه',
+          stepName: 'برش با گیوتین هیدرولیک و ابعاددهی شیت اولیه',
           processType: 'SHEARING',
           machineName: 'قیچی گیوتین هیدرولیک',
           hallName: 'سالن برشکاری و آماده‌سازی بلنک',
@@ -202,7 +196,7 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
           hallName: 'سالن جوشکاری و پرس‌جوش مقاومتی',
           waitingInputQty: 200,
           inProgressQty: 350,
-          goodBufferQty: 1500, // Available right at assembly buffer
+          goodBufferQty: 1500,
           scrapQty: 10,
           normScrapPercent: 0.6,
         },
@@ -266,7 +260,7 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
           hallName: 'سالن جوشکاری و پرس‌جوش مقاومتی',
           waitingInputQty: 120,
           inProgressQty: 180,
-          goodBufferQty: 800, // Ready at assembly buffer
+          goodBufferQty: 800,
           scrapQty: 6,
           normScrapPercent: 0.5,
         },
@@ -274,15 +268,17 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
 
       const mainRequired = orderQty * 1;
       const mainWhStock = 1200;
-      const mainWipFloorStock = mainStages[mainStages.length - 1].goodBufferQty; // 1500
-      const mainTotalAvail = mainWhStock + mainWipFloorStock;
-      const mainShortage = Math.max(0, mainRequired - mainTotalAvail);
+      const mainWipFloorStock = 1500;
+      const mainSubMo = issuedSubMos['CMP-ECU-MAIN'];
+      const mainTotalAvail = mainWhStock + mainWipFloorStock + (mainSubMo ? mainSubMo.qty : 0);
+      const mainShortage = mainSubMo ? 0 : Math.max(0, mainRequired - (mainWhStock + mainWipFloorStock));
 
       const compRequired = orderQty * 1;
       const compWhStock = 900;
-      const compWipFloorStock = compStages[compStages.length - 1].goodBufferQty; // 800
-      const compTotalAvail = compWhStock + compWipFloorStock;
-      const compShortage = Math.max(0, compRequired - compTotalAvail);
+      const compWipFloorStock = 800;
+      const compSubMo = issuedSubMos['CMP-ECU-COMP'];
+      const compTotalAvail = compWhStock + compWipFloorStock + (compSubMo ? compSubMo.qty : 0);
+      const compShortage = compSubMo ? 0 : Math.max(0, compRequired - (compWhStock + compWipFloorStock));
 
       return [
         {
@@ -302,8 +298,8 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
           status: mainShortage === 0 ? 'COVERED' : mainShortage > 1000 ? 'CRITICAL' : 'SHORTAGE',
           subMoRequired: true,
           subRoutingId: 'RTG-ECU-MAIN',
-          subMoIssued: Boolean(issuedSubMos['CMP-ECU-MAIN']),
-          issuedSubMoCode: issuedSubMos['CMP-ECU-MAIN'],
+          subMoIssued: Boolean(mainSubMo),
+          issuedSubMoCode: mainSubMo?.code,
           stages: mainStages,
           rawMaterialInfo: {
             materialName: 'کویل ورق سرد روغنی DC01A ضخامت 2mm ابعاد 2x1140',
@@ -330,8 +326,8 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
           status: compShortage === 0 ? 'COVERED' : compShortage > 1000 ? 'CRITICAL' : 'SHORTAGE',
           subMoRequired: true,
           subRoutingId: 'RTG-ECU-COMP',
-          subMoIssued: Boolean(issuedSubMos['CMP-ECU-COMP']),
-          issuedSubMoCode: issuedSubMos['CMP-ECU-COMP'],
+          subMoIssued: Boolean(compSubMo),
+          issuedSubMoCode: compSubMo?.code,
           stages: compStages,
           rawMaterialInfo: {
             materialName: 'کویل ورق سرد روغنی DC01A ضخامت 2mm ابعاد 2x1140 (یا 2x1000)',
@@ -380,14 +376,15 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
       ];
     }
 
-    // Generic fallback for any other BOM in the system
+    // Generic fallback for other BOMs
     if (matchedBom && matchedBom.components.length > 0) {
       return matchedBom.components.map((c, idx) => {
         const required = orderQty * c.quantityPerAssembly;
         const whStock = Math.round(required * (0.6 + (idx % 3) * 0.3));
         const wipStock = Math.round(required * 0.35);
-        const totalAvail = whStock + wipStock;
-        const shortage = Math.max(0, required - totalAvail);
+        const subMo = issuedSubMos[c.id];
+        const totalAvail = whStock + wipStock + (subMo ? subMo.qty : 0);
+        const shortage = subMo ? 0 : Math.max(0, required - (whStock + wipStock));
 
         return {
           id: c.id,
@@ -411,14 +408,14 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
           status: shortage === 0 ? 'COVERED' : shortage > required * 0.5 ? 'CRITICAL' : 'SHORTAGE',
           subMoRequired: c.subMoRequired,
           subRoutingId: c.subRoutingId,
-          subMoIssued: Boolean(issuedSubMos[c.id]),
-          issuedSubMoCode: issuedSubMos[c.id],
+          subMoIssued: Boolean(subMo),
+          issuedSubMoCode: subMo?.code,
           stages: [
             {
               stepCode: 'OP10_PREP',
-              stepName: 'آماده‌سازی و برش اولیه',
+              stepName: 'آماده‌سازی و برش اولیه شیت',
               processType: 'SHEARING',
-              machineName: 'ایستگاه ۱',
+              machineName: 'خط برش و نواربر',
               hallName: 'سالن برشکاری',
               waitingInputQty: 50,
               inProgressQty: 100,
@@ -428,9 +425,9 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
             },
             {
               stepCode: 'OP20_FORM',
-              stepName: 'فرم‌دهی و پرسکاری قطعه',
+              stepName: 'فرم‌دهی و پرسکاری قطعه نیمه‌ساخته',
               processType: 'BLANKING',
-              machineName: 'پرس سنگین',
+              machineName: 'پرس ضربه‌ای ۲۵۰ تن',
               hallName: 'سالن پرس‌ها',
               waitingInputQty: 100,
               inProgressQty: 150,
@@ -446,64 +443,20 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
     return [];
   }, [order, matchedBom, issuedSubMos]);
 
-  // Overall feasibility analysis
   const overallShortages = useMemo(() => {
     return subComponents.filter(c => c.shortageQty > 0 && !c.subMoIssued);
   }, [subComponents]);
 
   const canProceed = overallShortages.length === 0;
 
-  // Final assembly routing operations (OP60, OP70, etc.)
-  const assemblyRoutingSteps = useMemo(() => {
-    return [
-      {
-        stepCode: 'OP60_CO2_WELD',
-        stepName: 'اتصال صفحه اصلی و مکمل با ایستگاه جوشکاری CO2 مونتاژی',
-        processType: 'CO2_WELD',
-        machineName: 'سلول جوشکاری CO2 رباتیک',
-        hallName: 'سالن جوشکاری و مونتاژ بدنه',
-        inputParts: 'صفحه اصلی (OP50) + مکمل (OP50)',
-        currentWipFloor: 350,
-        cycleTimeSec: 35,
-      },
-      {
-        stepCode: 'OP65_PROJ_WELD_OPT',
-        stepName: 'پرس‌جوش تکمیلی قبل از رنگ (ایستگاه اختیاری)',
-        processType: 'SPOT_WELD',
-        machineName: 'دستگاه پرس‌جوش ۷۵kVA',
-        hallName: 'سالن جوشکاری و مونتاژ بدنه',
-        inputParts: 'مجموعه جوش‌شده',
-        currentWipFloor: 120,
-        cycleTimeSec: 8,
-      },
-      {
-        stepCode: 'OP70_PAINT_ED',
-        stepName: 'شستشو، چربی‌گیری، فسفاته و پوشش رنگ کاتافورز ضدخوردگی ED مشکی',
-        processType: 'PAINT',
-        machineName: 'خط پیوسته رنگ الکتروفورز ED',
-        hallName: 'سالن خط رنگ کاتافورز',
-        inputParts: 'مجموعه جوش‌کاری‌شده تمیز',
-        currentWipFloor: 500,
-        cycleTimeSec: 60,
-      },
-      {
-        stepCode: 'OP80_FINAL_PACK',
-        stepName: 'بازرسی ۱۰۰٪ ظاهری و تست گشتاور مهره‌ها و پالت‌بندی ساپکو',
-        processType: 'ASSEMBLY',
-        machineName: 'میز کنترل کیفیت و بسته‌بندی نهایی',
-        hallName: 'سالن مونتاژ و تحویل به انبار محصول',
-        inputParts: 'قطعه رنگ‌شده ED',
-        currentWipFloor: 250,
-        cycleTimeSec: 15,
-      },
-    ];
-  }, []);
-
   const handleIssueSingleSubMo = (row: SubComponentInspectionRow) => {
-    const subMoCode = `SUB-MO-1404-${row.partCode.replace(/[^A-Za-z0-9]/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+    const shortageAmount = row.shortageQty > 0 ? row.shortageQty : row.totalRequiredQty;
+    const cleanCode = row.partCode.replace(/[^A-Za-z0-9]/g, '').slice(-6);
+    const subMoCode = `SUB-MO-1404-${cleanCode}-${Math.floor(100 + Math.random() * 900)}`;
+
     setIssuedSubMos(prev => ({
       ...prev,
-      [row.id]: subMoCode,
+      [row.id]: { code: subMoCode, qty: shortageAmount },
     }));
 
     if (onIssueSubMo) {
@@ -513,38 +466,24 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
         componentPartId: row.partId,
         componentPartCode: row.partCode,
         componentPartName: row.partName,
-        requiredQty: row.shortageQty > 0 ? row.shortageQty : row.totalRequiredQty,
+        requiredQty: shortageAmount,
         subRoutingId: row.subRoutingId,
       });
     }
   };
 
   const handleIssueAllMissingSubMos = () => {
-    const nextIssued = { ...issuedSubMos };
     overallShortages.forEach(row => {
       if (row.subMoRequired) {
-        const subMoCode = `SUB-MO-1404-${row.partCode.replace(/[^A-Za-z0-9]/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
-        nextIssued[row.id] = subMoCode;
-        if (onIssueSubMo) {
-          onIssueSubMo({
-            parentMoId: order.id,
-            parentOrderCode: order.orderCode,
-            componentPartId: row.partId,
-            componentPartCode: row.partCode,
-            componentPartName: row.partName,
-            requiredQty: row.shortageQty > 0 ? row.shortageQty : row.totalRequiredQty,
-            subRoutingId: row.subRoutingId,
-          });
-        }
+        handleIssueSingleSubMo(row);
       }
     });
-    setIssuedSubMos(nextIssued);
   };
 
-  const handleAllocateWipBuffer = (rowId: string, amount: number) => {
-    setAllocatedStocks(prev => ({
+  const toggleExpand = (rowId: string) => {
+    setExpandedStages(prev => ({
       ...prev,
-      [rowId]: (prev[rowId] || 0) + amount,
+      [rowId]: !prev[rowId],
     }));
   };
 
@@ -555,18 +494,18 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
       role="dialog"
       aria-modal="true"
       aria-labelledby="wip-preflight-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
     >
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden text-right">
         {/* ================================================================= */}
         {/* HEADER                                                            */}
         {/* ================================================================= */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950 flex items-center gap-1">
-                <Wrench className="w-3.5 h-3.5" />
-                کنترل آمادگی پیش از صدور دستور تولید (Pre-Flight WIP Inspection)
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950 flex items-center gap-1 shadow-xs">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                کنترل ارزیابی پیش‌نیازها و موجودی بین‌مراحل (Material Availability Check)
               </span>
               <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-white/10 text-slate-200 border border-white/20">
                 دستور کار: {order.orderCode}
@@ -578,13 +517,11 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
 
             <h2 id="wip-preflight-title" className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Boxes className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>ارزیابی موجودی بین‌مراحل (WIP) و قطعات پیش‌ساخته / نیمه‌ساخته</span>
+              <span>ارزیابی درختی BOM و موجودی قطعات نیمه‌ساخته (WIP) پیش از صدور دستور کار</span>
             </h2>
 
             <p className="text-xs text-slate-300">
-              بررسی همزمان موجودی انبار نیمه‌ساخته، بافر بین‌ایستگاهی پای خط و مواد اولیه برای کالای «
-              <strong className="text-amber-300 font-semibold">{order.partName}</strong>» با تیراژ درخواستی{' '}
-              <strong className="text-emerald-300 font-mono font-bold">{formatNumber(order.orderQty)} عدد</strong>
+              بررسی همزمان نیاز درختی محصول، موجودی انبار نیمه‌ساخته، موجودی بافر پای خط و امکان صدور مستقیم دستور کار فرعی (Sub-MO)
             </p>
           </div>
 
@@ -599,11 +536,10 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
         </div>
 
         {/* ================================================================= */}
-        {/* EXECUTIVE SUMMARY BAR                                             */}
+        {/* EXECUTIVE KPI BAR                                                 */}
         {/* ================================================================= */}
         <div className="bg-slate-50 border-b border-slate-200 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-          {/* Tile 1: Order Qty */}
-          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
               <Package className="w-5 h-5" />
             </div>
@@ -615,36 +551,32 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
             </div>
           </div>
 
-          {/* Tile 2: Sub-Component Status */}
-          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
             <div
               className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                canProceed
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-amber-50 text-amber-700'
+                canProceed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
               }`}
             >
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] text-slate-500 font-medium">قطعات پیش‌ساخته (Sub-BOM):</div>
+              <div className="text-[11px] text-slate-500 font-medium">قطعات نیمه‌ساخته درختی:</div>
               <div className="text-xs font-bold text-slate-900">
-                {subComponents.filter(c => c.componentType === 'SUB_ASSEMBLY').length} قطعه نیمه‌ساخته
+                {subComponents.filter(c => c.componentType === 'SUB_ASSEMBLY').length} قطعه پیش‌ساخته فرعی
               </div>
               <div className="text-[11px] text-slate-500">
-                {subComponents.filter(c => c.shortageQty === 0).length} قطعه پوشش کامل
+                {subComponents.filter(c => c.shortageQty === 0).length} قطعه پوشش کامل ۱۰۰٪
               </div>
             </div>
           </div>
 
-          {/* Tile 3: Raw Coil & Sheet */}
-          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
               <Flame className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] text-slate-500 font-medium">ورق و شماره ذوب کلاف:</div>
-              <div className="text-xs font-bold text-slate-900 font-mono">
+              <div className="text-[11px] text-slate-500 font-medium">کلاف و شماره ذوب رسمی:</div>
+              <div className="text-xs font-bold text-amber-800 font-mono">
                 {order.heatNumber || 'HT-99412-MOB'}
               </div>
               <div className="text-[11px] text-emerald-700 font-mono">
@@ -653,12 +585,11 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
             </div>
           </div>
 
-          {/* Tile 4: Feasibility Verdict */}
           <div
-            className={`p-3 rounded-xl border shadow-sm flex items-center gap-3 ${
+            className={`p-3 rounded-xl border shadow-2xs flex items-center gap-3 ${
               canProceed
-                ? 'bg-emerald-50/70 border-emerald-300 text-emerald-900'
-                : 'bg-amber-50/70 border-amber-300 text-amber-900'
+                ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                : 'bg-amber-50/80 border-amber-300 text-amber-950'
             }`}
           >
             <div
@@ -669,565 +600,309 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
               {canProceed ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
             </div>
             <div>
-              <div className="text-[11px] font-semibold">ارزیابی امکان‌پذیری مونتاژ:</div>
+              <div className="text-[11px] font-bold">وضعیت تایید پیش‌نیازها:</div>
               <div className="text-xs font-bold">
-                {canProceed ? 'آماده برای مونتاژ و صدور' : `${toPersianDigits(overallShortages.length)} مورد کسری پیش‌ساخته`}
+                {canProceed ? 'آماده صدور و ابلاغ به خط 🟢' : `${toPersianDigits(overallShortages.length)} مورد کسری پیش‌ساخته ❌`}
               </div>
               <div className="text-[10px]">
-                {canProceed ? 'موجودی نیمه‌ساخته و پای خط کافی است' : 'نیازمند صدور Sub-MO یا شارژ خط'}
+                {canProceed ? 'تمام قطعات پیش‌ساخته آماده هستند' : 'از دکمه روبروی هر سطر برای صدور Sub-MO استفاده کنید'}
               </div>
             </div>
           </div>
         </div>
 
         {/* ================================================================= */}
-        {/* TABS NAVIGATION                                                   */}
-        {/* ================================================================= */}
-        <div className="border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between bg-white text-xs">
-          <div className="flex items-center gap-2 -mb-px">
-            <button
-              type="button"
-              onClick={() => setActiveTab('OVERVIEW')}
-              className={`py-3 px-3.5 font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'OVERVIEW'
-                  ? 'border-indigo-600 text-indigo-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Boxes className="w-4 h-4" />
-              <span>موازنه قطعات پیش‌ساخته و نیمه‌ساخته ({toPersianDigits(subComponents.length)})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('INTER_STAGE')}
-              className={`py-3 px-3.5 font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'INTER_STAGE'
-                  ? 'border-indigo-600 text-indigo-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <GitBranch className="w-4 h-4" />
-              <span>موجودی بین‌مراحل (WIP) به تفکیک ایستگاه‌های خط برش، پرس و جوش</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('RAW_MATERIALS')}
-              className={`py-3 px-3.5 font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'RAW_MATERIALS'
-                  ? 'border-indigo-600 text-indigo-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Flame className="w-4 h-4" />
-              <span>مواد اولیه کلاف، شماره ذوب و پیچ و مهره‌های جوشی</span>
-            </button>
-          </div>
-
-          {overallShortages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleIssueAllMissingSubMos}
-              className="py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>صدور همزمان کلیه دستورات کار فرعی (Sub-MOs)</span>
-            </button>
-          )}
-        </div>
-
-        {/* ================================================================= */}
-        {/* BODY CONTENT BY TAB                                               */}
+        {/* TREE-VIEW & MATERIAL AVAILABILITY CHECK                           */}
         {/* ================================================================= */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
-          {/* TAB 1: SUB-COMPONENTS BALANCE */}
-          {activeTab === 'OVERVIEW' && (
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-bold">
-                    منطق استانداردهای صنعت خودرو در ERP سازمانی KPIMS:
+          <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold">
+                  نمای درختی ساختار محصول (Hierarchical BOM Tree) و موازنه موجودی بین‌مراحل:
+                </div>
+                <p className="text-[11px] leading-relaxed text-indigo-900">
+                  برای تولید مجموعه نهایی، قطعات نیمه‌ساخته باید به میزان ضریب مصرف در تیراژ هدف موجود باشند.
+                  در جدول درختی زیر، موجودی انبار نیمه‌ساخته و موجودی در جریان پای کار سالن‌ها (WIP) به صورت تفکیک‌شده نمایش داده شده است.
+                  در صورت کسری، دقیقاً روبروی قطعه دکمه <strong>«صدور دستور تولید فرعی (Sub-MO)»</strong> قرار دارد تا بدون ترک این صفحه کسری را برطرف نمایید.
+                </p>
+              </div>
+            </div>
+
+            {overallShortages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleIssueAllMissingSubMos}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>صدور خودکار کلیه Sub-MO های دارای کسری</span>
+              </button>
+            )}
+          </div>
+
+          {/* HIERARCHICAL TREE CONTAINER */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4 shadow-sm">
+            {/* 1. ROOT NODE: PARENT ASSEMBLY */}
+            <div className="p-4 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]">
+                      محصول نهایی (Parent Assembly)
+                    </span>
+                    <span className="font-mono text-slate-300 text-xs">
+                      {order.partCode}
+                    </span>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-indigo-900">
-                    برای محصول «مجموعه براکت ضدسرقت»، دو قطعه پیش‌ساخته (صفحه براکت اصلی و مکمل براکت) باید در خطوط برشکاری، بلنکینگ، خم‌کاری و پرس‌جوش تولید شوند.
-                    جدول زیر موجودی آماده در انبار نیمه‌ساخته و موجودی پای کار فیکسچر مونتاژ را به صورت تفکیک‌شده نمایش می‌دهد.
-                    در صورت وجود کسری، می‌توانید بدون خروج از این صفحه، مستقیماً دستور ساخت فرعی (Sub-MO) صادر کنید تا قطعات نیمه‌ساخته برای این بچ آماده شوند.
-                  </p>
+                  <h3 className="text-sm font-bold text-white mt-1">
+                    {order.partName}
+                  </h3>
                 </div>
               </div>
 
-              {/* Components Balance Table */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                      <tr>
-                        <th className="py-3 px-3.5">ردیف</th>
-                        <th className="py-3 px-3.5">نوع قطعه</th>
-                        <th className="py-3 px-3.5">کد و نام قطعه پیش‌ساخته / نیمه‌ساخته</th>
-                        <th className="py-3 px-3.5 text-center">ضریب در BOM</th>
-                        <th className="py-3 px-3.5 text-center">نیاز کل بچ</th>
-                        <th className="py-3 px-3.5 text-center">موجودی انبار نیمه‌ساخته</th>
-                        <th className="py-3 px-3.5 text-center">WIP بین‌مراحل (پای خط)</th>
-                        <th className="py-3 px-3.5 text-center">کل موجودی قابل‌اتکا</th>
-                        <th className="py-3 px-3.5 text-center">کسری / مازاد</th>
-                        <th className="py-3 px-3.5 text-center">پوشش</th>
-                        <th className="py-3 px-3.5 text-center">اقدام سریع (Action)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-800">
-                      {subComponents.map((row, idx) => {
-                        const isSelected = selectedComponentId === row.id;
-                        return (
-                          <React.Fragment key={row.id}>
-                            <tr
-                              className={`transition-colors ${
-                                isSelected
-                                  ? 'bg-indigo-50/60'
-                                  : idx % 2 === 0
-                                  ? 'bg-white hover:bg-slate-50'
-                                  : 'bg-slate-50/50 hover:bg-slate-50'
-                              }`}
-                            >
-                              <td className="py-3 px-3.5 font-mono text-slate-500 text-center">
-                                {toPersianDigits(idx + 1)}
-                              </td>
-                              <td className="py-3 px-3.5">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    row.componentType === 'SUB_ASSEMBLY'
-                                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                      : row.componentType === 'FASTENER'
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                      : 'bg-slate-100 text-slate-800'
-                                  }`}
-                                >
-                                  {row.componentType === 'SUB_ASSEMBLY'
-                                    ? 'قطعه پیش‌ساخته (Sub-MO)'
-                                    : row.componentType === 'FASTENER'
-                                    ? 'اتصالات خودرویی'
-                                    : 'مواد پایه'}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3.5">
-                                <div className="font-bold text-slate-900">{row.partName}</div>
-                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                                  {row.partCode}
-                                </div>
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono font-bold text-slate-700">
-                                {toPersianDigits(row.quantityPerAssembly)} {row.unit}
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono font-bold text-slate-900">
-                                {formatNumber(row.totalRequiredQty)}
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono text-slate-700">
-                                {formatNumber(row.warehouseStockQty)}
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono font-semibold text-indigo-700">
-                                {formatNumber(row.interStageWipQty)}
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono font-bold text-slate-900">
-                                {formatNumber(row.totalAvailableQty)}
-                              </td>
-                              <td className="py-3 px-3.5 text-center font-mono">
-                                {row.shortageQty === 0 ? (
-                                  <span className="text-emerald-700 font-bold flex items-center justify-center gap-1">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    تکمیل (مازاد: +{formatNumber(row.totalAvailableQty - row.totalRequiredQty)})
-                                  </span>
-                                ) : (
-                                  <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                                    کسری: -{formatNumber(row.shortageQty)} {row.unit}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3.5 text-center">
-                                <div className="w-16 mx-auto bg-slate-100 rounded-full h-2 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${
-                                      row.coveragePercent >= 100
-                                        ? 'bg-emerald-500'
-                                        : row.coveragePercent >= 60
-                                        ? 'bg-amber-500'
-                                        : 'bg-rose-500'
-                                    }`}
-                                    style={{ width: `${row.coveragePercent}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-mono font-bold text-slate-600 mt-0.5 block">
-                                  %{toPersianDigits(row.coveragePercent)}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3.5 text-center">
-                                {row.subMoRequired ? (
-                                  row.subMoIssued || issuedSubMos[row.id] ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300">
-                                      <Check className="w-3.5 h-3.5" />
-                                      {issuedSubMos[row.id] || 'دستور ساخت صادر شد'}
-                                    </span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleIssueSingleSubMo(row)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-sm transition-colors cursor-pointer"
-                                    >
-                                      <Zap className="w-3 h-3 text-amber-300" />
-                                      <span>صدور دستور ساخت (Sub-MO)</span>
-                                    </button>
-                                  )
-                                ) : (
-                                  <span className="text-slate-400 text-[11px]">تأمین انبار / خرید</span>
-                                )}
-                              </td>
-                            </tr>
-
-                            {/* Collapsible detail row for stages */}
-                            {row.stages && row.stages.length > 0 && (
-                              <tr className="bg-slate-50/70 border-b border-slate-200">
-                                <td colSpan={11} className="py-2.5 px-4">
-                                  <div className="flex items-center justify-between text-[11px] text-slate-600 font-semibold mb-1.5">
-                                    <span className="flex items-center gap-1.5 text-slate-900">
-                                      <GitBranch className="w-3.5 h-3.5 text-indigo-600" />
-                                      موجودی بین‌مراحل (WIP) به تفکیک ایستگاه‌های تولیدی قطعه «{row.partName}»:
-                                    </span>
-                                    <span className="text-slate-500 font-mono text-[10px]">
-                                      مجموع پای خط: {formatNumber(row.stages.reduce((sum, s) => sum + s.goodBufferQty, 0))} عدد
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                                    {row.stages.map(stage => (
-                                      <div
-                                        key={stage.stepCode}
-                                        className="p-2 rounded-lg bg-white border border-slate-200 text-[11px] space-y-1 shadow-xs"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span className="px-1.5 py-0.2 rounded bg-slate-900 text-white font-mono text-[10px] font-bold">
-                                            {stage.stepCode}
-                                          </span>
-                                          <span className="text-emerald-700 font-mono font-bold text-[10px]">
-                                            سالم: {formatNumber(stage.goodBufferQty)}
-                                          </span>
-                                        </div>
-                                        <div className="font-semibold text-slate-900 text-[10px] truncate" title={stage.stepName}>
-                                          {stage.stepName}
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 truncate" title={stage.machineName}>
-                                          {stage.machineName}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              <div className="flex items-center gap-3 text-left font-mono">
+                <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-center">
+                  <div className="text-[10px] text-slate-400">تیراژ هدف دستور کار</div>
+                  <div className="text-base font-bold text-emerald-400">
+                    {formatNumber(order.orderQty)} عدد
+                  </div>
+                </div>
+                <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-center">
+                  <div className="text-[10px] text-slate-400">شماره دستور تولید (MO)</div>
+                  <div className="text-xs font-bold text-slate-200">
+                    {order.orderCode}
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {/* Quick Actions Card */}
-              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-                <div className="space-y-0.5">
-                  <div className="font-bold flex items-center gap-2 text-amber-300">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>تضمین زنجیره تأمین داخلی خط مونتاژ (Anti-Starvation Protocol)</span>
-                  </div>
-                  <p className="text-xs text-slate-300">
-                    با صدور خودکار Sub-MO، تیراژ کسری مستقیماً به برنامه روزانه سالن‌های برش و پرس تزریق شده و شماره بچ با دستور مونتاژ نهایی لینک می‌شود.
-                  </p>
-                </div>
+            {/* 2. TREE BRANCHES (CHILDREN NODES) */}
+            <div className="mr-4 sm:mr-6 pr-4 sm:pr-6 border-r-2 border-indigo-200 space-y-4">
+              <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                <GitBranch className="w-4 h-4 text-indigo-600" />
+                <span>اجزای متشکله پیش‌ساخته، قطعات نیمه‌ساخته و اتصالات درختی (Child Components):</span>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleIssueAllMissingSubMos}
-                    disabled={overallShortages.length === 0}
-                    className="px-3.5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              {subComponents.map((component, idx) => {
+                const isSubMoIssued = component.subMoIssued || Boolean(issuedSubMos[component.id]);
+                const currentSubMoCode = component.issuedSubMoCode || issuedSubMos[component.id]?.code;
+                const isExpanded = Boolean(expandedStages[component.id]);
+
+                return (
+                  <div
+                    key={component.id}
+                    className={`rounded-xl border p-4 transition-all ${
+                      component.shortageQty === 0
+                        ? 'bg-emerald-50/30 border-emerald-200'
+                        : isSubMoIssued
+                        ? 'bg-indigo-50/40 border-indigo-200'
+                        : 'bg-amber-50/40 border-amber-300 shadow-2xs'
+                    }`}
                   >
-                    <Zap className="w-4 h-4" />
-                    <span>صدور خودکار Sub-MO برای همه کسری‌ها</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: INTER-STAGE WIP BREAKDOWN */}
-          {activeTab === 'INTER_STAGE' && (
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-2">
-                <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <GitBranch className="w-4 h-4 text-emerald-600" />
-                  <span>دیاگرام جریان همگرا و موجودی بین‌ایستگاهی (Converging Assembly Flow):</span>
-                </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  خط تولید قطعه «مجموعه براکت ضدسرقت» دارای دو شاخه موازی ساخت قطعات پیش‌ساخته است که در ایستگاه جوشکاری CO2 مونتاژی (OP60) الحاق شده و سپس به خط رنگ کاتافورز ED منتقل می‌شوند.
-                </p>
-              </div>
-
-              {/* Branch 1: Main Bracket Plate */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div className="font-bold text-slate-900 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                    <span>شاخه ۱: صفحه براکت اصلی (WIP-ECU-MAIN-BRK) — خط پرس سنگین و پرس‌جوش</span>
-                  </div>
-                  <span className="text-xs font-mono text-indigo-700 font-bold">
-                    موجودی بافر پای جوش مونتاژ: ۱,۵۰۰ عدد
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-6 gap-2.5">
-                  {subComponents[0]?.stages.map((stage, sIdx) => (
-                    <div
-                      key={stage.stepCode}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 hover:border-indigo-300 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold">
-                          {stage.stepCode}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          مرحله {toPersianDigits(sIdx + 1)}
-                        </span>
-                      </div>
-                      <div className="font-bold text-slate-900 text-xs">{stage.stepName}</div>
-                      <div className="text-[11px] text-slate-600">{stage.machineName}</div>
-                      <div className="text-[10px] text-slate-400">{stage.hallName}</div>
-
-                      <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-1 text-[10px] font-mono">
-                        <div>
-                          <span className="text-slate-400 block">در جریان:</span>
-                          <span className="font-bold text-amber-700">{formatNumber(stage.inProgressQty)}</span>
+                    {/* Node Header Row */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                            component.componentType === 'SUB_ASSEMBLY'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : component.componentType === 'FASTENER'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}
+                        >
+                          {component.componentType === 'SUB_ASSEMBLY' ? '⚙️' : component.componentType === 'FASTENER' ? '🔩' : '🛢️'}
                         </div>
+
                         <div>
-                          <span className="text-slate-400 block">بافر سالم:</span>
-                          <span className="font-bold text-emerald-700">{formatNumber(stage.goodBufferQty)}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs">
+                              {component.partName}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-500">
+                              ({component.partCode})
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 font-mono">
+                              ضریب BOM: {toPersianDigits(component.quantityPerAssembly)} {component.unit}
+                            </span>
+                            {component.subRoutingId && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200">
+                                مسیر: {component.subRoutingId}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            {component.componentType === 'SUB_ASSEMBLY'
+                              ? 'قطعه نیمه‌ساخته پرسی نیازمند عملیات نواربری، بلنک، خم‌کاری و پرس‌جوش'
+                              : component.componentType === 'FASTENER'
+                              ? 'اقلام استاندارد خودرویی نیازمند تأمین انبار قطعات استاندارد'
+                              : 'مواد اولیه پایه'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Branch 2: Complementary Bracket */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div className="font-bold text-slate-900 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                    <span>شاخه ۲: مکمل براکت ضدسرقت (WIP-ECU-COMP-BRK) — خط پرس و پانچ</span>
-                  </div>
-                  <span className="text-xs font-mono text-purple-700 font-bold">
-                    موجودی بافر پای جوش مونتاژ: ۸۰۰ عدد
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                  {subComponents[1]?.stages.map((stage, sIdx) => (
-                    <div
-                      key={stage.stepCode}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 hover:border-purple-300 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded bg-purple-900 text-white font-mono text-[10px] font-bold">
-                          {stage.stepCode}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          مرحله {toPersianDigits(sIdx + 1)}
-                        </span>
-                      </div>
-                      <div className="font-bold text-slate-900 text-xs">{stage.stepName}</div>
-                      <div className="text-[11px] text-slate-600">{stage.machineName}</div>
-                      <div className="text-[10px] text-slate-400">{stage.hallName}</div>
-
-                      <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-1 text-[10px] font-mono">
-                        <div>
-                          <span className="text-slate-400 block">در جریان:</span>
-                          <span className="font-bold text-amber-700">{formatNumber(stage.inProgressQty)}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">بافر سالم:</span>
-                          <span className="font-bold text-emerald-700">{formatNumber(stage.goodBufferQty)}</span>
-                        </div>
+                      {/* FAST ACTION BUTTON (DIRECT SUB-MO ISSUANCE) */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {component.subMoRequired ? (
+                          isSubMoIssued ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span>دستور ساخت فرعی صادر شد: {currentSubMoCode}</span>
+                            </span>
+                          ) : component.shortageQty > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleIssueSingleSubMo(component)}
+                              className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-300" />
+                              <span>صدور دستور تولید فرعی (Sub-MO) به تیراژ {formatNumber(component.shortageQty)} عدد</span>
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>موجودی تکمیل و پوشش ۱۰۰٪</span>
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                            تأمین از انبار اتصالات
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Merged Branch: Assembly & ED Paint */}
-              <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
-                  <div className="font-bold text-emerald-950 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                    <span>مرحله الحاق مونتاژی و رنگ کاتافورز ED (Final Assembly & ED Paint)</span>
-                  </div>
-                  <span className="text-xs text-emerald-800 font-bold">
-                    نقطه ورود قطعات پیش‌ساخته به محصول نهایی
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  {assemblyRoutingSteps.map((step, idx) => (
-                    <div
-                      key={step.stepCode}
-                      className="p-3 rounded-xl bg-white border border-emerald-200 text-xs space-y-1.5 shadow-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded bg-emerald-800 text-white font-mono text-[10px] font-bold">
-                          {step.stepCode}
-                        </span>
-                        <span className="text-emerald-700 font-mono text-[10px] font-bold">
-                          {toPersianDigits(step.cycleTimeSec)} ثانیه
+                    {/* QUANTITATIVE BALANCE GRID */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-3 mt-3 border-t border-slate-200/80 text-xs font-mono">
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center">
+                        <span className="text-[10px] text-slate-400 font-sans block">نیاز کل برای این بچ</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {formatNumber(component.totalRequiredQty)} {component.unit}
                         </span>
                       </div>
-                      <div className="font-bold text-slate-900 text-xs">{step.stepName}</div>
-                      <div className="text-[11px] text-slate-600 font-mono">{step.machineName}</div>
-                      <div className="text-[10px] text-slate-400">{step.hallName}</div>
 
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500">موجودی پای ایستگاه:</span>
-                        <span className="font-bold font-mono text-emerald-700">
-                          {formatNumber(step.currentWipFloor)} عدد
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center">
+                        <span className="text-[10px] text-slate-400 font-sans block">موجودی انبار نیمه‌ساخته</span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {formatNumber(component.warehouseStockQty)} {component.unit}
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center">
+                        <span className="text-[10px] text-slate-400 font-sans block">WIP پای خط (بین‌ایستگاهی)</span>
+                        <span className="text-sm font-bold text-indigo-700">
+                          {formatNumber(component.interStageWipQty)} {component.unit}
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center">
+                        <span className="text-[10px] text-slate-400 font-sans block">کل موجودی قابل‌اتکا</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {formatNumber(component.totalAvailableQty)} {component.unit}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`p-2.5 rounded-lg border text-center ${
+                          component.shortageQty === 0
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            : 'bg-rose-50 border-rose-200 text-rose-700'
+                        }`}
+                      >
+                        <span className="text-[10px] font-sans block">وضعیت کسری / مازاد</span>
+                        <span className="text-sm font-bold">
+                          {component.shortageQty === 0 ? (
+                            `تکمیل 🟢`
+                          ) : (
+                            `کسری: -${formatNumber(component.shortageQty)} عدد`
+                          )}
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* TAB 3: RAW MATERIALS & FASTENERS */}
-          {activeTab === 'RAW_MATERIALS' && (
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 text-blue-700" />
-                  <span>کنترل مواد اولیه کلاف و اتصالات استاندارد ساپکو:</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-blue-900">
-                  اطلاعات ورق مصرفی، وزن کل مورد نیاز بچ، تناژ موجود در انبار رول و شماره ذوب رسمی کلاف در زیر درج شده است.
-                  تولید قطعات پیش‌ساخته مستقیماً به موجودی این کلاف وابسته است.
-                </p>
-              </div>
+                    {/* COLLAPSIBLE STAGES BREAKDOWN */}
+                    {component.stages && component.stages.length > 0 && (
+                      <div className="mt-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(component.id)}
+                          className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 cursor-pointer select-none"
+                        >
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          <span>
+                            {isExpanded
+                              ? `بستن جزئیات ایستگاه‌های مسیر تولید (${toPersianDigits(component.stages.length)} ایستگاه)`
+                              : `مشاهده تفکیک موجودی بین‌مراحل (WIP) در خطوط (${toPersianDigits(component.stages.length)} ایستگاه)`}
+                          </span>
+                        </button>
 
-              {/* Raw Coil Card */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div className="font-bold text-slate-900 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                    <span>کلاف ورق سرد روغنی مصرفی (DC01A ضخامت 2.0 میلیمتر عرض 1140):</span>
+                        {isExpanded && (
+                          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-2 pt-2 border-t border-slate-100">
+                            {component.stages.map(stage => (
+                              <div
+                                key={stage.stepCode}
+                                className="p-2 rounded-lg bg-white border border-slate-200 text-[10px] space-y-1 shadow-2xs"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="px-1.5 py-0.2 rounded bg-slate-900 text-white font-mono font-bold text-[9px]">
+                                    {stage.stepCode}
+                                  </span>
+                                  <span className="text-emerald-700 font-mono font-bold text-[10px]">
+                                    بافر: {formatNumber(stage.goodBufferQty)}
+                                  </span>
+                                </div>
+                                <div className="font-bold text-slate-800 truncate" title={stage.stepName}>
+                                  {stage.stepName}
+                                </div>
+                                <div className="text-slate-400 truncate" title={stage.machineName}>
+                                  {stage.machineName}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px]">
-                    موجودی کافی و تایید شده
-                  </span>
-                </div>
+                );
+              })}
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                    <div className="text-[11px] text-slate-500">شماره کلاف فیزیکی:</div>
-                    <div className="text-sm font-bold text-slate-900 font-mono mt-0.5">
-                      {order.coilNumber || 'MOB-2025-DC01-409'}
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                    <div className="text-[11px] text-slate-500">شماره ذوب رسمی (Heat No):</div>
-                    <div className="text-sm font-bold text-amber-800 font-mono mt-0.5">
-                      {order.heatNumber || 'HT-99412-MOB'}
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                    <div className="text-[11px] text-slate-500">مصرف ناخالص کل بچ ({formatNumber(order.orderQty)} عدد):</div>
-                    <div className="text-sm font-bold text-slate-900 font-mono mt-0.5">
-                      {formatNumber(
-                        Math.round(
-                          order.orderQty *
-                            (order.unitWeightKg || 1.25) *
-                            (1 + (order.scrapAllowancePct || 3.5) / 100)
-                        )
-                      )}{' '}
-                      <span className="text-xs font-normal text-slate-500">کیلوگرم</span>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                    <div className="text-[11px] text-slate-500">موجودی آزاد در انبار رول:</div>
-                    <div className="text-sm font-bold text-emerald-700 font-mono mt-0.5">
-                      {formatNumber(order.warehouseAvailableKg || 18500)}{' '}
-                      <span className="text-xs font-normal text-slate-500">کیلوگرم</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fasteners and Hardware Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 15 Nuts M6 */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-slate-900">
-                      مهره جوشی چهارگوش پایه‌دار M6 (DIN 928)
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 font-mono">
-                      ۱۵ عدد در هر براکت
+              {/* 3. RAW MATERIAL COIL NODE */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-2 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                      🛢️
                     </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    اتصال در مرحله OP50 صفحه اصلی با پرس‌جوش ۷۵kVA و گشتاور حداقل 40 N.m
-                  </p>
-                  <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center font-mono">
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">نیاز این بچ</div>
-                      <div className="font-bold text-slate-900">{formatNumber(order.orderQty * 15)}</div>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">موجودی انبار</div>
-                      <div className="font-bold text-emerald-700">۴۵,۰۰۰ عدد</div>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">وضعیت</div>
-                      <div className="font-bold text-emerald-700">پوشش کامل 🟢</div>
+                    <div>
+                      <div className="font-bold text-slate-900">
+                        کویل ورق سرد روغنی پایه (DC01A ضخامت 2.0 میلیمتر عرض 1140)
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        کلاف: <strong>{order.coilNumber || 'MOB-2025-DC01-409'}</strong> · شماره ذوب:{' '}
+                        <strong className="text-amber-800">{order.heatNumber || 'HT-99412-MOB'}</strong>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 2 Studs/Bolts M6x20 */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
+                  <div className="text-left font-mono text-xs">
                     <div className="font-bold text-slate-900">
-                      پیچ پایه جوشی مقاومتی M6x20 استاندارد
+                      مصرف ناخالص کل: {formatNumber(Math.round(order.orderQty * (order.unitWeightKg || 1.25) * 1.035))} کیلوگرم
                     </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 font-mono">
-                      ۲ عدد در هر براکت
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    اتصال در مرحله OP50 مکمل براکت ضدسرقت با پرس‌جوش مقاومتی
-                  </p>
-                  <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center font-mono">
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">نیاز این بچ</div>
-                      <div className="font-bold text-slate-900">{formatNumber(order.orderQty * 2)}</div>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">موجودی انبار</div>
-                      <div className="font-bold text-emerald-700">۱۲,۰۰۰ عدد</div>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded">
-                      <div className="text-[10px] text-slate-400">وضعیت</div>
-                      <div className="font-bold text-emerald-700">پوشش کامل 🟢</div>
+                    <div className="text-emerald-700 font-semibold text-[11px]">
+                      موجودی آزاد انبار رول: {formatNumber(order.warehouseAvailableKg || 18500)} کیلوگرم 🟢
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* ================================================================= */}
@@ -1242,8 +917,8 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
             />
             <span className="font-semibold text-slate-700">
               {canProceed
-                ? 'کلیه موجودی‌های نیمه‌ساخته و قطعات پیش‌ساخته برای این دستور کار تایید شدند.'
-                : 'برای کسری قطعات پیش‌ساخته، ابتدا Sub-MO صادر کنید یا موجودی پای کار را اختصاص دهید.'}
+                ? 'کلیه پیش‌نیازها و موجودی قطعات پیش‌ساخته تایید شدند. آماده صدور نهایی دستور کار.'
+                : 'برای ردیف‌های دارای کسری، روی دکمه «صدور دستور تولید فرعی» کلیک کنید یا با پذیرش ریسک ادامه دهید.'}
             </span>
           </div>
 
@@ -1253,7 +928,7 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer transition-colors"
             >
-              انصراف / بازگشت به ویرایش MO
+              انصراف / ویرایش مشخصات
             </button>
 
             {onConfirmIssueOrder && (
@@ -1263,17 +938,17 @@ export const PreMoWipInspectionModal: React.FC<PreMoWipInspectionModalProps> = (
                   onConfirmIssueOrder(order);
                   onClose();
                 }}
-                className={`px-5 py-2 rounded-xl font-bold text-white shadow-md transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-5 py-2.5 rounded-xl font-bold text-white shadow-md transition-all flex items-center gap-2 cursor-pointer ${
                   canProceed
                     ? 'bg-slate-900 hover:bg-slate-800'
-                    : 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'bg-amber-600 hover:bg-amber-700'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>
                   {canProceed
-                    ? 'تایید نهایی و صدور دستور تولید (MO)'
-                    : 'صدور دستور تولید همگام با Sub-MOها'}
+                    ? 'تایید نهایی و صدور دستور تولید اصلی (Confirm MO)'
+                    : 'تایید و صدور دستور تولید همراه با Sub-MOهای صادره'}
                 </span>
               </button>
             )}
