@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   LayoutDashboard,
   Layers,
@@ -35,6 +35,7 @@ import {
   Building,
   BookOpen,
   Disc,
+  AlertTriangle,
 } from 'lucide-react';
 import { UserRoleProfile } from '../types/inventory';
 import {
@@ -43,6 +44,31 @@ import {
   COLOR_THEMES,
 } from '../types/theme';
 import { InventorySubTab } from './inventory/InventoryModuleView';
+
+const DYNAMIC_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard,
+  ScrollText,
+  Boxes,
+  FileSignature,
+  CalendarDays,
+  Hammer,
+  Wrench,
+  FileSpreadsheet,
+  Cpu,
+  Layers,
+  GitCommit,
+  Printer,
+  Sparkles,
+  Truck,
+  Disc,
+  BellRing,
+  Search,
+  Database: ScrollText,
+  Sliders: Settings,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+};
 import { ProductionWorkbenchSubTab } from './production/ErpProductionWorkbenchView';
 import { PlanningSubTabKey } from './planning/ProductionPlanningModuleView';
 import { toPersianDigits } from '../utils/formatters';
@@ -152,6 +178,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [collapsed, setCollapsed] = useState(false);
   const [showAllForRole, setShowAllForRole] = useState(false);
   const [moduleSearch, setModuleSearch] = useState('');
+  const [dbMenus, setDbMenus] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/menus/tree')
+      .then(res => res.json())
+      .then(json => {
+        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          setDbMenus(json.data);
+        }
+      })
+      .catch(err => {
+        console.warn('[Sidebar] Dynamic menu fetch failed, using fallback:', err?.message);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     core: true,
     planning_prod: true,
@@ -481,16 +525,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ]
   );
 
+  // Dynamic Menu Mapping from Database (Prisma Menu Table)
+  const displayNavItems: NavGroup['items'] = useMemo(() => {
+    if (dbMenus.length === 0) {
+      return flatTenItems;
+    }
+
+    return flatTenItems.map(staticItem => {
+      const dbMatch = dbMenus.find((m: any) => {
+        if (staticItem.tab === 'dashboard' && m.path === '/dashboard') return true;
+        if (staticItem.tab === 'master_data' && m.path === '/master-data') return true;
+        if (staticItem.tab === 'production' && m.path === '/production') return true;
+        if (staticItem.tab === 'inventory' && m.path === '/inventory') return true;
+        return m.path?.includes(staticItem.tab);
+      });
+
+      if (!dbMatch) return staticItem;
+
+      const IconComponent =
+        dbMatch.icon && DYNAMIC_ICON_MAP[dbMatch.icon]
+          ? DYNAMIC_ICON_MAP[dbMatch.icon]
+          : staticItem.icon;
+
+      // Always prioritize fully functional and configured subModules for production, planning, inventory and machines
+      let dynamicSubs = staticItem.subModules;
+      if (!dynamicSubs && dbMatch.children && Array.isArray(dbMatch.children) && dbMatch.children.length > 0) {
+        dynamicSubs = dbMatch.children.map((child: any) => {
+          const ChildIcon =
+            child.icon && DYNAMIC_ICON_MAP[child.icon]
+              ? DYNAMIC_ICON_MAP[child.icon]
+              : Layers;
+          return {
+            id: child.id,
+            tab: staticItem.tab,
+            label: child.title,
+            keywords: `${child.title} ${child.path || ''}`,
+            icon: ChildIcon,
+            navParams: {
+              productionViewMode: child.path?.includes('logs') ? 'VOUCHERS' : 'ERP_WORKBENCH',
+              productionModuleTab: child.path?.includes('wip') ? 'LIVE_WIP_OP_TRACKER' : 'MULTI_PART_SCHEDULER',
+            },
+          };
+        });
+      }
+
+      return {
+        ...staticItem,
+        label: dbMatch.title || staticItem.label,
+        flatLabel: dbMatch.title || staticItem.flatLabel,
+        icon: IconComponent,
+        subModules: dynamicSubs,
+      };
+    });
+  }, [dbMenus, flatTenItems]);
+
   const navGroups: NavGroup[] = useMemo(
     () => [
       {
         id: 'core',
         groupTitle: 'ماژول‌های اصلی کارخانه',
         defaultOpen: true,
-        items: flatTenItems,
+        items: displayNavItems,
       },
     ],
-    [flatTenItems]
+    [displayNavItems]
   );
 
   const isRoleFiltered = currentRole !== 'ADMIN' && !showAllForRole;
@@ -616,7 +714,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
            ================================================================= */}
         {isFlatListMode && !searchNormalized ? (
           <nav className="space-y-1">
-            {flatTenItems.map(item => {
+            {displayNavItems.map(item => {
               const isMainActive = activeTab === item.tab;
               const Icon = item.icon;
               const showSubModules =

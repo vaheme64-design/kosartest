@@ -9,7 +9,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { ManufacturingOperation } from '../../types/productionWip';
-import { SCRAP_REASONS } from '../../types/inventory';
+import { DynamicSelect } from '../common/DynamicSelect';
 import { formatNumber, toPersianDigits } from '../../utils/formatters';
 
 interface OperationProductionModalProps {
@@ -206,21 +206,17 @@ export const OperationProductionModal: React.FC<OperationProductionModalProps> =
           {/* Scrap Reason (Required if scrap > 0) */}
           {scrap > 0 && (
             <div className="space-y-1.5 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl">
-              <label className="text-xs font-bold text-rose-700 block">
-                علت فنی ضایعات (الزام مهندسی کیفیت) <span className="text-rose-400">*</span>
-              </label>
-              <select
+              <DynamicSelect
+                categoryCode="SCRAP_REASON"
+                label="علت فنی ضایعات (الزام مهندسی کیفیت از دیتابیس MasterItem)"
                 value={scrapReason}
-                onChange={e => setScrapReason(e.target.value)}
-                className="w-full bg-white border border-rose-500/40 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-rose-400"
-              >
-                <option value="">-- انتخاب علت استاندارد ضایعات --</option>
-                {SCRAP_REASONS.map((r, i) => (
-                  <option key={i} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                valueField="value"
+                onChange={(val, item) => setScrapReason(item?.value || val)}
+                required
+                allowAddOption={true}
+                placeholder="-- انتخاب علت ضایعات از پایگاه داده --"
+                selectClassName="bg-white border-rose-500/40"
+              />
             </div>
           )}
 

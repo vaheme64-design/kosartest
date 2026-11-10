@@ -37,6 +37,7 @@ import {
 import { formatNumber, formatWeightKg, getVoucherTypeLabel, toPersianDigits } from '../utils/formatters';
 import { QuickEntryModals, QuickCreateEntityType } from './common/QuickEntryModals';
 import { MasterDataSkeleton } from './ui/Skeleton';
+import { DynamicSelect } from './common/DynamicSelect';
 
 interface TransactionsVouchersViewProps {
   parts: Part[];
@@ -883,20 +884,16 @@ export const TransactionsVouchersView: React.FC<TransactionsVouchersViewProps> =
 
           {/* Scrap Reason (For Scrap only) */}
           {voucherType === 'SCRAP' && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">علت عیب و بروز ضایعات *</label>
-              <select
-                value={scrapReason}
-                onChange={e => setScrapReason(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-slate-400"
-              >
-                {SCRAP_REASONS.map(r => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <DynamicSelect
+              categoryCode="SCRAP_REASON"
+              label="علت عیب و بروز ضایعات (استخراج از دیتابیس MasterItem)"
+              value={scrapReason}
+              valueField="value"
+              onChange={(val, item) => setScrapReason(item?.value || val)}
+              required
+              allowAddOption={true}
+              placeholder="-- انتخاب علت ضایعات از پایگاه داده --"
+            />
           )}
 
           {/* Reference Document */}

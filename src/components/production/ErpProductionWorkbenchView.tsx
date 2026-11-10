@@ -53,6 +53,11 @@ import { getDynamicWorkDays, getCurrentJalaliDate, getJalaliMonthDays } from '..
 import { useErpRouter } from '../../context/RouterContext';
 import { PreMoWipInspectionModal } from '../workflow/PreMoWipInspectionModal';
 import { HighwayPartScenario } from '../workflow/FactoryHighwayWorkbench';
+import { AuditConfirmationModal } from '../common/AuditConfirmationModal';
+import { useAuditAction } from '../../hooks/useAuditAction';
+import { DynamicSelect } from '../common/DynamicSelect';
+import { D3MaterialFlowDiagram } from './D3MaterialFlowDiagram';
+import { MachineOverlapAlertWidget } from '../planning/MachineOverlapAlertWidget';
 
 export interface ScheduledOpStep {
   opId: string;
@@ -569,6 +574,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
 }) => {
   // Major Operational Sub-Modules
   const router = useErpRouter();
+  const auditAction = useAuditAction();
   const [activeModuleTab, setActiveModuleTab] = useState<ProductionWorkbenchSubTab>(() => {
     if (router.route.tab === 'production' && router.route.productionModuleTab) {
       return router.route.productionModuleTab;
@@ -740,28 +746,20 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
     });
   };
 
-  // Modal for Mandatory Pause / Hold of a Work Order Operation
+  // Modal for Mandatory Pause / Hold of a Work Order Operation (Dynamic MasterItem)
   const [holdModalContext, setHoldModalContext] = useState<{
     partItem: MultiPartScheduleItem;
     op: ScheduledOpStep;
   } | null>(null);
-  const [holdReasonCode, setHoldReasonCode] = useState<string>('DOWNTIME_TOOLING');
+  const [holdReasonCode, setHoldReasonCode] = useState<string>('DIE_BREAKDOWN');
+  const [holdReasonText, setHoldReasonText] = useState<string>('شکستگی یا گیر سنبه و ماتریس قالب (نیاز به قالب‌سازی)');
   const [holdDescription, setHoldDescription] = useState<string>('');
   const [holdEstimatedMinutes, setHoldEstimatedMinutes] = useState<number>(30);
 
-  const HOLD_REASONS = [
-    { code: 'DOWNTIME_TOOLING', label: 'خرابی قالب، سنبه، ماتریس یا سایش تیغه (نیاز به قالب‌سازی)', category: 'UNPLANNED_BREAKDOWN' },
-    { code: 'DOWNTIME_PRESS', label: 'نقص فنی مکانیکی، نشتی روغن هیدرولیک یا افت فشار باد پرس', category: 'UNPLANNED_BREAKDOWN' },
-    { code: 'MATERIAL_SHORTAGE', label: 'کسری رول ورق، عدم تطابق ابعاد نوار یا اتمام مهره جوشی', category: 'MATERIAL_SHORTAGE' },
-    { code: 'QC_DEFECT_STOP', label: 'توقف کیفی توسط بازرس خط (پلیسه بیش از حد / عدم انطباق ابعادی)', category: 'MINOR_STOP' },
-    { code: 'WAITING_INSPECTION', label: 'توقف در انتظار تایید قطعه اول توسط آزمایشگاه (ISIR / First Piece)', category: 'SETUP_CHANGE' },
-    { code: 'PLANNED_SMED', label: 'توقف برنامه‌ریزی‌شده تعویض قالب و ستاپ فیکسچر (SMED)', category: 'SETUP_CHANGE' },
-    { code: 'POWER_FACILITY', label: 'قطعی برق سراسری، افت فشار باد مرکزی کمپرسور یا عیب چیلر', category: 'UNPLANNED_BREAKDOWN' },
-  ];
-
   const handleOpenHoldModal = (partItem: MultiPartScheduleItem, op: ScheduledOpStep) => {
     setHoldModalContext({ partItem, op });
-    setHoldReasonCode('DOWNTIME_TOOLING');
+    setHoldReasonCode('DIE_BREAKDOWN');
+    setHoldReasonText('شکستگی یا گیر سنبه و ماتریس قالب (نیاز به قالب‌سازی)');
     setHoldDescription('');
     setHoldEstimatedMinutes(30);
   };
@@ -769,8 +767,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   const handleConfirmHold = () => {
     if (!holdModalContext) return;
     const { partItem, op } = holdModalContext;
-    const reasonObj = HOLD_REASONS.find(r => r.code === holdReasonCode);
-    const reasonLabel = reasonObj?.label || holdReasonCode;
+    const reasonLabel = holdReasonText || holdReasonCode;
 
     // 1. Update schedule step status to ON_HOLD
     const nextSchedule = scheduleItems.map(item => {
@@ -800,7 +797,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       const newDtEntry = {
         id: `DT-${Date.now()}`,
         machineCode: op.machineCode,
-        category: (reasonObj?.category || 'UNPLANNED_BREAKDOWN') as any,
+        category: 'UNPLANNED_BREAKDOWN' as any,
         durationMinutes: holdEstimatedMinutes || 30,
         startHour: `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`,
         reason: `${op.opCode} (${partItem.partName}): ${reasonLabel}${holdDescription ? ` | ${holdDescription}` : ''}`,
@@ -821,28 +818,81 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   };
 
   const handleResumeOrder = (partItem: MultiPartScheduleItem, op: ScheduledOpStep) => {
-    if (!confirm(`آیا علت توقف روی دستگاه «${op.machineName}» برطرف شده و خط آماده راه‌اندازی و ادامه ضربه است؟`)) {
-      return;
-    }
-    const nextSchedule = scheduleItems.map(item => {
-      if (item.id !== partItem.id) return item;
-      return {
-        ...item,
-        ops: item.ops.map(o => {
-          if (o.opId !== op.opId) return o;
+    auditAction.requestAuditAction({
+      title: 'راه‌اندازی مجدد خط و لغو توقف (Resume)',
+      actionSummary: `رفع توقف موقت روی دستگاه «${op.machineName}» برای قطعه «${partItem.partName}» (مرحله ${op.opCode} - دستور ${partItem.orderCode}) و تغییر وضعیت به در جریان (IN_PROGRESS)`,
+      entityName: 'ScheduledOpStep',
+      entityId: `${partItem.orderCode}-${op.opCode}`,
+      actionType: 'RESUME_OPERATION',
+      confirmButtonText: 'تایید راه‌اندازی و ثبت ممیزی',
+      onConfirm: async (reason: string) => {
+        const nextSchedule = scheduleItems.map(item => {
+          if (item.id !== partItem.id) return item;
           return {
-            ...o,
-            status: 'IN_PROGRESS' as const,
-            holdTimestamp: undefined,
+            ...item,
+            ops: item.ops.map(o => {
+              if (o.opId !== op.opId) return o;
+              return {
+                ...o,
+                status: 'IN_PROGRESS' as const,
+                holdTimestamp: undefined,
+              };
+            }),
           };
-        }),
-      };
+        });
+        saveSchedule(nextSchedule);
+        setToastNotice({
+          type: 'success',
+          title: `تولید روی دستگاه «${op.machineName}» مجدداً راه‌اندازی شد`,
+          detail: `وضعیت دستور کار مرحله ${op.opCode} به «در جریان» بازگردانده شد. دلیل ممیزی: «${reason}».`,
+        });
+      },
     });
-    saveSchedule(nextSchedule);
-    setToastNotice({
-      type: 'success',
-      title: `تولید روی دستگاه «${op.machineName}» مجدداً راه‌اندازی شد`,
-      detail: `وضعیت دستور کار مرحله ${op.opCode} به «در جریان» بازگردانده شد.`,
+  };
+
+  const handleChangeOpStatusAudit = (
+    partItem: MultiPartScheduleItem,
+    op: ScheduledOpStep,
+    targetStatus: ScheduledOpStep['status']
+  ) => {
+    const statusLabels: Record<ScheduledOpStep['status'], string> = {
+      PLANNED: 'برنامه‌ریزی‌شده',
+      IN_PROGRESS: 'در جریان تولید',
+      ON_HOLD: 'توقف موقت',
+      COMPLETED: 'تکمیل‌شده',
+      ROLLED_FORWARD: 'انتقال به شیفت بعد',
+    };
+
+    auditAction.requestAuditAction({
+      title: `تغییر وضعیت مرحله ${op.opCode} قطعه ${partItem.partName}`,
+      actionSummary: `تغییر وضعیت عملیات مرحله ${op.opCode} روی «${op.machineName}» از «${statusLabels[op.status]}» به «${statusLabels[targetStatus]}» برای دستور ساخت ${partItem.orderCode}`,
+      entityName: 'ScheduledOpStep',
+      entityId: `${partItem.orderCode}-${op.opCode}`,
+      actionType: 'STATUS_CHANGE',
+      isDestructive: targetStatus === 'ON_HOLD',
+      confirmButtonText: 'تایید تغییر وضعیت و ثبت در ممیزی',
+      onConfirm: async (reason: string) => {
+        const nextSchedule = scheduleItems.map(item => {
+          if (item.id !== partItem.id) return item;
+          return {
+            ...item,
+            ops: item.ops.map(o => {
+              if (o.opId !== op.opId) return o;
+              return {
+                ...o,
+                status: targetStatus,
+                holdTimestamp: targetStatus === 'ON_HOLD' ? new Date().toISOString() : undefined,
+              };
+            }),
+          };
+        });
+        saveSchedule(nextSchedule);
+        setToastNotice({
+          type: 'info',
+          title: `وضعیت مرحله ${op.opCode} به ${statusLabels[targetStatus]} تغییر یافت`,
+          detail: `تغییر وضعیت در زمان‌بندی اعمال شد. دلیل ثبت‌شده در ممیزی: «${reason}».`,
+        });
+      },
     });
   };
 
@@ -998,17 +1048,28 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
   const [editPartTargetQty, setEditPartTargetQty] = useState<number>(1000);
   const [editPartOrderCode, setEditPartOrderCode] = useState<string>('');
 
-  // Delete Scheduled Item Handler (حذف برنامه تولید قطعه)
+  // Delete Scheduled Item Handler (حذف برنامه تولید قطعه با ممیزی کامل)
   const handleDeleteScheduleItem = (itemId: string, partName: string) => {
-    if (!confirm(`آیا از حذف برنامه تولید قطعه «${partName}» اطمینان دارید؟ تمامی مراحل زمان‌بندی‌شده آن حذف خواهند شد.`)) {
-      return;
-    }
-    const next = scheduleItems.filter(item => item.id !== itemId);
-    saveSchedule(next);
-    setToastNotice({
-      type: 'info',
-      title: `برنامه تولید قطعه «${partName}» با موفقیت حذف شد`,
-      detail: 'مراحل و دستور کار مربوطه از ماتریس زمان‌بندی و برنامه روزانه خارج گردید.',
+    const targetItem = scheduleItems.find(item => item.id === itemId);
+    const orderCode = targetItem?.orderCode || itemId;
+
+    auditAction.requestAuditAction({
+      title: 'حذف برنامه تولید و ابطال دستور کار (Delete MO)',
+      actionSummary: `حذف دائم برنامه تولید قطعه «${partName}» با شماره دستور ${orderCode} و ابطال زمان‌بندی تمام مراحل OP مربوطه در خط`,
+      entityName: 'ManufacturingOrder',
+      entityId: orderCode,
+      actionType: 'DELETE_ORDER',
+      isDestructive: true,
+      confirmButtonText: 'حذف نهایی و ثبت در لاگ ممیزی',
+      onConfirm: async (reason: string) => {
+        const next = scheduleItems.filter(item => item.id !== itemId);
+        saveSchedule(next);
+        setToastNotice({
+          type: 'info',
+          title: `برنامه تولید قطعه «${partName}» با موفقیت حذف شد`,
+          detail: `مراحل و دستور کار مربوطه از ماتریس زمان‌بندی خارج گردید. دلیل ممیزی: «${reason}».`,
+        });
+      },
     });
   };
 
@@ -2113,12 +2174,14 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       {/* TAB 1: MULTI-PART & STAGGERED MULTI-OP SCHEDULER MATRIX              */}
       {/* ==================================================================== */}
       {activeModuleTab === 'MULTI_PART_SCHEDULER' && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">
-                جدول زمان‌بندی پله‌ای مراحل تولید قطعات (Staggered Multi-OP Scheduling Matrix)
-              </h3>
+        <div className="space-y-4">
+          <MachineOverlapAlertWidget compact />
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">
+                  جدول زمان‌بندی پله‌ای مراحل تولید قطعات (Staggered Multi-OP Scheduling Matrix)
+                </h3>
               <p className="text-slate-500 mt-0.5">
                 برای هر قطعه می‌توانید مشخص کنید کدام مراحل (مثلاً OP10 تا OP30) امروز انجام شوند و کدام مراحل (مثلاً OP40 و OP50) در روزهای بعد؛ روی هر مرحله کلیک کنید تا تولید آن ثبت شود.
               </p>
@@ -2275,6 +2338,36 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                               </div>
 
                               <div className="space-y-1.5 pt-1.5 border-t border-slate-200/70 text-[10px]">
+                                {/* Status Selector backed by Audit Trail */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 font-bold">وضعیت مرحله:</span>
+                                  <select
+                                    value={op.status}
+                                    onChange={e =>
+                                      handleChangeOpStatusAudit(
+                                        item,
+                                        op,
+                                        e.target.value as ScheduledOpStep['status']
+                                      )
+                                    }
+                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${
+                                      op.status === 'COMPLETED'
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                        : op.status === 'IN_PROGRESS'
+                                        ? 'bg-blue-50 text-blue-800 border-blue-300'
+                                        : op.status === 'ON_HOLD'
+                                        ? 'bg-rose-50 text-rose-800 border-rose-300'
+                                        : 'bg-slate-100 text-slate-700 border-slate-300'
+                                    }`}
+                                    title="تغییر وضعیت مرحله با ثبت الزامی دلیل ممیزی"
+                                  >
+                                    <option value="PLANNED">برنامه‌ریزی‌شده</option>
+                                    <option value="IN_PROGRESS">در جریان</option>
+                                    <option value="ON_HOLD">توقف موقت</option>
+                                    <option value="COMPLETED">تکمیل‌شده</option>
+                                  </select>
+                                </div>
+
                                 {/* Day Selector for this specific OP */}
                                 <div className="flex items-center justify-between">
                                   <span className="text-slate-500">روز اجرا:</span>
@@ -2484,6 +2577,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -2802,15 +2896,17 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
       {/* TAB 3: LIVE WIP PER OP TRACKER & AUTO WAREHOUSE RECEIPT              */}
       {/* ==================================================================== */}
       {activeModuleTab === 'LIVE_WIP_OP_TRACKER' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
-          <div className="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-                <span>
-                  رهگیر لحظه‌ای موجودی بین‌مرحله‌ای قطعات در خط (WIP per OP) و رسید خودکار انبار در مرحله آخر
-                </span>
-              </h3>
+        <div className="space-y-4">
+          <D3MaterialFlowDiagram />
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                  <span>
+                    رهگیر لحظه‌ای موجودی بین‌مرحله‌ای قطعات در خط (WIP per OP) و رسید خودکار انبار در مرحله آخر
+                  </span>
+                </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 مشاهده دقیق اینکه از هر قطعه در کدام مرحله (OP10، OP20، OP30...) چند عدد نیمه‌ساخته در خط وجود دارد و چند عدد از مرحله آخر وارد انبار محصول نهایی شده است.
               </p>
@@ -2927,6 +3023,7 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -4702,23 +4799,18 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
               }}
               className="space-y-3.5"
             >
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  کد و علت توقف خط (الزامی) *
-                </label>
-                <select
-                  value={holdReasonCode}
-                  onChange={e => setHoldReasonCode(e.target.value)}
-                  required
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:bg-white cursor-pointer"
-                >
-                  {HOLD_REASONS.map(r => (
-                    <option key={r.code} value={r.code}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <DynamicSelect
+                categoryCode="DOWNTIME_REASON"
+                label="کد و علت توقف خط (استخراج شده از دیتابیس MasterItem)"
+                value={holdReasonCode}
+                onChange={(val, item) => {
+                  setHoldReasonCode(val);
+                  if (item) setHoldReasonText(item.value);
+                }}
+                required
+                allowAddOption={true}
+                showCodeBadge={true}
+              />
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -4939,6 +5031,9 @@ export const ErpProductionWorkbenchView: React.FC<ErpProductionWorkbenchViewProp
           handleOpenOpExecutionModal(partItem, opStep);
         }}
       />
+
+      {/* Enterprise Audit Confirmation Modal (Mandatory reason >= 10 chars) */}
+      <AuditConfirmationModal {...auditAction.modalProps} />
     </div>
   );
 };

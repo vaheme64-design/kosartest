@@ -1389,3 +1389,257 @@ model ImportErrorRecord {
   @@index([batchId, rowNumber])
   @@map("import_error_records")
 }
+
+// =========================================================================
+// 6. ENTERPRISE ZERO-HARDCODING, AUDIT TRAIL, DYNAMIC BOM & WORK ORDERS
+// =========================================================================
+
+// دسته‌بندی‌های اطلاعات پایه برای جلوگیری از هاردکد (Master Categories)
+model MasterCategory {
+  id          String       @id @default(uuid())
+  code        String       @unique // e.g. "UNIT_OF_MEASURE", "DOWNTIME_REASON", "QUALITY_CLASS", "SCRAP_REASON", "ITEM_TYPE"
+  name        String       // نام فارسی دسته‌بندی پایه
+  description String?      // توضیحات کاربردی
+  isSystem    Boolean      @default(false)
+  isDeleted   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  items       MasterItem[]
+
+  @@map("master_categories")
+}
+
+// اقلام اطلاعات پایه و مقادیر داینامیک سیستم (Master Items)
+model MasterItem {
+  id           String         @id @default(uuid())
+  categoryId   String
+  category     MasterCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  code         String         // کد مقدار (e.g. "KG", "PCS", "DIE_BREAKDOWN", "COIL_CHANGE")
+  value        String         // مقدار/عنوان فارسی (e.g. "کیلوگرم", "عدد", "شکستگی یا گیر قالب")
+  orderIndex   Int            @default(0)
+  isActive     Boolean        @default(true)
+  metadata     Json?          // داده‌های متغیر جانبی
+  isDeleted    Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  downtimeLogs DowntimeLog[]
+
+  @@unique([categoryId, code])
+  @@index([categoryId, isActive])
+  @@map("master_items")
+}
+
+// لاگ ردیابی و ممیزی رویدادهای سازمانی (Enterprise Audit Trail & Change Log)
+model ActionLog {
+  id         String   @id @default(uuid())
+  entityName String   // نام جدول یا موجودیت (e.g. "Item", "WorkOrder", "BomComponent")
+  entityId   String   // شناسه رکورد تغییریافته
+  actionType String   // CREATE, UPDATE, DELETE, RELEASE, STATUS_CHANGE, HOLD, RECOVERY
+  oldValues  Json?    // مقادیر قبلی فیلدها قبل از تغییر
+  newValues  Json?    // مقادیر جدید فیلدها پس از تغییر
+  reason     String   // توضیح اجباری کاربر (دلیل تغییر، توقف، لغو یا صدور)
+  userId     String?  // شناسه کاربر ثبت‌کننده
+  ipAddress  String?  // آدرس IP کاربر
+  userAgent  String?  // مشخصات مرورگر یا کلاینت
+  isDeleted  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([entityName, entityId])
+  @@index([actionType, createdAt])
+  @@map("action_logs")
+}
+
+// مدیریت داینامیک ساختار منوهای درختی سیستم (Dynamic Self-Referencing Menu Tree)
+model Menu {
+  id             String   @id @default(uuid())
+  title          String   // عنوان منو در نوار ناوبری (مثلا "ماتریس برنامه‌ریزی تولید")
+  path           String?  // مسیر داینامیک URL (مثلا "/production/matrix")
+  icon           String?  // نام آیکون Lucide
+  orderIndex     Int      @default(0) // ترتیب نمایش
+  permissionCode String?  // کد مجوز امنیتی لازم برای مشاهده
+  isActive       Boolean  @default(true)
+  isDeleted      Boolean  @default(false)
+
+  parentId       String?
+  parent         Menu?    @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Menu[]   @relation("MenuHierarchy")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([parentId, orderIndex])
+  @@map("menus")
+}
+
+// کاتالوگ جامع قطعات و اقلام مهندسی تولید (Items: Finished Goods, WIP, Raw Materials)
+model Item {
+  id             String             @id @default(uuid())
+  code           String             @unique // کد فنی کالا (e.g. "PRT-ECU-BRK-01", "WIP-ECU-BASE-10", "RM-COIL-DC04")
+  name           String             // نام کامل کالا (e.g. "مجموعه براکت ضدسرقت رایانه موتور")
+  type           String             // نوع کالا: FINISHED_GOOD, SEMI_FINISHED, RAW_MATERIAL
+  carModel       String?            // مدل خودرو (پژو ۲۰۶، تارا، دنا پلاس)
+  unitId         String?            // شناسه واحد سنجش یا MasterItem
+  unit           String?            @default("PCS") // واحد شمارش
+  weightNetKg    Decimal?           // وزن خالص قطعه
+  weightGrossKg  Decimal?           // وزن ناخالص مصرفی
+  minSafetyStock Decimal            @default(0) // حداقل موجودی احتیاطی
+  isDeleted      Boolean            @default(false) // حذف منطقی Soft Delete
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // روابط ساختار محصول (BOM)
+  bomParents     BomComponent[]     @relation("ParentItem")
+  bomChildren    BomComponent[]     @relation("ChildItem")
+
+  // توالی عملیات مهندسی روتینگ
+  routingOperations RoutingOperation[]
+
+  // دستور کارهای ساخت
+  workOrders     WorkOrder[]
+
+  @@index([type, isDeleted])
+  @@index([code])
+  @@map("items")
+}
+
+// ساختار شکست محصول و ارتباط والد و فرزندی چندسطحی (Multi-Level Bill of Materials)
+model BomComponent {
+  id           String   @id @default(uuid())
+  parentItemId String
+  parentItem   Item     @relation("ParentItem", fields: [parentItemId], references: [id], onDelete: Cascade)
+  childItemId  String
+  childItem    Item     @relation("ChildItem", fields: [childItemId], references: [id], onDelete: Restrict)
+  quantity     Decimal  @default(1) // ضریب مصرف قطعه فرزند به ازای یک واحد والد
+  version      String   @default("1.0") // نسخه مهندسی BOM
+  scrapFactor  Decimal  @default(0) // درصد ضایعات پیش‌بینی‌شده
+  notes        String?  // یادداشت مهندسی
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([parentItemId, childItemId, version])
+  @@index([parentItemId])
+  @@index([childItemId])
+  @@map("bom_components")
+}
+
+// مراکز کاری، ماشین‌آلات و ایستگاه‌های تولید (Work Centers & Production Lines)
+model WorkCenter {
+  id                 String             @id @default(uuid())
+  code               String             @unique // کد ایستگاه یا پرس (e.g. "PRS-800T-01", "WLD-SPOT-02")
+  name               String             // نام کامل ایستگاه (e.g. "پرس ۸۰۰ تن هیدرولیک کشش")
+  hallLocation       String?            // سالن استقرار (سالن پرس سنگین، سالن جوشکاری، سالن رنگ)
+  capacityPerHour    Decimal?           // ظرفیت اسمی بر ساعت
+  status             String             @default("ACTIVE") // ACTIVE, MAINTENANCE, BREAKDOWN, IDLE
+  isDeleted          Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  routingOperations  RoutingOperation[]
+  downtimeLogs       DowntimeLog[]
+
+  @@index([status, isDeleted])
+  @@map("work_centers")
+}
+
+// توالی عملیات ساخت و روتینگ قطعه با قفل تقدم و تاخر (Routing Operations & Precedence Locking)
+model RoutingOperation {
+  id              String             @id @default(uuid())
+  itemId          String
+  item            Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  opNumber        Int                // شماره گام (10, 20, 30, 40...)
+  opCode          String             // کد عملیات (OP10, OP20)
+  opName          String             // شرح فرآیند (برش رول، بلنکینگ، کشش، خم، پانچ، پرس‌جوش)
+  workCenterId    String
+  workCenter      WorkCenter         @relation(fields: [workCenterId], references: [id], onDelete: Restrict)
+  requiresOpId    String?            // شناسه عملیات پیش‌نیاز جهت قفل تقدم جریان کار
+  requiresOp      RoutingOperation?  @relation("OperationPrecedence", fields: [requiresOpId], references: [id], onDelete: SetNull)
+  dependentOps    RoutingOperation[] @relation("OperationPrecedence")
+  setupTimeMin    Int                @default(0) // زمان ستاپ قالب (دقیقه)
+  cycleTimeSec    Int                @default(0) // زمان چرخه هر ضرب (ثانیه)
+  isDeleted       Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  productionLogs  ProductionLog[]
+
+  @@unique([itemId, opNumber])
+  @@index([itemId])
+  @@index([workCenterId])
+  @@map("routing_operations")
+}
+
+// دستور کارهای کارگاهی تولید (Work Orders / Manufacturing Orders)
+model WorkOrder {
+  id                String          @id @default(uuid())
+  orderNumber       String          @unique // شماره یکتای دستور کار (e.g. "WO-1404-1001")
+  itemId            String
+  item              Item            @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  plannedQuantity   Decimal         // تیراژ برنامه‌ریزی‌شده
+  completedQuantity Decimal         @default(0) // تیراژ سالم تولیدشده
+  scrapQuantity     Decimal         @default(0) // تیراژ ضایعات
+  status            String          @default("DRAFT") // DRAFT, RELEASED, IN_PROGRESS, COMPLETED, CANCELLED
+  startDate         DateTime        // تاریخ شروع برنامه‌ریزی‌شده
+  endDate           DateTime        // تاریخ پایان برنامه‌ریزی‌شده
+  actualStartDate   DateTime?       // تاریخ شروع واقعی
+  actualEndDate     DateTime?       // تاریخ پایان واقعی
+  notes             String?
+  isDeleted         Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  productionLogs    ProductionLog[]
+
+  @@index([itemId, status])
+  @@index([startDate, endDate])
+  @@map("work_orders")
+}
+
+// ثبت کارکرد تولید، تیراژ سالم و ضایعات پای خط (Production & Scrap Floor Logs)
+model ProductionLog {
+  id            String           @id @default(uuid())
+  workOrderId   String
+  workOrder     WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  operationId   String
+  operation     RoutingOperation @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  goodQuantity  Decimal          @default(0) // تولید سالم تایید شده
+  scrapQuantity Decimal          @default(0) // ضایعات ثبت‌شده
+  operatorId    String?          // شناسه یا کد پرسنلی اپراتور
+  isApproved    Boolean          @default(false) // تاییدیه سرپرست شیفت/کیفیت
+  approvedBy    String?          // نام یا شناسه تاییدکننده
+  approvedAt    DateTime?        // زمان تایید
+  logDate       DateTime         @default(now()) // تاریخ ثبت کارکرد
+  shiftName     String?          // شیفت کاری (صبح، عصر، شب)
+  notes         String?
+  isDeleted     Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([workOrderId, operationId])
+  @@index([logDate])
+  @@map("production_logs")
+}
+
+// ثبت وقایع و لاگ توقفات ماشین‌آلات و خطوط تولید (Work Center Downtime Logs)
+model DowntimeLog {
+  id               String      @id @default(uuid())
+  workCenterId     String
+  workCenter       WorkCenter  @relation(fields: [workCenterId], references: [id], onDelete: Restrict)
+  downtimeReasonId String
+  downtimeReason   MasterItem  @relation(fields: [downtimeReasonId], references: [id], onDelete: Restrict)
+  startTime        DateTime    // زمان شروع توقف
+  endTime          DateTime?   // زمان خاتمه توقف
+  durationMinutes  Int         @default(0) // مدت زمان توقف به دقیقه
+  operatorNotes    String?     // گزارش فنی یا تشریح علت اپراتور
+  isPlanned        Boolean     @default(false) // توقف برنامه‌ریزی‌شده یا اضطراری
+  isDeleted        Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([workCenterId, startTime])
+  @@index([downtimeReasonId])
+  @@map("downtime_logs")
+}
+

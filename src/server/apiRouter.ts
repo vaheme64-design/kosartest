@@ -152,6 +152,10 @@ import {
   updateConsumableStockOrRate,
 } from './oeeAndConsumablesEngine';
 import { ShiftFilterKey } from '../types/oeeAndConsumables';
+import { MrpService } from './services/MrpService';
+import { WipService } from './services/WipService';
+import { CapacityPlanningService } from './services/CapacityPlanningService';
+import { runErpIntegrationTest } from './runErpIntegrationTest';
 
 // Server-side State Store (in production can be wired to PostgreSQL / Prisma / SQL Server / ERP)
 let partsStore: Part[] = [...INITIAL_PARTS];
@@ -5602,6 +5606,522 @@ apiRouter.get('/maintenance/tpm-metrics', (_req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'خطا در محاسبه شاخص‌های TPM' });
   }
 });
+
+// =========================================================================
+// ENTERPRISE ZERO-HARDCODING MASTER DATA & DYNAMIC MENUS API
+// =========================================================================
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  SCRAP_TYPE: 'SCRAP_REASON',
+  SCRAP_REASONS: 'SCRAP_REASON',
+  DOWNTIME_REASONS: 'DOWNTIME_REASON',
+  DOWNTIME: 'DOWNTIME_REASON',
+  HOLD_REASONS: 'DOWNTIME_REASON',
+  HOLD_REASON: 'DOWNTIME_REASON',
+  UNITS: 'UNIT_OF_MEASURE',
+  UOM: 'UNIT_OF_MEASURE',
+  QUALITY: 'QUALITY_CLASS',
+  QUALITY_CLASSES: 'QUALITY_CLASS',
+};
+
+const DEFAULT_MASTER_CATEGORIES = [
+  {
+    code: 'DOWNTIME_REASON',
+    name: 'علل توقف خطوط و ماشین‌آلات (Downtime Reasons)',
+    description: 'کدهای استاندارد ثبت توقفات پای پرس، عیوب مکانیکی و لجستیک',
+    items: [
+      { code: 'DIE_BREAKDOWN', value: 'شکستگی یا گیر سنبه و ماتریس قالب (نیاز به قالب‌سازی)', orderIndex: 1 },
+      { code: 'COIL_REPLACE', value: 'تعویض کلاف ورق و ستاپ فیدر', orderIndex: 2 },
+      { code: 'PRESS_MECHANICAL', value: 'نقص فنی مکانیکی، نشتی روغن هیدرولیک یا افت فشار باد پرس', orderIndex: 3 },
+      { code: 'MAINTENANCE_PM', value: 'سرویس دوره‌ای و روان‌کاری برنامه‌ریزی‌شده (PM)', orderIndex: 4 },
+      { code: 'NO_MATERIAL', value: 'کسری رول ورق، عدم تطابق ابعاد نوار یا اتمام مهره جوشی', orderIndex: 5 },
+      { code: 'QC_DEFECT_STOP', value: 'توقف کیفی توسط بازرس خط (پلیسه بیش از حد / عدم انطباق ابعادی)', orderIndex: 6 },
+      { code: 'WAITING_ISIR', value: 'توقف در انتظار تایید قطعه اول توسط آزمایشگاه (ISIR / First Piece)', orderIndex: 7 },
+      { code: 'PLANNED_SMED', value: 'توقف برنامه‌ریزی‌شده تعویض قالب و ستاپ فیکسچر (SMED)', orderIndex: 8 },
+      { code: 'POWER_FACILITY', value: 'قطعی برق سراسری، افت فشار باد مرکزی کمپرسور یا عیب چیلر', orderIndex: 9 },
+    ],
+  },
+  {
+    code: 'SCRAP_REASON',
+    name: 'دلایل ایجاد ضایعات فلزی (Scrap Reasons)',
+    description: 'علل مهندسی تولید قطعات معیوب در فرآیند پرس‌کاری و برش',
+    items: [
+      { code: 'TEAR_CRACK', value: 'پارگی و ترک‌خوردگی در کشش عمیق', orderIndex: 1 },
+      { code: 'WRINKLING', value: 'چروک‌افتادگی در بلنک یا لبه ورق', orderIndex: 2 },
+      { code: 'BURR_HIGH', value: 'پلیسه بیش از حد مجاز برش گیوتین و سنبه', orderIndex: 3 },
+      { code: 'SURFACE_DEFECT', value: 'خط و خش، زدگی یا ناخالصی متالورژیکی', orderIndex: 4 },
+      { code: 'DIMENSION_OUT', value: 'انحراف ابعادی خارج از تلرانس نقشه مهندسی', orderIndex: 5 },
+      { code: 'SETUP_SCRAP', value: 'ضایعات ستاپ و تنظیم قالب در شروع تولید', orderIndex: 6 },
+    ],
+  },
+  {
+    code: 'UNIT_OF_MEASURE',
+    name: 'واحدهای سنجش و اندازه‌گیری (Units of Measure)',
+    description: 'واحدهای مصرف، بسته‌بندی و وزن‌سنجی قطعات و کلاف‌ها',
+    items: [
+      { code: 'KG', value: 'کیلوگرم (وزن ورق و کویل)', orderIndex: 1 },
+      { code: 'PCS', value: 'عدد (قطعه شمارشی)', orderIndex: 2 },
+      { code: 'TON', value: 'تن (محموله‌های سنگین)', orderIndex: 3 },
+      { code: 'M', value: 'متر (طول نوار ورق)', orderIndex: 4 },
+      { code: 'PALLET', value: 'پالت فلزی ساپکو', orderIndex: 5 },
+    ],
+  },
+  {
+    code: 'QUALITY_CLASS',
+    name: 'کلاس‌های کیفی بازرسی (Quality Classes)',
+    description: 'رتبه‌بندی کیفی قطعات تولیدی در ایستگاه‌های کنترل کیفیت',
+    items: [
+      { code: 'GRADE_A', value: 'تایید کامل استاندارد (کیفیت ممتاز)', orderIndex: 1 },
+      { code: 'GRADE_B', value: 'تایید مشروط / نیازمند دوباره‌کاری جزیی', orderIndex: 2 },
+      { code: 'REJECTED', value: 'عدم انطباق قطعی (اسقاط و بازیافت)', orderIndex: 3 },
+    ],
+  },
+];
+
+/**
+ * 1. GET /api/master-data/:categoryCode
+ * Returns all active, sorted MasterItems for the given category code from SQLite/Prisma.
+ */
+apiRouter.get('/master-data/:categoryCode', async (req: Request, res: Response) => {
+  try {
+    const rawCode = String(req.params.categoryCode || '').trim().toUpperCase();
+    const normalizedCode = CATEGORY_ALIASES[rawCode] || rawCode;
+    const prisma = getPrismaClient();
+
+    let category = await prisma.masterCategory.findFirst({
+      where: {
+        code: normalizedCode,
+        isDeleted: false,
+      },
+      include: {
+        items: {
+          where: {
+            isActive: true,
+            isDeleted: false,
+          },
+          orderBy: {
+            orderIndex: 'asc',
+          },
+        },
+      },
+    });
+
+    // If category not found in DB, seed it on the fly if a default exists
+    if (!category) {
+      const defaultTpl = DEFAULT_MASTER_CATEGORIES.find(c => c.code === normalizedCode);
+      if (defaultTpl) {
+        const createdCat = await prisma.masterCategory.create({
+          data: {
+            code: defaultTpl.code,
+            name: defaultTpl.name,
+            description: defaultTpl.description,
+            isSystem: true,
+          },
+        });
+
+        for (const it of defaultTpl.items) {
+          await prisma.masterItem.create({
+            data: {
+              categoryId: createdCat.id,
+              code: it.code,
+              value: it.value,
+              orderIndex: it.orderIndex,
+              isActive: true,
+            },
+          });
+        }
+
+        category = await prisma.masterCategory.findFirst({
+          where: { id: createdCat.id },
+          include: {
+            items: {
+              where: { isActive: true, isDeleted: false },
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        });
+      }
+    }
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: `دسته‌بندی اطلاعات پایه با کد «${normalizedCode}» یافت نشد.`,
+      });
+    }
+
+    res.json({
+      success: true,
+      category: {
+        id: category.id,
+        code: category.code,
+        name: category.name,
+        description: category.description,
+      },
+      data: category.items.map(item => ({
+        id: item.id,
+        code: item.code,
+        value: item.value,
+        orderIndex: item.orderIndex,
+        metadata: item.metadata,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching master data:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در واکشی داده‌های پایه',
+    });
+  }
+});
+
+/**
+ * 2. GET /api/master-data
+ * Returns all active master categories and their items.
+ */
+apiRouter.get('/master-data', async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrismaClient();
+    const categories = await prisma.masterCategory.findMany({
+      where: { isDeleted: false },
+      include: {
+        items: {
+          where: { isActive: true, isDeleted: false },
+          orderBy: { orderIndex: 'asc' },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      count: categories.length,
+      data: categories,
+    });
+  } catch (error) {
+    console.error('Error listing master categories:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در فهرست دسته‌بندی‌های پایه',
+    });
+  }
+});
+
+/**
+ * 3. POST /api/master-data/:categoryCode/items
+ * Dynamically adds a new MasterItem to a category with action logging.
+ */
+apiRouter.post('/master-data/:categoryCode/items', async (req: Request, res: Response) => {
+  try {
+    const rawCode = String(req.params.categoryCode || '').trim().toUpperCase();
+    const normalizedCode = CATEGORY_ALIASES[rawCode] || rawCode;
+    const { code, value, orderIndex = 0, metadata } = req.body;
+
+    if (!code || !value) {
+      return res.status(400).json({
+        success: false,
+        error: 'کد و عنوان مقدار پایه الزامی است.',
+      });
+    }
+
+    const prisma = getPrismaClient();
+    const category = await prisma.masterCategory.findFirst({
+      where: { code: normalizedCode, isDeleted: false },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: `دسته‌بندی پایه با کد «${normalizedCode}» یافت نشد.`,
+      });
+    }
+
+    const newItem = await prisma.masterItem.upsert({
+      where: {
+        categoryId_code: {
+          categoryId: category.id,
+          code: String(code).trim().toUpperCase(),
+        },
+      },
+      update: {
+        value: String(value).trim(),
+        orderIndex: Number(orderIndex) || 0,
+        metadata: metadata || null,
+        isActive: true,
+        isDeleted: false,
+      },
+      create: {
+        categoryId: category.id,
+        code: String(code).trim().toUpperCase(),
+        value: String(value).trim(),
+        orderIndex: Number(orderIndex) || 0,
+        metadata: metadata || null,
+        isActive: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `آیتم «${newItem.value}» با موفقیت در دسته‌بندی ${category.name} ثبت گردید.`,
+      data: newItem,
+    });
+  } catch (error) {
+    console.error('Error creating master item:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در افزودن آیتم پایه جدید',
+    });
+  }
+});
+
+/**
+ * 4. GET /api/menus/tree
+ * Returns dynamic hierarchical navigation tree from the Menu table.
+ */
+apiRouter.get('/menus/tree', async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrismaClient();
+    const rootMenus = await prisma.menu.findMany({
+      where: {
+        parentId: null,
+        isActive: true,
+        isDeleted: false,
+      },
+      include: {
+        children: {
+          where: {
+            isActive: true,
+            isDeleted: false,
+          },
+          orderBy: {
+            orderIndex: 'asc',
+          },
+        },
+      },
+      orderBy: {
+        orderIndex: 'asc',
+      },
+    });
+
+    res.json({
+      success: true,
+      count: rootMenus.length,
+      data: rootMenus,
+    });
+  } catch (error) {
+    console.error('Error fetching dynamic menu tree:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در بارگذاری منوهای سیستم',
+    });
+  }
+});
+
+// =========================================================================
+// ENTERPRISE SAP PP CORE SERVICES API (MRP, WIP BUFFER, CAPACITY OVERLAPS)
+// =========================================================================
+
+/**
+ * 1. GET /api/erp-services/work-orders
+ * Lists all active WorkOrders from Prisma with their Item and Routing operations.
+ */
+apiRouter.get('/erp-services/work-orders', async (_req: Request, res: Response) => {
+  try {
+    // Ensure concurrent work orders are seeded
+    await CapacityPlanningService.detectMachineOverlaps(new Date());
+    const prisma = getPrismaClient();
+    const workOrders = await prisma.workOrder.findMany({
+      where: { isDeleted: false },
+      include: {
+        item: {
+          include: {
+            routingOperations: {
+              where: { isDeleted: false },
+              include: { workCenter: true },
+              orderBy: { opNumber: 'asc' },
+            },
+          },
+        },
+      },
+      orderBy: { orderNumber: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      count: workOrders.length,
+      data: workOrders,
+    });
+  } catch (error) {
+    console.error('Error fetching work orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در دریافت لیست دستور کارها',
+    });
+  }
+});
+
+/**
+ * 2. GET /api/erp-services/mrp/:workOrderId
+ * Recursive BOM explosion and Gross Requirement calculation via MrpService.
+ */
+apiRouter.get('/erp-services/mrp/:workOrderId', async (req: Request, res: Response) => {
+  try {
+    const { workOrderId } = req.params;
+    const result = await MrpService.calculateMaterialRequirements(workOrderId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in MrpService.calculateMaterialRequirements:', error);
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در اجرای الگوریتم انفجار BOM (MRP)',
+    });
+  }
+});
+
+/**
+ * 3. GET /api/erp-services/wip/:workOrderId/:opId
+ * Inter-stage WIP buffer calculation & precedence lock check via WipService.
+ */
+apiRouter.get('/erp-services/wip/:workOrderId/:opId', async (req: Request, res: Response) => {
+  try {
+    const { workOrderId, opId } = req.params;
+    const result = await WipService.calculateOpBuffer(workOrderId, opId, false);
+    if (result.isPrecedenceLocked) {
+      return res.status(200).json({
+        ...result,
+        success: false,
+        error: result.errorMessage || 'قفل تقدم: بافر ورودی کافی نیست',
+      });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Error in WipService.calculateOpBuffer:', error);
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'قفل تقدم: بافر ورودی کافی نیست',
+    });
+  }
+});
+
+/**
+ * 4. GET /api/erp-services/wip-flow/:workOrderId
+ * Full work order material flow across all operations for D3.js live visualization.
+ */
+apiRouter.get('/erp-services/wip-flow/:workOrderId', async (req: Request, res: Response) => {
+  try {
+    const { workOrderId } = req.params;
+    const result = await WipService.getWorkOrderMaterialFlow(workOrderId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in WipService.getWorkOrderMaterialFlow:', error);
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در محاسبه گراف جریان مواد دستور کار',
+    });
+  }
+});
+
+/**
+ * 5. POST /api/erp-services/wip-log
+ * Allows recording a live ProductionLog in Prisma for an operation to immediately see the D3 Material Flow update!
+ */
+apiRouter.post('/erp-services/wip-log', async (req: Request, res: Response) => {
+  try {
+    const { workOrderId, operationId, goodQuantity, scrapQuantity = 0, shiftName = 'شیفت صبح', notes = '' } = req.body;
+    if (!workOrderId || !operationId || Number(goodQuantity) <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'شناسه دستور کار، مرحله عملیات و تعداد تولید سالم الزامی است.',
+      });
+    }
+
+    // Check precedence buffer first using WipService!
+    const bufferCheck = await WipService.calculateOpBuffer(workOrderId, operationId, false);
+    if (bufferCheck.isPrecedenceLocked) {
+      return res.status(400).json({
+        success: false,
+        error: bufferCheck.errorMessage || 'قفل تقدم: بافر ورودی کافی نیست',
+        detail: bufferCheck.lockReason,
+      });
+    }
+
+    const totalAttempt = Number(goodQuantity) + Number(scrapQuantity);
+    if (totalAttempt > bufferCheck.wipBufferAvailable) {
+      return res.status(400).json({
+        success: false,
+        error: `تعداد ثبتی (${totalAttempt}) بیشتر از موجودی بافر ورودی آماده (${bufferCheck.wipBufferAvailable} عدد) است.`,
+      });
+    }
+
+    const prisma = getPrismaClient();
+    const createdLog = await prisma.productionLog.create({
+      data: {
+        workOrderId: bufferCheck.workOrder.id,
+        operationId: bufferCheck.currentOperation.id,
+        goodQuantity: Number(goodQuantity),
+        scrapQuantity: Number(scrapQuantity) || 0,
+        operatorId: 'EMP-2045',
+        isApproved: true,
+        approvedBy: 'مهندس حسینی (تایید مستقیم خط)',
+        approvedAt: new Date(),
+        shiftName,
+        notes: notes || 'ثبت کارکرد زنده از گراف جریان مواد D3',
+      },
+    });
+
+    const updatedFlow = await WipService.getWorkOrderMaterialFlow(bufferCheck.workOrder.id);
+    res.status(201).json({
+      success: true,
+      message: 'کارکرد تولید با موفقیت ثبت شد و بافر بین‌مرحله‌ای به‌روز گردید.',
+      log: createdLog,
+      flow: updatedFlow,
+    });
+  } catch (error) {
+    console.error('Error recording WIP log:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در ثبت کارکرد مرحله',
+    });
+  }
+});
+
+/**
+ * 6. GET /api/erp-services/capacity-overlaps
+ * Machine overlap detection via CapacityPlanningService.detectMachineOverlaps(date).
+ */
+apiRouter.get('/erp-services/capacity-overlaps', async (req: Request, res: Response) => {
+  try {
+    const dateParam = req.query.date ? new Date(String(req.query.date)) : new Date();
+    const validDate = isNaN(dateParam.getTime()) ? new Date() : dateParam;
+    const result = await CapacityPlanningService.detectMachineOverlaps(validDate);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in CapacityPlanningService.detectMachineOverlaps:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در تحلیل تداخل ظرفیت ماشین‌آلات',
+    });
+  }
+});
+
+/**
+ * 7. GET /api/test-erp-flow
+ * Executes the End-to-End Integration Test Suite for MrpService, WipService, and CapacityPlanningService.
+ */
+apiRouter.get('/test-erp-flow', async (_req: Request, res: Response) => {
+  try {
+    const report = await runErpIntegrationTest();
+    res.status(report.success ? 200 : 500).json(report);
+  } catch (error) {
+    console.error('Error in /api/test-erp-flow:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'خطا در اجرای تست یکپارچه ERP',
+    });
+  }
+});
+
+
 
 
 

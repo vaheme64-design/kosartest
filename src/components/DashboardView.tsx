@@ -30,6 +30,8 @@ import { loadVipPartsMap } from '../utils/qcHoldStore';
 import { formatNumber, toPersianDigits } from '../utils/formatters';
 import { MetricTooltip } from './common/MetricTooltip';
 import { FormulaTooltip } from './common/FormulaTooltip';
+import { MachineOverlapAlertWidget } from './planning/MachineOverlapAlertWidget';
+import { D3MaterialFlowDiagram } from './production/D3MaterialFlowDiagram';
 
 interface DashboardViewProps {
   currentUser?: UserRoleProfile;
@@ -606,6 +608,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Machine Overlap Detection Alert Widget (CapacityPlanningService) */}
+      <MachineOverlapAlertWidget
+        onNavigateToCapacity={() =>
+          onNavigateSubModule
+            ? onNavigateSubModule('planning', { planningSubTab: 'capacity_planning' })
+            : onNavigateToTab('planning')
+        }
+      />
+
+      {/* D3.js Live Material Flow & WipService / MrpService Diagram */}
+      <D3MaterialFlowDiagram />
 
       {/* Main Factory Highway Workbench */}
       <FactoryHighwayWorkbench

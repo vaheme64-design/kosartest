@@ -914,10 +914,342 @@ async function main() {
     },
   });
 
+  // -------------------------------------------------------------------------
+  // 14. ENTERPRISE ZERO-HARDCODING: Master Categories & Items
+  // -------------------------------------------------------------------------
+  console.log('  -> Seeding Dynamic Master Categories & Master Items (Zero-Hardcoding)...');
+
+  const masterCategoriesData = [
+    {
+      code: 'UNIT_OF_MEASURE',
+      name: 'واحدهای سنجش و اندازه‌گیری',
+      description: 'واحدهای مصرف، بسته‌بندی و وزن‌سنجی قطعات و کلاف‌ها',
+      items: [
+        { code: 'KG', value: 'کیلوگرم', orderIndex: 1 },
+        { code: 'PCS', value: 'عدد', orderIndex: 2 },
+        { code: 'TON', value: 'تن', orderIndex: 3 },
+        { code: 'M', value: 'متر', orderIndex: 4 },
+      ],
+    },
+    {
+      code: 'DOWNTIME_REASON',
+      name: 'علل توقف خطوط و ماشین‌آلات (Downtime Reasons)',
+      description: 'کدهای استاندارد ثبت توقفات پای پرس، عیوب مکانیکی و لجستیک',
+      items: [
+        { code: 'DIE_BREAKDOWN', value: 'شکستگی یا گیر سنبه و ماتریس قالب', orderIndex: 1 },
+        { code: 'COIL_REPLACE', value: 'تعویض کلاف ورق و ستاپ فیدر', orderIndex: 2 },
+        { code: 'MAINTENANCE_PM', value: 'سرویس دوره‌ای و روان‌کاری برنامه‌ریزی‌شده (PM)', orderIndex: 3 },
+        { code: 'HYDRAULIC_LEAK', value: 'افت فشار یا نشتی سیستم هیدرولیک', orderIndex: 4 },
+        { code: 'ELECTRICAL_FAULT', value: 'خطای مدارهای فرمان و سنسورهای ایمنی', orderIndex: 5 },
+        { code: 'NO_MATERIAL', value: 'کسری و تاخیر در تحویل مواد اولیه پای خط', orderIndex: 6 },
+      ],
+    },
+    {
+      code: 'SCRAP_REASON',
+      name: 'دلایل ایجاد ضایعات فلزی (Scrap Reasons)',
+      description: 'علل مهندسی تولید قطعات معیوب در فرآیند پرس‌کاری',
+      items: [
+        { code: 'TEAR_CRACK', value: 'پارگی و ترک‌خوردگی در کشش عمیق', orderIndex: 1 },
+        { code: 'WRINKLING', value: 'چروک‌افتادگی در بلنک یا لبه ورق', orderIndex: 2 },
+        { code: 'BURR_HIGH', value: 'پلیسه بیش از حد مجاز برش گیوتین', orderIndex: 3 },
+        { code: 'SURFACE_DEFECT', value: 'خط و خش، زدگی یا ناخالصی متالورژیکی', orderIndex: 4 },
+      ],
+    },
+    {
+      code: 'QUALITY_CLASS',
+      name: 'کلاس‌های کیفی بازرسی (Quality Classes)',
+      description: 'رتبه‌بندی کیفی قطعات تولیدی در ایستگاه‌های کنترل',
+      items: [
+        { code: 'GRADE_A', value: 'تایید کامل استاندارد (کیفیت ممتاز)', orderIndex: 1 },
+        { code: 'GRADE_B', value: 'تایید مشروط / نیازمند دوباره‌کاری جزیی', orderIndex: 2 },
+        { code: 'REJECTED', value: 'عدم انطباق قطعی (اسقاط)', orderIndex: 3 },
+      ],
+    },
+  ];
+
+  const masterItemMap: Record<string, string> = {};
+  for (const catData of masterCategoriesData) {
+    const cat = await prisma.masterCategory.upsert({
+      where: { code: catData.code },
+      update: { name: catData.name, description: catData.description },
+      create: {
+        code: catData.code,
+        name: catData.name,
+        description: catData.description,
+        isSystem: true,
+      },
+    });
+
+    for (const itemData of catData.items) {
+      const item = await prisma.masterItem.upsert({
+        where: {
+          categoryId_code: {
+            categoryId: cat.id,
+            code: itemData.code,
+          },
+        },
+        update: { value: itemData.value, orderIndex: itemData.orderIndex },
+        create: {
+          categoryId: cat.id,
+          code: itemData.code,
+          value: itemData.value,
+          orderIndex: itemData.orderIndex,
+        },
+      });
+      masterItemMap[`${catData.code}_${itemData.code}`] = item.id;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 15. ENTERPRISE MENUS: Dynamic Self-Referencing Tree Menus
+  // -------------------------------------------------------------------------
+  console.log('  -> Seeding Dynamic Tree Menus (Menu Hierarchy)...');
+
+  const rootMenus = [
+    { title: 'داشبورد و مانیتورینگ کارخانه', path: '/dashboard', icon: 'LayoutDashboard', orderIndex: 1 },
+    { title: 'مهندسی و اطلاعات پایه (Master Data)', path: '/master-data', icon: 'Database', orderIndex: 2 },
+    { title: 'برنامه‌ریزی و پیشخوان تولید (SAP PP)', path: '/production', icon: 'Cpu', orderIndex: 3 },
+    { title: 'مدیریت انبار و زنجیره تامین ساپکو', path: '/inventory', icon: 'Boxes', orderIndex: 4 },
+  ];
+
+  const createdRootMenus: Record<string, string> = {};
+  for (const rm of rootMenus) {
+    const m = await prisma.menu.upsert({
+      where: { id: `menu-${rm.path.replace('/', '')}` },
+      update: { title: rm.title, path: rm.path, icon: rm.icon, orderIndex: rm.orderIndex },
+      create: {
+        id: `menu-${rm.path.replace('/', '')}`,
+        title: rm.title,
+        path: rm.path,
+        icon: rm.icon,
+        orderIndex: rm.orderIndex,
+      },
+    });
+    createdRootMenus[rm.path] = m.id;
+  }
+
+  const childMenus = [
+    { parentPath: '/master-data', title: 'کاتالوگ اقلام و قطعات (Items)', path: '/master-data/items', icon: 'Boxes', orderIndex: 1 },
+    { parentPath: '/master-data', title: 'مراکز کاری و ماشین‌آلات (Work Centers)', path: '/master-data/work-centers', icon: 'Factory', orderIndex: 2 },
+    { parentPath: '/master-data', title: 'دسته‌بندی‌های داینامیک پایه', path: '/master-data/categories', icon: 'Sliders', orderIndex: 3 },
+    { parentPath: '/production', title: 'ماتریس مراحل تولید (OP Matrix)', path: '/production/matrix', icon: 'Layers', orderIndex: 1 },
+    { parentPath: '/production', title: 'موجودی پای‌خط و بین‌ایستگاهی (WIP)', path: '/production/wip', icon: 'GitBranch', orderIndex: 2 },
+    { parentPath: '/production', title: 'دستور کارهای تولید (Work Orders)', path: '/production/orders', icon: 'FileText', orderIndex: 3 },
+    { parentPath: '/production', title: 'لاگ ثبت کارکرد و ضایعات شیفت', path: '/production/logs', icon: 'CheckCircle2', orderIndex: 4 },
+    { parentPath: '/production', title: 'ثبت و تحلیل توقفات خطوط', path: '/production/downtime', icon: 'AlertTriangle', orderIndex: 5 },
+  ];
+
+  for (const cm of childMenus) {
+    await prisma.menu.upsert({
+      where: { id: `menu-sub-${cm.path.replace(/\//g, '-')}` },
+      update: { title: cm.title, path: cm.path, icon: cm.icon, orderIndex: cm.orderIndex, parentId: createdRootMenus[cm.parentPath] },
+      create: {
+        id: `menu-sub-${cm.path.replace(/\//g, '-')}` ,
+        parentId: createdRootMenus[cm.parentPath],
+        title: cm.title,
+        path: cm.path,
+        icon: cm.icon,
+        orderIndex: cm.orderIndex,
+      },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 16. ENTERPRISE ENGINEERING: WorkCenters, Items & Multi-Level BOM
+  // -------------------------------------------------------------------------
+  console.log('  -> Seeding WorkCenters, Items & Multi-Level BOM...');
+
+  const workCentersData = [
+    { code: 'PRS-800T-01', name: 'پرس هیدرولیک ۸۰۰ تن کشش عمیق شولر', hallLocation: 'سالن پرس سنگین', capacityPerHour: 320 },
+    { code: 'PRS-630T-01', name: 'پرس مکانیکی ۶۳۰ تن ارفورت', hallLocation: 'سالن پرس سنگین', capacityPerHour: 450 },
+    { code: 'PRS-400T-01', name: 'پرس مکانیکی ۴۰۰ تن ضربه‌ای فورماکس', hallLocation: 'سالن پرس متوسط', capacityPerHour: 550 },
+    { code: 'PRS-250T-01', name: 'پرس C فریم ۲۵۰ تن پانچ و دوربری', hallLocation: 'سالن پرس متوسط', capacityPerHour: 650 },
+    { code: 'WLD-SPOT-01', name: 'سلول پرس‌جوش مقاومتی نقطه‌ای ۱۰۰ کاوا', hallLocation: 'سالن جوشکاری', capacityPerHour: 280 },
+  ];
+
+  const workCenterMap: Record<string, string> = {};
+  for (const wc of workCentersData) {
+    const created = await prisma.workCenter.upsert({
+      where: { code: wc.code },
+      update: { name: wc.name, hallLocation: wc.hallLocation, capacityPerHour: wc.capacityPerHour },
+      create: wc,
+    });
+    workCenterMap[wc.code] = created.id;
+  }
+
+  const itemsData = [
+    { code: 'PRT-ECU-BRK-01', name: 'مجموعه براکت ضدسرقت رایانه موتور (ECU) با پوشش رنگ کاتافورز ED', type: 'FINISHED_GOOD', carModel: 'پژو ۲۰۶ / ۲۰۷', weightNetKg: 1.72, weightGrossKg: 2.10, minSafetyStock: 500 },
+    { code: 'WIP-ECU-BASE-10', name: 'صفحه براکت اصلی ضدسرقت (قطعه نیمه‌ساخته پرسی)', type: 'SEMI_FINISHED', carModel: 'پژو ۲۰۶', weightNetKg: 1.15, weightGrossKg: 1.40, minSafetyStock: 400 },
+    { code: 'WIP-ECU-WING-20', name: 'مکمل تقویتی براکت / گوشواره (قطعه نیمه‌ساخته پانچ و خم)', type: 'SEMI_FINISHED', carModel: 'پژو ۲۰۶', weightNetKg: 0.55, weightGrossKg: 0.70, minSafetyStock: 400 },
+    { code: 'RM-COIL-DC04-08', name: 'کلاف ورق روغنی کشش عمیق DC04 ضخامت ۰.۸ عرض ۱۲۵۰', type: 'RAW_MATERIAL', carModel: 'عمومی بدنه', weightNetKg: 1.0, weightGrossKg: 1.0, minSafetyStock: 5000 },
+    { code: 'RM-COIL-DC01-15', name: 'کلاف نوار ورق روغنی DC01A ضخامت ۱.۵ عرض ۳۲۰', type: 'RAW_MATERIAL', carModel: 'عمومی شاسی', weightNetKg: 1.0, weightGrossKg: 1.0, minSafetyStock: 3000 },
+  ];
+
+  const itemMap: Record<string, string> = {};
+  for (const it of itemsData) {
+    const created = await prisma.item.upsert({
+      where: { code: it.code },
+      update: { name: it.name, type: it.type, carModel: it.carModel, minSafetyStock: it.minSafetyStock },
+      create: it,
+    });
+    itemMap[it.code] = created.id;
+  }
+
+  // Multi-Level BOM Connections
+  await prisma.bomComponent.upsert({
+    where: { parentItemId_childItemId_version: { parentItemId: itemMap['PRT-ECU-BRK-01'], childItemId: itemMap['WIP-ECU-BASE-10'], version: '1.0' } },
+    update: { quantity: 1 },
+    create: {
+      parentItemId: itemMap['PRT-ECU-BRK-01'],
+      childItemId: itemMap['WIP-ECU-BASE-10'],
+      quantity: 1,
+      version: '1.0',
+      notes: 'پایه اصلی ساختار مجموعه براکت ECU',
+    },
+  });
+
+  await prisma.bomComponent.upsert({
+    where: { parentItemId_childItemId_version: { parentItemId: itemMap['PRT-ECU-BRK-01'], childItemId: itemMap['WIP-ECU-WING-20'], version: '1.0' } },
+    update: { quantity: 1 },
+    create: {
+      parentItemId: itemMap['PRT-ECU-BRK-01'],
+      childItemId: itemMap['WIP-ECU-WING-20'],
+      quantity: 1,
+      version: '1.0',
+      notes: 'گوشواره و مکمل تقویتی پرچ‌شونده',
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // 17. ENTERPRISE ROUTING WITH PRECEDENCE LOCKING & WORK ORDERS
+  // -------------------------------------------------------------------------
+  console.log('  -> Seeding Routing with Precedence Locking & Work Orders...');
+
+  const op10 = await prisma.routingOperation.upsert({
+    where: { itemId_opNumber: { itemId: itemMap['PRT-ECU-BRK-01'], opNumber: 10 } },
+    update: {},
+    create: {
+      itemId: itemMap['PRT-ECU-BRK-01'],
+      opNumber: 10,
+      opCode: 'OP10',
+      opName: 'برش و تغذیه نوار ورق (گیوتین و رول‌بازکن)',
+      workCenterId: workCenterMap['PRS-400T-01'],
+      setupTimeMin: 30,
+      cycleTimeSec: 15,
+    },
+  });
+
+  const op20 = await prisma.routingOperation.upsert({
+    where: { itemId_opNumber: { itemId: itemMap['PRT-ECU-BRK-01'], opNumber: 20 } },
+    update: { requiresOpId: op10.id },
+    create: {
+      itemId: itemMap['PRT-ECU-BRK-01'],
+      opNumber: 20,
+      opCode: 'OP20',
+      opName: 'بلنک‌زنی و کشش عمیق پوسته براکت',
+      workCenterId: workCenterMap['PRS-800T-01'],
+      requiresOpId: op10.id, // قفل تقدم به OP10
+      setupTimeMin: 45,
+      cycleTimeSec: 35,
+    },
+  });
+
+  const op30 = await prisma.routingOperation.upsert({
+    where: { itemId_opNumber: { itemId: itemMap['PRT-ECU-BRK-01'], opNumber: 30 } },
+    update: { requiresOpId: op20.id },
+    create: {
+      itemId: itemMap['PRT-ECU-BRK-01'],
+      opNumber: 30,
+      opCode: 'OP30',
+      opName: 'پانچ، سوراخ‌کاری و خم لبه‌ها',
+      workCenterId: workCenterMap['PRS-250T-01'],
+      requiresOpId: op20.id, // قفل تقدم به OP20
+      setupTimeMin: 30,
+      cycleTimeSec: 25,
+    },
+  });
+
+  const op40 = await prisma.routingOperation.upsert({
+    where: { itemId_opNumber: { itemId: itemMap['PRT-ECU-BRK-01'], opNumber: 40 } },
+    update: { requiresOpId: op30.id },
+    create: {
+      itemId: itemMap['PRT-ECU-BRK-01'],
+      opNumber: 40,
+      opCode: 'OP40',
+      opName: 'پرس‌جوش مقاومتی، مونتاژ نهایی و تحویل به انبار',
+      workCenterId: workCenterMap['WLD-SPOT-01'],
+      requiresOpId: op30.id, // قفل تقدم به OP30
+      setupTimeMin: 20,
+      cycleTimeSec: 20,
+    },
+  });
+
+  // Work Order
+  const workOrder = await prisma.workOrder.upsert({
+    where: { orderNumber: 'WO-1404-1001' },
+    update: { plannedQuantity: 2500, completedQuantity: 1600, scrapQuantity: 24, status: 'IN_PROGRESS' },
+    create: {
+      orderNumber: 'WO-1404-1001',
+      itemId: itemMap['PRT-ECU-BRK-01'],
+      plannedQuantity: 2500,
+      completedQuantity: 1600,
+      scrapQuantity: 24,
+      status: 'IN_PROGRESS',
+      startDate: new Date('2024-11-01T07:00:00.000Z'),
+      endDate: new Date('2024-11-06T19:00:00.000Z'),
+      actualStartDate: new Date('2024-11-01T07:30:00.000Z'),
+      notes: 'دستور کار اصلی تولید مجموعه براکت ضدسرقت ECU ساپکو',
+    },
+  });
+
+  // Production Log
+  await prisma.productionLog.create({
+    data: {
+      workOrderId: workOrder.id,
+      operationId: op20.id,
+      goodQuantity: 800,
+      scrapQuantity: 12,
+      operatorId: 'EMP-2045',
+      isApproved: true,
+      approvedBy: 'مهندس حسینی (مدیر تولید)',
+      approvedAt: new Date('2024-11-02T15:00:00.000Z'),
+      shiftName: 'شیفت صبح',
+      notes: 'تولید سالم با رعایت کامل الزامات کنترل کیفیت و بدون موج سطحی',
+    },
+  });
+
+  // Downtime Log
+  await prisma.downtimeLog.create({
+    data: {
+      workCenterId: workCenterMap['PRS-800T-01'],
+      downtimeReasonId: masterItemMap['DOWNTIME_REASON_COIL_REPLACE'],
+      startTime: new Date('2024-11-02T10:15:00.000Z'),
+      endTime: new Date('2024-11-02T10:50:00.000Z'),
+      durationMinutes: 35,
+      operatorNotes: 'اتمام رول قبلی و تعویض کلاف ورق روغنی DC04 بر روی فیدر پرس ۸۰۰ تن',
+      isPlanned: false,
+    },
+  });
+
+  // Action Log Audit Trail
+  await prisma.actionLog.create({
+    data: {
+      entityName: 'WorkOrder',
+      entityId: workOrder.id,
+      actionType: 'RELEASE',
+      oldValues: { status: 'DRAFT', plannedQuantity: 2500 },
+      newValues: { status: 'IN_PROGRESS', releasedAt: new Date().toISOString() },
+      reason: 'ابلاغ برنامه تولید هفتگی بر اساس اولویت تامین سالن مونتاژ ایران‌خودرو',
+      userId: adminUser.id,
+      ipAddress: '192.168.10.45',
+    },
+  });
+
   console.log('✅ KPIMS Seed completed successfully!');
   console.log(`   - Master Data: ${Object.keys(partsData).length} parts, ${machines.length} machines, ${dies.length} dies, ${warehouses.length} warehouses`);
-  console.log(`   - Supply & Production: SAPCO Quota Contract, Coils, Customer Order, Work Order MO-1403-1082`);
-  console.log(`   - Inventory: Kardex TRX-1403-3410 and TRX-1403-3415 with immutable balances`);
+  console.log(`   - Enterprise Zero-Hardcoding: ${masterCategoriesData.length} MasterCategories, Menus, WorkCenters, BOM & WorkOrders`);
+  console.log(`   - Supply & Production: SAPCO Quota Contract, Coils, Work Orders WO-1404-1001 & MO-1403-1082`);
+  console.log(`   - Audit Trail: Immutable ActionLog & ProductionLog created`);
 }
 
 main()
