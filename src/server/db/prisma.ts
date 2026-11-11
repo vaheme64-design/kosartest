@@ -19,27 +19,20 @@ export const isDatabaseUrlConfigured = (): boolean => {
 export const resolveDatabaseUrl = (): string => {
   let rawUrl = (process.env.DATABASE_URL && process.env.DATABASE_URL.trim().length > 0)
     ? process.env.DATABASE_URL.trim()
-    : 'file:./prisma/dev.db';
+    : 'postgresql://postgres:postgres@localhost:5432/kpims_db?schema=public';
 
   // Strip surrounding quotes if present
   if ((rawUrl.startsWith('"') && rawUrl.endsWith('"')) || (rawUrl.startsWith("'") && rawUrl.endsWith("'"))) {
     rawUrl = rawUrl.slice(1, -1).trim();
   }
 
-  // If DATABASE_URL is set to a non-file protocol (e.g. postgresql://, postgres://, mysql://),
-  // Prisma's current SQLite datasource will reject it with: "the URL must start with the protocol file:."
-  // In that case, safely fallback to the SQLite dev.db file.
-  if (!rawUrl.startsWith('file:')) {
-    if (rawUrl.includes('://')) {
-      console.warn('[Prisma Notice]: DATABASE_URL uses non-file protocol (' + rawUrl.split('://')[0] + '). Falling back to SQLite file for KPIMS.');
-      rawUrl = 'file:./prisma/dev.db';
-    } else {
-      // It's a file path without 'file:' prefix
-      rawUrl = `file:${rawUrl}`;
-    }
+  // If URL is PostgreSQL protocol, return directly
+  if (rawUrl.startsWith('postgresql://') || rawUrl.startsWith('postgres://')) {
+    process.env.DATABASE_URL = rawUrl;
+    return rawUrl;
   }
 
-  // Extract file path from file:
+  // Extract file path if file: protocol is used
   const filePath = rawUrl.replace(/^file:/, '');
 
   // Determine standard file locations
@@ -51,46 +44,14 @@ export const resolveDatabaseUrl = (): string => {
   if (path.isAbsolute(filePath)) {
     absolutePath = filePath;
   } else {
-    // Relative path: check if it targets prisma/dev.db or dev.db
     if (filePath.includes('prisma/dev.db') || filePath.includes('prisma\\dev.db')) {
       absolutePath = prismaDirDb;
     } else if (filePath.endsWith('dev.db')) {
-      // If prisma/dev.db exists, prefer that
       absolutePath = fs.existsSync(prismaDirDb) ? prismaDirDb : path.resolve(cwd, filePath);
     } else {
       absolutePath = path.resolve(cwd, filePath);
     }
   }
-
-  // Ensure directory exists
-  const dir = path.dirname(absolutePath);
-  if (!fs.existsSync(dir)) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch (err) {
-      console.error('Failed to create directory for SQLite database:', err);
-    }
-  }
-
-  // Ensure both prisma/dev.db and root dev.db are linked/synchronized so any relative access works
-  try {
-    if (fs.existsSync(prismaDirDb) && !fs.existsSync(rootDirDb)) {
-      try {
-        fs.linkSync(prismaDirDb, rootDirDb);
-      } catch {
-        fs.copyFileSync(prismaDirDb, rootDirDb);
-      }
-    } else if (fs.existsSync(rootDirDb) && !fs.existsSync(prismaDirDb)) {
-      if (!fs.existsSync(path.dirname(prismaDirDb))) {
-        fs.mkdirSync(path.dirname(prismaDirDb), { recursive: true });
-      }
-      try {
-        fs.linkSync(rootDirDb, prismaDirDb);
-      } catch {
-        fs.copyFileSync(rootDirDb, prismaDirDb);
-      }
-    }
-  } catch {}
 
   const resolvedUrl = `file:${absolutePath}`;
   process.env.DATABASE_URL = resolvedUrl;
@@ -146,6 +107,8 @@ export interface DatabaseStatus {
 export async function checkDatabaseConnection(): Promise<DatabaseStatus> {
   const rawUrl = resolveDatabaseUrl();
   const maskedUrl = rawUrl.replace(/:([^@]+)@/, ':****@');
+  const dbType: 'SQLite' | 'PostgreSQL' =
+    rawUrl.startsWith('postgresql://') || rawUrl.startsWith('postgres://') ? 'PostgreSQL' : 'SQLite';
 
   try {
     const prisma = getPrismaClient();
@@ -159,7 +122,7 @@ export async function checkDatabaseConnection(): Promise<DatabaseStatus> {
     return {
       isConfigured: true,
       isConnected: true,
-      databaseType: 'SQLite',
+      databaseType: dbType,
       databaseUrlMasked: maskedUrl,
       lastChecked: new Date().toISOString(),
     };
@@ -174,7 +137,7 @@ export async function checkDatabaseConnection(): Promise<DatabaseStatus> {
     return {
       isConfigured: true,
       isConnected: false,
-      databaseType: 'SQLite',
+      databaseType: dbType,
       databaseUrlMasked: maskedUrl,
       errorMessage: errorMsg,
       lastChecked: new Date().toISOString(),
